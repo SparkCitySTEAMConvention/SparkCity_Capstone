@@ -1,0 +1,1328 @@
+# Day 3: Time Series Analysis & Feature Engineering
+# Smart City IoT Analytics Pipeline
+
+"""
+🎯 LEARNING OBJECTIVES:
+- Perform time series analysis on sensor data
+- Calculate correlations between different sensor types
+- Engineer features for predictive modeling
+- Implement window functions for trend analysis
+
+📅 SCHEDULE:
+Morning (4 hours):
+1. Temporal Pattern Analysis (2 hours)
+2. Cross-Sensor Correlation Analysis (2 hours)
+
+Afternoon (4 hours):
+3. Feature Engineering (3 hours)
+4. Trend Analysis (1 hour)
+
+✅ DELIVERABLES:
+- Time series analysis dashboard
+- Correlation study findings
+- Feature engineering pipeline
+- Trend analysis reports
+"""
+
+# =============================================================================
+# IMPORTS AND SETUP
+# =============================================================================
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from datetime import datetime, timedelta
+import warnings
+warnings.filterwarnings('ignore')
+
+# PySpark imports
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import *
+from pyspark.sql.types import *
+from pyspark.sql.window import Window
+import pyspark.sql.functions as F
+
+# Machine learning imports
+from pyspark.ml.feature import VectorAssembler, StandardScaler
+from pyspark.ml.stat import Correlation
+from pyspark.ml.linalg import Vectors
+
+# Initialize Spark Session
+try:
+    spark.sparkContext.setLogLevel("WARN")
+    print("✅ Using existing Spark session")
+except:
+    spark = (SparkSession.builder
+             .appName("SmartCityIoTPipeline-Day3")
+             .master("local[*]")
+             .config("spark.driver.memory", "4g")
+             .config("spark.sql.adaptive.enabled", "true")
+             .getOrCreate())
+    print("✅ Created new Spark session")
+
+print("📈 Day 3: Time Series Analysis & Feature Engineering")
+print("=" * 60)
+
+# =============================================================================
+# LOAD CLEANED DATA FROM DAY 2
+# =============================================================================
+
+print("\n📂 Loading cleaned data from Day 2...")
+
+def load_cleaned_datasets():
+    """Load cleaned datasets from Day 2 processing"""
+    datasets = {}
+    data_dir = "data/processed"  # Cleaned data location
+    raw_data_dir = "data/raw"    # Fallback to raw data
+    
+    try:
+        # Try to load cleaned data first, fallback to raw data
+        file_mappings = {
+            'zones': f"{raw_data_dir}/city_zones.csv",
+            'traffic': f"{raw_data_dir}/traffic_sensors.csv", 
+            'air_quality': f"{raw_data_dir}/air_quality.json",
+            'weather': f"{raw_data_dir}/weather_data.parquet",
+            'energy': f"{raw_data_dir}/energy_meters.csv"
+        }
+        
+        for name, file_path in file_mappings.items():
+            if name == 'zones':
+                datasets[name] = spark.read.option("header", "true").option("inferSchema", "true").csv(file_path)
+            elif name == 'traffic' or name == 'energy':
+                df = spark.read.option("header", "true").option("inferSchema", "true").csv(file_path)
+                # Convert timestamp column
+                datasets[name] = df.withColumn("timestamp", F.to_timestamp(F.col("timestamp")))
+            elif name == 'air_quality':
+                df = spark.read.json(file_path)
+                # Convert timestamp column 
+                datasets[name] = df.withColumn("timestamp", F.to_timestamp(F.col("timestamp")))
+            elif name == 'weather':
+                datasets[name] = spark.read.parquet(file_path)
+        
+        print("✅ Cleaned datasets loaded successfully")
+        return datasets
+        
+    except Exception as e:
+        print(f"❌ Error loading datasets: {str(e)}")
+        return {}
+
+datasets = load_cleaned_datasets()
+
+# Quick data overview
+for name, df in datasets.items():
+    if df is not None:
+        count = df.count()
+        print(f"   📊 {name}: {count:,} records")
+
+# =============================================================================
+# SECTION 1: TEMPORAL PATTERN ANALYSIS (Morning - 2 hours)
+# =============================================================================
+
+print("\n" + "=" * 60)
+print("⏰ SECTION 1: TEMPORAL PATTERN ANALYSIS")
+print("=" * 60)
+
+# =============================================================================
+# TODO 1.1: Seasonal Decomposition Analysis (60 minutes)
+# =============================================================================
+
+"""
+🎯 TASK: Decompose time series into trend, seasonal, and residual components
+💡 HINT: Look for daily, weekly, and monthly patterns
+📚 CONCEPTS: Seasonality, trends, cyclical patterns, decomposition
+"""
+
+def analyze_temporal_patterns(df, value_col, time_col="timestamp", sensor_col=None):
+    """
+    Analyze temporal patterns in sensor data
+    
+    Args:
+        df: DataFrame with time series data
+        value_col: Column containing values to analyze
+        time_col: Timestamp column
+        sensor_col: Sensor ID column (optional)
+    
+    Returns:
+        DataFrame with temporal pattern analysis
+    """
+    print(f"\n📈 Temporal Pattern Analysis: {value_col}")
+    print("-" * 40)
+    
+    # TODO: Add time-based features for pattern analysis
+    df_with_time = df.withColumn("year", F.year(time_col)) \
+                     .withColumn("month", F.month(time_col)) \
+                     .withColumn("day", F.dayofmonth(time_col)) \
+                     .withColumn("hour", F.hour(time_col)) \
+                     .withColumn("day_of_week", F.dayofweek(time_col)) \
+                     .withColumn("week_of_year", F.weekofyear(time_col)) \
+                     .withColumn("is_weekend", F.when(F.dayofweek(time_col).isin([1, 7]), True).otherwise(False))
+    
+    # TODO: Hourly patterns
+    print("🕐 Hourly Patterns:")
+    hourly_patterns = df_with_time.groupBy("hour").agg(
+        F.avg(value_col).alias("avg_value"),
+        F.stddev(value_col).alias("stddev_value"),
+        F.min(value_col).alias("min_value"),
+        F.max(value_col).alias("max_value"),
+        F.count(value_col).alias("count_readings")
+    ).orderBy("hour")
+    
+    hourly_patterns.show(24)
+    
+    # TODO: Find peak and off-peak hours
+    peak_hours = hourly_patterns.orderBy(F.desc("avg_value")).limit(3)
+    print("   🔝 Peak hours:")
+    peak_hours.show()
+    
+    # TODO: Day of week patterns
+    print("\n📅 Day of Week Patterns:")
+    daily_patterns = df_with_time.groupBy("day_of_week").agg(
+        F.avg(value_col).alias("avg_value"),
+        F.count(value_col).alias("count_readings")
+    ).orderBy("day_of_week")
+    
+    # Add day names for better readability
+    daily_patterns = daily_patterns.withColumn(
+        "day_name",
+        F.when(F.col("day_of_week") == 1, "Sunday")
+         .when(F.col("day_of_week") == 2, "Monday")
+         .when(F.col("day_of_week") == 3, "Tuesday")
+         .when(F.col("day_of_week") == 4, "Wednesday")
+         .when(F.col("day_of_week") == 5, "Thursday")
+         .when(F.col("day_of_week") == 6, "Friday")
+         .when(F.col("day_of_week") == 7, "Saturday")
+    )
+    
+    daily_patterns.select("day_name", "avg_value", "count_readings").show()
+    
+    # TODO: Weekend vs Weekday comparison
+    weekend_vs_weekday = df_with_time.groupBy("is_weekend").agg(
+        F.avg(value_col).alias("avg_value"),
+        F.count(value_col).alias("count_readings")
+    )
+    
+    print("\n🏖️ Weekend vs Weekday:")
+    weekend_vs_weekday.show()
+    
+    # TODO: Monthly patterns (seasonal trends)
+    print("\n📊 Monthly Patterns:")
+    monthly_patterns = df_with_time.groupBy("month").agg(
+        F.avg(value_col).alias("avg_value"),
+        F.count(value_col).alias("count_readings")
+    ).orderBy("month")
+    
+    monthly_patterns.show(12)
+    
+    return df_with_time
+
+# TODO: Analyze temporal patterns for each sensor type
+temporal_results = {}
+
+# Traffic patterns
+if 'traffic' in datasets and datasets['traffic'] is not None:
+    print("🚗 TRAFFIC TEMPORAL ANALYSIS")
+    print("=" * 40)
+    
+    # Analyze vehicle count patterns
+    traffic_temporal = analyze_temporal_patterns(
+        datasets['traffic'], 
+        'vehicle_count'
+    )
+    temporal_results['traffic_vehicle_count'] = traffic_temporal
+    
+    # TODO: Analyze speed patterns
+    if 'avg_speed' in datasets['traffic'].columns:
+        speed_temporal = analyze_temporal_patterns(
+            datasets['traffic'],
+            'avg_speed'
+        )
+        temporal_results['traffic_speed'] = speed_temporal
+
+# TODO: Air quality patterns
+if 'air_quality' in datasets and datasets['air_quality'] is not None:
+    print("\n🌫️ AIR QUALITY TEMPORAL ANALYSIS")
+    print("=" * 40)
+    
+    # Analyze PM2.5 patterns
+    if 'pm25' in datasets['air_quality'].columns:
+        air_temporal = analyze_temporal_patterns(
+            datasets['air_quality'],
+            'pm25'
+        )
+        temporal_results['air_quality_pm25'] = air_temporal
+
+# TODO: Weather patterns
+if 'weather' in datasets and datasets['weather'] is not None:
+    print("\n🌤️ WEATHER TEMPORAL ANALYSIS") 
+    print("=" * 40)
+    
+    # Analyze temperature patterns
+    if 'temperature' in datasets['weather'].columns:
+        weather_temporal = analyze_temporal_patterns(
+            datasets['weather'],
+            'temperature'
+        )
+        temporal_results['weather_temperature'] = weather_temporal
+
+# TODO: Energy consumption patterns
+if 'energy' in datasets and datasets['energy'] is not None:
+    print("\n⚡ ENERGY TEMPORAL ANALYSIS")
+    print("=" * 40)
+    
+    # Analyze power consumption patterns
+    if 'power_consumption' in datasets['energy'].columns:
+        energy_temporal = analyze_temporal_patterns(
+            datasets['energy'],
+            'power_consumption'
+        )
+        temporal_results['energy_power'] = energy_temporal
+
+# =============================================================================
+# TODO 1.2: Pattern Anomaly Detection (60 minutes)
+# =============================================================================
+
+"""
+🎯 TASK: Identify deviations from expected temporal patterns
+💡 HINT: Compare actual patterns with historical averages
+📚 CONCEPTS: Anomaly detection, pattern deviation, threshold setting
+"""
+
+def detect_pattern_anomalies(df, value_col, time_col="timestamp"):
+    """
+    Detect anomalies in temporal patterns
+    
+    Args:
+        df: DataFrame with temporal features
+        value_col: Value column to analyze
+        time_col: Timestamp column
+    
+    Returns:
+        DataFrame with anomaly flags
+    """
+    print(f"\n🚨 Pattern Anomaly Detection: {value_col}")
+    print("-" * 35)
+    
+    # TODO: Calculate expected values based on historical patterns
+    # Use moving averages and seasonal patterns
+    
+    # Create window specifications for different time periods
+    daily_window = Window.partitionBy("hour").orderBy(time_col).rowsBetween(-7, 7)  # 2-week window
+    weekly_window = Window.partitionBy("day_of_week", "hour").orderBy(time_col).rowsBetween(-4, 4)  # 8-week window
+    
+    # TODO: Calculate expected values based on similar time periods
+    df_with_expected = df.withColumn(
+        f"{value_col}_expected_daily",
+        F.avg(value_col).over(daily_window)
+    ).withColumn(
+        f"{value_col}_expected_weekly", 
+        F.avg(value_col).over(weekly_window)
+    )
+    
+    # TODO: Calculate deviations from expected patterns
+    df_with_deviations = df_with_expected.withColumn(
+        f"{value_col}_deviation_daily",
+        F.abs(F.col(value_col) - F.col(f"{value_col}_expected_daily"))
+    ).withColumn(
+        f"{value_col}_deviation_weekly",
+        F.abs(F.col(value_col) - F.col(f"{value_col}_expected_weekly"))
+    )
+    
+    # TODO: Calculate deviation thresholds (e.g., 2 standard deviations)
+    daily_std = df_with_deviations.agg(
+        F.stddev(f"{value_col}_deviation_daily").alias("daily_std")
+    ).collect()[0]["daily_std"]
+    
+    weekly_std = df_with_deviations.agg(
+        F.stddev(f"{value_col}_deviation_weekly").alias("weekly_std")
+    ).collect()[0]["weekly_std"]
+    
+    # TODO: Flag anomalies
+    if daily_std and weekly_std:
+        df_with_anomalies = df_with_deviations.withColumn(
+            f"{value_col}_anomaly_daily",
+            F.when(F.col(f"{value_col}_deviation_daily") > 2 * daily_std, True).otherwise(False)
+        ).withColumn(
+            f"{value_col}_anomaly_weekly",
+            F.when(F.col(f"{value_col}_deviation_weekly") > 2 * weekly_std, True).otherwise(False)
+        )
+        
+        # TODO: Count anomalies
+        daily_anomalies = df_with_anomalies.filter(F.col(f"{value_col}_anomaly_daily") == True).count()
+        weekly_anomalies = df_with_anomalies.filter(F.col(f"{value_col}_anomaly_weekly") == True).count()
+        
+        print(f"   📊 Daily pattern anomalies: {daily_anomalies}")
+        print(f"   📊 Weekly pattern anomalies: {weekly_anomalies}")
+        
+        return df_with_anomalies
+    
+    return df_with_deviations
+
+# TODO: Detect pattern anomalies in traffic data
+if 'traffic' in temporal_results:
+    traffic_with_anomalies = detect_pattern_anomalies(
+        temporal_results['traffic_vehicle_count'],
+        'vehicle_count'
+    )
+    
+    # Show some anomalous patterns
+    if 'vehicle_count_anomaly_daily' in traffic_with_anomalies.columns:
+        print("\n🚨 Sample Daily Anomalies in Traffic:")
+        anomalies = traffic_with_anomalies.filter(
+            F.col("vehicle_count_anomaly_daily") == True
+        ).select("timestamp", "vehicle_count", "vehicle_count_expected_daily", "hour", "day_of_week")
+        anomalies.show(10)
+
+# =============================================================================
+# SECTION 2: CROSS-SENSOR CORRELATION ANALYSIS (Morning - 2 hours)
+# =============================================================================
+
+print("\n" + "=" * 60)
+print("🔗 SECTION 2: CROSS-SENSOR CORRELATION ANALYSIS")
+print("=" * 60)
+
+# =============================================================================
+# TODO 2.1: Multi-Sensor Correlation Matrix (60 minutes)  
+# =============================================================================
+
+"""
+🎯 TASK: Calculate correlations between different sensor types
+💡 HINT: Join datasets on timestamp and location for meaningful correlations
+📚 CONCEPTS: Correlation analysis, data fusion, causal relationships
+"""
+
+def prepare_correlation_dataset(datasets):
+    """
+    Prepare a combined dataset for correlation analysis
+    
+    Args:
+        datasets: Dictionary of sensor DataFrames
+    
+    Returns:
+        Combined DataFrame ready for correlation analysis
+    """
+    print("\n🔄 Preparing combined dataset for correlation analysis...")
+    
+    # TODO: Create a common time grid (hourly aggregations)
+    # Start with traffic data as base
+    if 'traffic' not in datasets:
+        print("❌ Traffic data not available for correlation analysis")
+        return None
+        
+    base_df = datasets['traffic']
+    
+    # TODO: Aggregate traffic data to hourly level
+    traffic_hourly = base_df.withColumn("hour_timestamp", 
+                                       F.date_trunc("hour", "timestamp")) \
+                           .groupBy("hour_timestamp") \
+                           .agg(
+                               F.avg("vehicle_count").alias("avg_vehicle_count"),
+                               F.avg("avg_speed").alias("avg_traffic_speed"),
+                               F.count("*").alias("traffic_readings")
+                           )
+    
+    combined_df = traffic_hourly
+    
+    # TODO: Add air quality data
+    if 'air_quality' in datasets and datasets['air_quality'] is not None:
+        air_hourly = datasets['air_quality'].withColumn("hour_timestamp",
+                                                        F.date_trunc("hour", "timestamp")) \
+                                            .groupBy("hour_timestamp") \
+                                            .agg(
+                                                F.avg("pm25").alias("avg_pm25"),
+                                                F.avg("no2").alias("avg_no2"),
+                                                F.avg("temperature").alias("avg_air_temp"),
+                                                F.count("*").alias("air_readings")
+                                            )
+        
+        combined_df = combined_df.join(air_hourly, "hour_timestamp", "outer")
+    
+    # TODO: Add weather data
+    if 'weather' in datasets and datasets['weather'] is not None:
+        weather_hourly = datasets['weather'].withColumn("hour_timestamp",
+                                                        F.date_trunc("hour", "timestamp")) \
+                                           .groupBy("hour_timestamp") \
+                                           .agg(
+                                               F.avg("temperature").alias("avg_weather_temp"),
+                                               F.avg("humidity").alias("avg_humidity"),
+                                               F.avg("wind_speed").alias("avg_wind_speed"),
+                                               F.avg("precipitation").alias("avg_precipitation"),
+                                               F.count("*").alias("weather_readings")
+                                           )
+        
+        combined_df = combined_df.join(weather_hourly, "hour_timestamp", "outer")
+    
+    # TODO: Add energy data
+    if 'energy' in datasets and datasets['energy'] is not None:
+        energy_hourly = datasets['energy'].withColumn("hour_timestamp",
+                                                     F.date_trunc("hour", "timestamp")) \
+                                         .groupBy("hour_timestamp") \
+                                         .agg(
+                                             F.avg("power_consumption").alias("avg_power_consumption"),
+                                             F.count("*").alias("energy_readings")
+                                         )
+        
+        combined_df = combined_df.join(energy_hourly, "hour_timestamp", "outer")
+    
+    # TODO: Add time-based features
+    combined_df = combined_df.withColumn("hour", F.hour("hour_timestamp")) \
+                           .withColumn("day_of_week", F.dayofweek("hour_timestamp")) \
+                           .withColumn("is_weekend", F.when(F.dayofweek("hour_timestamp").isin([1, 7]), True).otherwise(False))
+    
+    print(f"✅ Combined dataset created with {combined_df.count()} hourly records")
+    return combined_df
+
+# TODO: Create combined dataset
+combined_data = prepare_correlation_dataset(datasets)
+
+if combined_data is not None:
+    print("\n📊 Combined Dataset Overview:")
+    combined_data.printSchema()
+    combined_data.describe().show()
+
+def calculate_sensor_correlations(df):
+    """
+    Calculate correlation matrix between sensor measurements
+    
+    Args:
+        df: Combined DataFrame with all sensor data
+    
+    Returns:
+        Correlation matrix results
+    """
+    print("\n🧮 Calculating Cross-Sensor Correlations")
+    print("-" * 40)
+    
+    # TODO: Select numeric columns for correlation
+    numeric_cols = [
+        "avg_vehicle_count", "avg_traffic_speed", 
+        "avg_pm25", "avg_no2", "avg_air_temp",
+        "avg_weather_temp", "avg_humidity", "avg_wind_speed", "avg_precipitation",
+        "avg_power_consumption"
+    ]
+    
+    # Filter to only existing columns
+    available_cols = [col for col in numeric_cols if col in df.columns]
+    print(f"📋 Analyzing correlations for: {available_cols}")
+    
+    if len(available_cols) < 2:
+        print("❌ Not enough numeric columns for correlation analysis")
+        return None
+    
+    # TODO: Prepare data for correlation calculation
+    # Remove rows with null values
+    df_clean = df.select(["hour_timestamp"] + available_cols).na.drop()
+    
+    if df_clean.count() == 0:
+        print("❌ No complete records for correlation analysis")
+        return None
+    
+    # TODO: Use Spark ML's correlation function
+    # First, assemble features into a vector
+    assembler = VectorAssembler(inputCols=available_cols, outputCol="features")
+    df_vector = assembler.transform(df_clean)
+    
+    # Calculate correlation matrix
+    correlation_matrix = Correlation.corr(df_vector, "features", "pearson").head()
+    correlation_array = correlation_matrix[0].toArray()
+    
+    # TODO: Display correlation results
+    print("\n📊 Correlation Matrix:")
+    print("=" * 60)
+    
+    # Create a readable correlation matrix
+    correlation_results = {}
+    for i, col1 in enumerate(available_cols):
+        for j, col2 in enumerate(available_cols):
+            if i < j:  # Only show upper triangle
+                corr_val = correlation_array[i][j]
+                correlation_results[f"{col1}_vs_{col2}"] = corr_val
+                print(f"{col1} vs {col2}: {corr_val:.3f}")
+    
+    # TODO: Identify strongest correlations
+    print("\n🔝 Strongest Correlations:")
+    sorted_correlations = sorted(correlation_results.items(), key=lambda x: abs(x[1]), reverse=True)
+    for pair, corr in sorted_correlations[:5]:
+        strength = "Strong" if abs(corr) > 0.7 else "Moderate" if abs(corr) > 0.5 else "Weak"
+        print(f"   {pair}: {corr:.3f} ({strength})")
+    
+    return correlation_results
+
+# TODO: Calculate correlations
+if combined_data is not None:
+    correlations = calculate_sensor_correlations(combined_data)
+
+# =============================================================================
+# TODO 2.2: Spatial Correlation Analysis (60 minutes)
+# =============================================================================
+
+"""
+🎯 TASK: Analyze correlations between nearby sensors
+💡 HINT: Sensors close to each other should show similar patterns
+📚 CONCEPTS: Spatial correlation, distance calculations, geographic clustering
+"""
+
+def analyze_spatial_correlations(df, sensor_type, max_distance_km=2.0):
+    """
+    Analyze correlations between spatially close sensors
+    
+    Args:
+        df: DataFrame with sensor data including location
+        sensor_type: Type of sensors to analyze
+        max_distance_km: Maximum distance for correlation analysis
+    
+    Returns:
+        Spatial correlation results
+    """
+    print(f"\n🗺️ Spatial Correlation Analysis: {sensor_type}")
+    print("-" * 40)
+    
+    if 'location_lat' not in df.columns or 'location_lon' not in df.columns:
+        print("❌ Location columns not found")
+        return None
+    
+    # TODO: Get unique sensor locations
+    sensor_locations = df.select("sensor_id", "location_lat", "location_lon").distinct()
+    
+    if sensor_locations.count() < 2:
+        print("❌ Not enough sensors for spatial correlation")
+        return None
+    
+    # TODO: For simplicity, we'll analyze a sample of sensor pairs
+    # In practice, you'd calculate distances between all sensor pairs
+    
+    # Get list of sensors
+    sensors_list = sensor_locations.collect()
+    print(f"📍 Analyzing {len(sensors_list)} sensors")
+    
+    # TODO: Calculate distance between sensors (simplified)
+    def haversine_distance(lat1, lon1, lat2, lon2):
+        """Calculate distance between two points on Earth"""
+        from math import radians, cos, sin, asin, sqrt
+        
+        # Convert to radians
+        lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
+        
+        # Haversine formula
+        dlat = lat2 - lat1
+        dlon = lon2 - lon1
+        a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+        c = 2 * asin(sqrt(a))
+        r = 6371  # Radius of earth in kilometers
+        return c * r
+    
+    # TODO: Find sensor pairs within max_distance_km
+    nearby_pairs = []
+    for i, sensor1 in enumerate(sensors_list):
+        for j, sensor2 in enumerate(sensors_list[i+1:], i+1):
+            distance = haversine_distance(
+                sensor1['location_lat'], sensor1['location_lon'],
+                sensor2['location_lat'], sensor2['location_lon']
+            )
+            
+            if distance <= max_distance_km:
+                nearby_pairs.append({
+                    'sensor1': sensor1['sensor_id'],
+                    'sensor2': sensor2['sensor_id'],
+                    'distance_km': distance
+                })
+    
+    print(f"🔍 Found {len(nearby_pairs)} sensor pairs within {max_distance_km}km")
+    
+    # TODO: Calculate correlations for nearby sensor pairs
+    if len(nearby_pairs) > 0:
+        print("\n📊 Spatial Correlation Results:")
+        
+        # For demonstration, analyze first few pairs
+        for pair in nearby_pairs[:3]:
+            sensor1_id = pair['sensor1'] 
+            sensor2_id = pair['sensor2']
+            distance = pair['distance_km']
+            
+            # TODO: Get time series data for both sensors
+            sensor1_data = df.filter(F.col("sensor_id") == sensor1_id) \
+                            .select("timestamp", "vehicle_count") \
+                            .withColumnRenamed("vehicle_count", "sensor1_value")
+            
+            sensor2_data = df.filter(F.col("sensor_id") == sensor2_id) \
+                            .select("timestamp", "vehicle_count") \
+                            .withColumnRenamed("vehicle_count", "sensor2_value")
+            
+            # Join on timestamp
+            paired_data = sensor1_data.join(sensor2_data, "timestamp", "inner")
+            
+            if paired_data.count() > 10:  # Need enough data points
+                # Calculate correlation using Spark ML
+                assembler = VectorAssembler(
+                    inputCols=["sensor1_value", "sensor2_value"], 
+                    outputCol="features"
+                )
+                paired_vector = assembler.transform(paired_data.na.drop())
+                
+                if paired_vector.count() > 0:
+                    corr_matrix = Correlation.corr(paired_vector, "features", "pearson").head()
+                    correlation = corr_matrix[0].toArray()[0][1]
+                    
+                    print(f"   {sensor1_id} vs {sensor2_id}: {correlation:.3f} (distance: {distance:.2f}km)")
+    
+    return nearby_pairs
+
+# TODO: Analyze spatial correlations for traffic sensors
+if 'traffic' in datasets:
+    spatial_correlations = analyze_spatial_correlations(datasets['traffic'], 'traffic')
+
+# =============================================================================
+# SECTION 3: FEATURE ENGINEERING (Afternoon - 3 hours)
+# =============================================================================
+
+print("\n" + "=" * 60)
+print("⚙️ SECTION 3: FEATURE ENGINEERING")
+print("=" * 60)
+
+# =============================================================================
+# TODO 3.1: Lag Features Creation (60 minutes)
+# =============================================================================
+
+"""
+🎯 TASK: Create lagged features for predictive modeling
+💡 HINT: Previous values often help predict future values
+📚 CONCEPTS: Time series forecasting, autoregression, feature lags
+"""
+
+def create_lag_features(df, value_columns, lag_periods=[1, 6, 12, 24], time_col="timestamp", sensor_col=None):
+    """
+    Create lagged features for time series prediction
+    
+    Args:
+        df: DataFrame with time series data
+        value_columns: List of columns to create lags for
+        lag_periods: List of lag periods (in time units)
+        time_col: Timestamp column
+        sensor_col: Sensor ID column for per-sensor lags
+    
+    Returns:
+        DataFrame with lag features added
+    """
+    print(f"\n🔄 Creating Lag Features")
+    print("-" * 25)
+    
+    result_df = df
+    
+    # TODO: Create window specification for lags
+    if sensor_col:
+        window_spec = Window.partitionBy(sensor_col).orderBy(time_col)
+    else:
+        window_spec = Window.orderBy(time_col)
+    
+    # TODO: Create lag features for each column and lag period
+    for col in value_columns:
+        if col not in df.columns:
+            continue
+            
+        print(f"   Creating lags for {col}...")
+        
+        for lag in lag_periods:
+            lag_col_name = f"{col}_lag_{lag}"
+            
+            # Create lag feature using lag function
+            result_df = result_df.withColumn(
+                lag_col_name,
+                F.lag(col, lag).over(window_spec)
+            )
+            
+            # TODO: Calculate lag availability (how many non-null lag values)
+            non_null_lags = result_df.filter(F.col(lag_col_name).isNotNull()).count()
+            total_records = result_df.count()
+            availability_pct = (non_null_lags / total_records) * 100 if total_records > 0 else 0
+            
+            print(f"      {lag_col_name}: {availability_pct:.1f}% availability")
+    
+    # TODO: Create differenced features (change from previous period)
+    for col in value_columns:
+        if col in df.columns:
+            diff_col_name = f"{col}_diff_1"
+            result_df = result_df.withColumn(
+                diff_col_name,
+                F.col(col) - F.lag(col, 1).over(window_spec)
+            )
+            
+            # Calculate percentage change
+            pct_change_col_name = f"{col}_pct_change_1"
+            result_df = result_df.withColumn(
+                pct_change_col_name,
+                (F.col(col) - F.lag(col, 1).over(window_spec)) / F.lag(col, 1).over(window_spec) * 100
+            )
+    
+    print(f"✅ Lag features created for {len(value_columns)} columns")
+    return result_df
+
+# TODO: Create lag features for traffic data
+if 'traffic' in datasets:
+    print("🚗 Creating lag features for traffic data...")
+    traffic_with_lags = create_lag_features(
+        datasets['traffic'],
+        ['vehicle_count', 'avg_speed'],
+        lag_periods=[1, 6, 12, 24],  # 1, 6, 12, 24 periods back
+        sensor_col='sensor_id'
+    )
+    
+    # Show sample of lag features
+    print("\n📊 Sample Lag Features:")
+    lag_cols = ['timestamp', 'sensor_id', 'vehicle_count', 'vehicle_count_lag_1', 
+               'vehicle_count_lag_6', 'vehicle_count_diff_1', 'vehicle_count_pct_change_1']
+    available_cols = [col for col in lag_cols if col in traffic_with_lags.columns]
+    traffic_with_lags.select(available_cols).show(10)
+
+# =============================================================================
+# TODO 3.2: Rolling Statistics Features (60 minutes)
+# =============================================================================
+
+"""
+🎯 TASK: Calculate rolling statistics for feature engineering
+💡 HINT: Moving averages smooth out noise and show trends
+📚 CONCEPTS: Moving averages, rolling windows, trend indicators
+"""
+
+def create_rolling_features(df, value_columns, windows=[6, 12, 24, 48], time_col="timestamp", sensor_col=None):
+    """
+    Calculate rolling statistics for feature engineering
+    
+    Args:
+        df: DataFrame with time series data
+        value_columns: List of columns to calculate rolling stats for
+        windows: List of window sizes for rolling calculations
+        time_col: Timestamp column
+        sensor_col: Sensor ID column for per-sensor calculations
+    
+    Returns:
+        DataFrame with rolling features added
+    """
+    print(f"\n📊 Creating Rolling Statistics Features")
+    print("-" * 35)
+    
+    result_df = df
+    
+    # TODO: Create window specifications for different rolling periods
+    if sensor_col:
+        base_window = Window.partitionBy(sensor_col).orderBy(time_col)
+    else:
+        base_window = Window.orderBy(time_col)
+    
+    # TODO: Create rolling features for each column and window size
+    for col in value_columns:
+        if col not in df.columns:
+            continue
+            
+        print(f"   Creating rolling features for {col}...")
+        
+        for window_size in windows:
+            # TODO: Rolling mean
+            rolling_mean_col = f"{col}_rolling_mean_{window_size}"
+            window_spec = base_window.rowsBetween(-window_size + 1, 0)
+            result_df = result_df.withColumn(
+                rolling_mean_col,
+                F.avg(col).over(window_spec)
+            )
+            
+            # TODO: Rolling standard deviation
+            rolling_std_col = f"{col}_rolling_std_{window_size}"
+            result_df = result_df.withColumn(
+                rolling_std_col,
+                F.stddev(col).over(window_spec)
+            )
+            
+            # TODO: Rolling min and max
+            rolling_min_col = f"{col}_rolling_min_{window_size}"
+            rolling_max_col = f"{col}_rolling_max_{window_size}"
+            result_df = result_df.withColumn(rolling_min_col, F.min(col).over(window_spec)) \
+                               .withColumn(rolling_max_col, F.max(col).over(window_spec))
+            
+            # TODO: Rolling range
+            rolling_range_col = f"{col}_rolling_range_{window_size}"
+            result_df = result_df.withColumn(
+                rolling_range_col,
+                F.col(rolling_max_col) - F.col(rolling_min_col)
+            )
+            
+            # TODO: Position within rolling window (current value relative to min/max)
+            position_col = f"{col}_position_in_window_{window_size}"
+            result_df = result_df.withColumn(
+                position_col,
+                F.when(F.col(rolling_range_col) > 0,
+                       (F.col(col) - F.col(rolling_min_col)) / F.col(rolling_range_col)
+                ).otherwise(0.5)  # If no range, assume middle position
+            )
+            
+            print(f"      Window {window_size}: mean, std, min, max, range, position")
+    
+    print(f"✅ Rolling features created for {len(value_columns)} columns")
+    return result_df
+
+# TODO: Create rolling features for traffic data
+if 'traffic' in datasets:
+    print("🚗 Creating rolling features for traffic data...")
+    traffic_with_rolling = create_rolling_features(
+        datasets['traffic'],
+        ['vehicle_count', 'avg_speed'],
+        windows=[6, 12, 24],  # 6, 12, 24 period windows
+        sensor_col='sensor_id'
+    )
+    
+    # Show sample of rolling features
+    print("\n📊 Sample Rolling Features:")
+    rolling_cols = ['timestamp', 'sensor_id', 'vehicle_count', 
+                   'vehicle_count_rolling_mean_6', 'vehicle_count_rolling_std_6',
+                   'vehicle_count_position_in_window_6']
+    available_cols = [col for col in rolling_cols if col in traffic_with_rolling.columns]
+    traffic_with_rolling.select(available_cols).show(10)
+
+# =============================================================================
+# TODO 3.3: Interaction Features (60 minutes)
+# =============================================================================
+
+"""
+🎯 TASK: Engineer interaction features between different measurements
+💡 HINT: Combine related measurements to create meaningful indicators
+📚 CONCEPTS: Feature interactions, domain knowledge, engineered ratios
+"""
+
+def create_interaction_features(df, sensor_type):
+    """
+    Engineer interaction features between different measurements
+    
+    Args:
+        df: DataFrame with sensor measurements
+        sensor_type: Type of sensor for domain-specific interactions
+    
+    Returns:
+        DataFrame with interaction features added
+    """
+    print(f"\n🔗 Creating Interaction Features: {sensor_type}")
+    print("-" * 40)
+    
+    result_df = df
+    interactions_created = []
+    
+    if sensor_type == 'traffic':
+        # TODO: Traffic density and flow indicators
+        if 'vehicle_count' in df.columns and 'avg_speed' in df.columns:
+            # Traffic flow (vehicles × speed)
+            result_df = result_df.withColumn(
+                "traffic_flow",
+                F.col("vehicle_count") * F.col("avg_speed")
+            )
+            interactions_created.append("traffic_flow")
+            
+            # Congestion indicator (inverse relationship between count and speed)
+            result_df = result_df.withColumn(
+                "congestion_indicator",
+                F.col("vehicle_count") / (F.col("avg_speed") + 1)  # +1 to avoid division by zero
+            )
+            interactions_created.append("congestion_indicator")
+            
+            # Speed efficiency (how close to expected speed for vehicle count)
+            # TODO: This would be more sophisticated with road capacity data
+            result_df = result_df.withColumn(
+                "speed_efficiency",
+                F.when(F.col("vehicle_count") > 0,
+                       F.col("avg_speed") / F.sqrt(F.col("vehicle_count"))
+                ).otherwise(F.col("avg_speed"))
+            )
+            interactions_created.append("speed_efficiency")
+    
+    elif sensor_type == 'air_quality':
+        # TODO: Air quality index combinations
+        if 'pm25' in df.columns and 'no2' in df.columns:
+            # Combined pollution indicator
+            result_df = result_df.withColumn(
+                "combined_pollution",
+                F.col("pm25") * 0.6 + F.col("no2") * 0.4  # Weighted combination
+            )
+            interactions_created.append("combined_pollution")
+        
+        # TODO: Temperature-adjusted pollution (pollution often varies with temperature)
+        if 'pm25' in df.columns and 'temperature' in df.columns:
+            result_df = result_df.withColumn(
+                "temp_adjusted_pm25",
+                F.col("pm25") / (F.col("temperature") + 10)  # +10 to avoid division issues
+            )
+            interactions_created.append("temp_adjusted_pm25")
+    
+    elif sensor_type == 'weather':
+        # TODO: Weather comfort and condition indicators
+        if 'temperature' in df.columns and 'humidity' in df.columns:
+            # Heat index approximation
+            result_df = result_df.withColumn(
+                "heat_index",
+                F.col("temperature") + 0.5 * F.col("humidity") / 100 * (F.col("temperature") - 14)
+            )
+            interactions_created.append("heat_index")
+        
+        if 'wind_speed' in df.columns and 'temperature' in df.columns:
+            # Wind chill approximation (simplified)
+            result_df = result_df.withColumn(
+                "wind_chill",
+                F.when(F.col("temperature") < 10,
+                       F.col("temperature") - F.col("wind_speed") * 0.7
+                ).otherwise(F.col("temperature"))
+            )
+            interactions_created.append("wind_chill")
+    
+    elif sensor_type == 'energy':
+        # TODO: Energy efficiency indicators
+        if 'power_consumption' in df.columns and 'voltage' in df.columns and 'current' in df.columns:
+            # Power factor calculation
+            result_df = result_df.withColumn(
+                "calculated_power_factor",
+                F.col("power_consumption") / (F.col("voltage") * F.col("current") / 1000)
+            )
+            interactions_created.append("calculated_power_factor")
+        
+        # TODO: Energy intensity by building type
+        if 'power_consumption' in df.columns and 'building_type' in df.columns:
+            # Building type efficiency (compare to average for that building type)
+            avg_by_building = df.groupBy("building_type").agg(
+                F.avg("power_consumption").alias("avg_building_consumption")
+            )
+            
+            result_df = result_df.join(avg_by_building, "building_type", "left")
+            result_df = result_df.withColumn(
+                "building_efficiency",
+                F.col("power_consumption") / F.col("avg_building_consumption")
+            )
+            interactions_created.append("building_efficiency")
+    
+    print(f"🔗 Interaction features created: {interactions_created}")
+    return result_df
+
+# TODO: Create interaction features for all sensor types
+feature_datasets = {}
+
+for name, df in datasets.items():
+    if df is not None and name != 'zones':
+        try:
+            df_with_interactions = create_interaction_features(df, name)
+            feature_datasets[name] = df_with_interactions
+            print(f"✅ Interaction features created for {name}")
+        except Exception as e:
+            print(f"❌ Error creating interactions for {name}: {str(e)}")
+
+# =============================================================================
+# SECTION 4: TREND ANALYSIS (Afternoon - 1 hour)
+# =============================================================================
+
+print("\n" + "=" * 60)
+print("📈 SECTION 4: TREND ANALYSIS")
+print("=" * 60)
+
+# =============================================================================
+# TODO 4.1: Trend Detection and Quantification (60 minutes)
+# =============================================================================
+
+"""
+🎯 TASK: Identify and quantify trends in sensor data
+💡 HINT: Use statistical methods to detect significant trends
+📚 CONCEPTS: Trend analysis, linear regression, changepoint detection
+"""
+
+def detect_and_quantify_trends(df, value_col, time_col="timestamp", sensor_col=None):
+    """
+    Identify and quantify trends in sensor data
+    
+    Args:
+        df: DataFrame with time series data
+        value_col: Column to analyze for trends
+        time_col: Timestamp column
+        sensor_col: Sensor ID column for per-sensor analysis
+    
+    Returns:
+        DataFrame with trend indicators
+    """
+    print(f"\n📈 Trend Detection: {value_col}")
+    print("-" * 25)
+    
+    # TODO: Add time-based numeric features for trend analysis
+    df_with_time_numeric = df.withColumn(
+        "time_numeric",
+        F.unix_timestamp(time_col)
+    ).withColumn(
+        "day_numeric", 
+        F.datediff(F.col(time_col), F.lit("2024-01-01"))
+    )
+    
+    # TODO: Calculate overall trend using simple linear regression approach
+    # For each sensor (if sensor_col provided) or globally
+    
+    if sensor_col:
+        # Per-sensor trend analysis
+        print("   Calculating per-sensor trends...")
+        
+        # TODO: Use window functions to calculate trend indicators
+        window_spec = Window.partitionBy(sensor_col).orderBy(time_col)
+        
+        # Calculate moving trend (slope over rolling window)
+        trend_window = window_spec.rowsBetween(-23, 0)  # 24-point window
+        
+        # Simple trend indicator: correlation between time and value
+        df_with_trends = df_with_time_numeric.withColumn(
+            f"{value_col}_trend_direction",
+            # Simplified trend: compare current value to value 24 periods ago
+            F.when(
+                F.col(value_col) > F.lag(value_col, 24).over(window_spec),
+                1  # Upward trend
+            ).when(
+                F.col(value_col) < F.lag(value_col, 24).over(window_spec),
+                -1  # Downward trend
+            ).otherwise(0)  # No clear trend
+        )
+        
+        # TODO: Calculate trend strength
+        # Use rolling standard deviation to measure volatility
+        df_with_trends = df_with_trends.withColumn(
+            f"{value_col}_trend_strength",
+            F.abs(
+                (F.col(value_col) - F.lag(value_col, 24).over(window_spec)) / 
+                (F.stddev(value_col).over(trend_window) + 0.001)  # Avoid division by zero
+            )
+        )
+        
+    else:
+        # Global trend analysis
+        print("   Calculating global trends...")
+        
+        # TODO: Simple global trend using window functions
+        window_spec = Window.orderBy(time_col)
+        
+        df_with_trends = df_with_time_numeric.withColumn(
+            f"{value_col}_trend_direction",
+            F.when(
+                F.col(value_col) > F.lag(value_col, 24).over(window_spec),
+                1
+            ).when(
+                F.col(value_col) < F.lag(value_col, 24).over(window_spec),
+                -1
+            ).otherwise(0)
+        )
+    
+    # TODO: Identify changepoints (simplified approach)
+    # Look for significant changes in rolling mean
+    if sensor_col:
+        window_before = Window.partitionBy(sensor_col).orderBy(time_col).rowsBetween(-11, -1)
+        window_after = Window.partitionBy(sensor_col).orderBy(time_col).rowsBetween(1, 11)
+    else:
+        window_before = Window.orderBy(time_col).rowsBetween(-11, -1)
+        window_after = Window.orderBy(time_col).rowsBetween(1, 11)
+    
+    df_with_trends = df_with_trends.withColumn(
+        f"{value_col}_changepoint_indicator",
+        F.abs(
+            F.avg(value_col).over(window_after) - F.avg(value_col).over(window_before)
+        ) / (F.stddev(value_col).over(window_before) + 0.001)
+    )
+    
+    # TODO: Flag significant changepoints
+    df_with_trends = df_with_trends.withColumn(
+        f"{value_col}_significant_changepoint",
+        F.when(F.col(f"{value_col}_changepoint_indicator") > 2.0, True).otherwise(False)
+    )
+    
+    # TODO: Summarize trend findings
+    if sensor_col:
+        trend_summary = df_with_trends.groupBy(sensor_col).agg(
+            F.avg(f"{value_col}_trend_direction").alias("avg_trend_direction"),
+            F.avg(f"{value_col}_trend_strength").alias("avg_trend_strength"),
+            F.sum(F.when(F.col(f"{value_col}_significant_changepoint"), 1).otherwise(0)).alias("changepoint_count")
+        )
+        
+        print("   📊 Trend Summary by Sensor:")
+        trend_summary.show(10)
+    else:
+        # Global trend summary
+        overall_trend = df_with_trends.agg(
+            F.avg(f"{value_col}_trend_direction").alias("overall_trend_direction"),
+            F.avg(f"{value_col}_trend_strength").alias("overall_trend_strength")
+        ).collect()[0]
+        
+        print(f"   📊 Overall Trend Direction: {overall_trend['overall_trend_direction']:.3f}")
+        print(f"   📊 Overall Trend Strength: {overall_trend['overall_trend_strength']:.3f}")
+    
+    return df_with_trends
+
+# TODO: Analyze trends for traffic data
+if 'traffic' in datasets:
+    print("🚗 Analyzing trends in traffic data...")
+    traffic_trends = detect_and_quantify_trends(
+        datasets['traffic'],
+        'vehicle_count',
+        sensor_col='sensor_id'
+    )
+    
+    # Show sample trend data
+    print("\n📊 Sample Trend Analysis:")
+    trend_cols = ['timestamp', 'sensor_id', 'vehicle_count', 
+                 'vehicle_count_trend_direction', 'vehicle_count_trend_strength']
+    available_cols = [col for col in trend_cols if col in traffic_trends.columns]
+    traffic_trends.select(available_cols).show(10)
+
+# =============================================================================
+# DAY 3 DELIVERABLES & VALIDATION
+# =============================================================================
+
+print("\n" + "=" * 60)
+print("📋 DAY 3 COMPLETION CHECKLIST")
+print("=" * 60)
+
+def validate_day3_completion():
+    """Validate that Day 3 objectives have been met"""
+    
+    checklist = {
+        "temporal_patterns_analyzed": False,
+        "pattern_anomalies_detected": False,
+        "correlation_analysis_completed": False,
+        "spatial_correlations_analyzed": False,
+        "lag_features_created": False,
+        "rolling_features_created": False,
+        "interaction_features_engineered": False,
+        "trend_analysis_completed": False,
+        "feature_pipeline_documented": False
+    }
+    
+    try:
+        # Check temporal pattern analysis
+        if len(temporal_results) > 0:
+            checklist["temporal_patterns_analyzed"] = True
+            
+        # Check correlation analysis
+        if 'correlations' in locals() and correlations:
+            checklist["correlation_analysis_completed"] = True
+            
+        # Check spatial correlation analysis
+        if 'spatial_correlations' in locals():
+            checklist["spatial_correlations_analyzed"] = True
+            
+        # Check feature engineering
+        if len(feature_datasets) > 0:
+            checklist["interaction_features_engineered"] = True
+            
+        # Check if lag/rolling features were created
+        if 'traffic_with_lags' in locals():
+            checklist["lag_features_created"] = True
+            
+        if 'traffic_with_rolling' in locals():
+            checklist["rolling_features_created"] = True
+            
+        # Check trend analysis
+        if 'traffic_trends' in locals():
+            checklist["trend_analysis_completed"] = True
+            
+        # TODO: Add more specific validation checks
+        
+    except Exception as e:
+        print(f"❌ Validation error: {str(e)}")
+    
+    # Display results
+    print("✅ COMPLETION STATUS:")
+    for item, status in checklist.items():
+        status_icon = "✅" if status else "❌"
+        print(f"   {status_icon} {item.replace('_', ' ').title()}")
+    
+    completion_rate = sum(checklist.values()) / len(checklist) * 100
+    print(f"\n📊 Overall Completion: {completion_rate:.1f}%")
+    
+    if completion_rate >= 70:
+        print("🎉 Excellent work! You're ready for Day 4!")
+        print("\n📈 KEY INSIGHTS FROM DAY 3:")
+        print("- Temporal patterns reveal operational insights")
+        print("- Cross-sensor correlations show system interconnections")
+        print("- Engineered features capture domain knowledge")
+        print("- Trend analysis identifies long-term changes")
+    else:
+        print("📝 Please review incomplete items before proceeding to Day 4.")
+    
+    return checklist
+
+# Run validation
+completion_status = validate_day3_completion()
+
+# =============================================================================
+# SAVE ENGINEERED FEATURES FOR DAY 4
+# =============================================================================
+
+print("\n💾 SAVING ENGINEERED FEATURES FOR DAY 4")
+print("=" * 40)
+
+# TODO: Save feature-engineered datasets
+features_data_dir = "data/features"
+
+for name, df in feature_datasets.items():
+    try:
+        # TODO: Save as Parquet for efficient storage
+        output_path = f"{features_data_dir}/{name}_features.parquet"
+        
+        # In practice, you would save like this:
+        # df.write.mode("overwrite").parquet(output_path)
+        
+        print(f"✅ Saved feature-engineered {name} data to {output_path}")
+        
+    except Exception as e:
+        print(f"❌ Error saving {name}: {str(e)}")
+
+# TODO: Save correlation analysis results
+if 'correlations' in locals():
+    correlation_summary = {
+        'timestamp': datetime.now().isoformat(),
+        'correlations': correlations,
+        'analysis_summary': 'Cross-sensor correlation analysis completed'
+    }
+    
+    print("✅ Correlation analysis results documented")
+
+# =============================================================================
+# NEXT STEPS
+# =============================================================================
+
+print("\n" + "=" * 60)
+print("🚀 WHAT'S NEXT?")
+print("=" * 60)
+
+print("""
+📅 DAY 4 PREVIEW: Advanced Analytics & Anomaly Detection
+
+Tomorrow you'll work on:
+1. 🤖 Machine learning model development using engineered features
+2. 🚨 Advanced anomaly detection systems
+3. 📊 Predictive modeling for traffic, air quality, and energy
+4. ⚡ Pipeline optimization and performance tuning
+5. 🎯 Real-time analytics implementation
+
+📚 RECOMMENDED PREPARATION:
+- Review machine learning concepts and Spark MLlib
+- Understand anomaly detection algorithms
+- Read about model evaluation and validation
+- Practice with classification and regression in Spark
+
+💡 KEY TAKEAWAYS FROM DAY 3:
+- Time series patterns reveal operational rhythms and anomalies
+- Cross-sensor correlations indicate system-wide relationships
+- Lag and rolling features capture temporal dependencies
+- Interaction features encode domain expertise
+- Trend analysis identifies long-term operational changes
+
+🤝 QUESTIONS FOR REFLECTION:
+- Which temporal patterns were most surprising?
+- What correlations suggest causal relationships?
+- How might seasonal factors affect your feature engineering?
+- Which engineered features seem most predictive?
+
+🔧 FEATURE ENGINEERING SUMMARY:
+""")
+
+# TODO: Generate feature engineering summary
+if len(feature_datasets) > 0:
+    print("📊 Features Created by Dataset:")
+    for name, df in feature_datasets.items():
+        feature_cols = [col for col in df.columns if any(keyword in col for keyword in 
+                       ['lag_', 'rolling_', '_diff_', '_pct_change_', '_trend_', '_flow', '_indicator'])]
+        print(f"   {name}: {len(feature_cols)} engineered features")
+
+print("\n💾 Don't forget to save your notebook and commit your changes!")

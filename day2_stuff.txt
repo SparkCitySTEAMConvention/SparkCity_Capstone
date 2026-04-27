@@ -1,0 +1,1282 @@
+# Day 2: Data Quality & Cleaning Pipeline
+# Smart City IoT Analytics Pipeline
+
+"""
+🎯 LEARNING OBJECTIVES:
+- Implement comprehensive data quality assessment
+- Design cleaning procedures for IoT sensor data
+- Handle missing values and outliers appropriately
+- Create reusable data quality functions
+
+📅 SCHEDULE:
+Morning (4 hours):
+1. Data Quality Assessment (2 hours)
+2. Missing Data Strategy (2 hours)
+
+Afternoon (4 hours):
+3. Outlier Detection & Treatment (2 hours)
+4. Data Standardization (2 hours)
+
+✅ DELIVERABLES:
+- Data quality assessment report
+- Comprehensive cleaning pipeline
+- Outlier detection and treatment functions
+- Standardized datasets ready for analysis
+"""
+
+# =============================================================================
+# IMPORTS AND SETUP
+# =============================================================================
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from datetime import datetime, timedelta
+import warnings
+warnings.filterwarnings('ignore')
+
+# PySpark imports
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import *
+from pyspark.sql.types import *
+from pyspark.sql.window import Window
+import pyspark.sql.functions as F
+
+# Machine learning imports (for outlier detection)
+from pyspark.ml.feature import VectorAssembler
+from pyspark.ml.clustering import KMeans
+from pyspark.ml.stat import Correlation
+
+# Initialize Spark Session (should already exist from Day 1)
+try:
+    spark.sparkContext.setLogLevel("WARN")
+    print("✅ Using existing Spark session")
+except:
+    spark = (SparkSession.builder
+             .appName("SmartCityIoTPipeline-Day2")
+             .master("local[*]")
+             .config("spark.driver.memory", "4g")
+             .config("spark.sql.adaptive.enabled", "true")
+             .getOrCreate())
+    print("✅ Created new Spark session")
+
+print("🔧 Day 2: Data Quality & Cleaning Pipeline")
+print("=" * 60)
+
+# =============================================================================
+# SECTION 1: COMPREHENSIVE DATA PROFILING (Morning - 2 hours)
+# =============================================================================
+
+print("\n📊 SECTION 1: COMPREHENSIVE DATA PROFILING")
+print("=" * 60)
+
+# Load cleaned data from Day 1 (or reload if needed)
+data_dir = "data/raw"
+
+# TODO 1.1: Load all datasets with error handling
+def load_all_datasets():
+    """Load all sensor datasets with consistent error handling"""
+    datasets = {}
+    
+    try:
+        # Load each dataset
+        datasets['zones'] = spark.read.option("header", "true").option("inferSchema", "true").csv(f"{data_dir}/city_zones.csv")
+        datasets['traffic'] = spark.read.option("header", "true").option("inferSchema", "true").csv(f"{data_dir}/traffic_sensors.csv")
+        datasets['air_quality'] = spark.read.json(f"{data_dir}/air_quality.json")
+        datasets['weather'] = spark.read.parquet(f"{data_dir}/weather_data.parquet")
+        datasets['energy'] = spark.read.option("header", "true").option("inferSchema", "true").csv(f"{data_dir}/energy_meters.csv")
+        
+        # Convert timestamp columns to proper format
+        for name, df in datasets.items():
+            if name != 'zones' and 'timestamp' in df.columns:
+                datasets[name] = df.withColumn("timestamp", F.to_timestamp(F.col("timestamp")))
+        
+        print("✅ All datasets loaded successfully")
+        return datasets
+        
+    except Exception as e:
+        print(f"❌ Error loading datasets: {str(e)}")
+        return {}
+
+datasets = load_all_datasets()
+
+# =============================================================================
+# TODO 1.2: Advanced Data Quality Metrics (45 minutes)
+# =============================================================================
+
+"""
+🎯 TASK: Create comprehensive data quality profiling functions
+💡 HINT: Look beyond basic missing values - consider temporal patterns, distributions
+📚 CONCEPTS: Data profiling, quality metrics, statistical validation
+"""
+
+def comprehensive_data_profile(df, dataset_name, time_col="timestamp"):
+    """
+    Generate comprehensive data quality profile
+    
+    Args:
+        df: Spark DataFrame to profile
+        dataset_name: Name for reporting
+        time_col: Timestamp column name
+    
+    Returns:
+        Dictionary with quality metrics
+    """
+    print(f"\n🔍 Comprehensive Profile: {dataset_name}")
+    print("-" * 50)
+    
+    # Basic statistics
+    total_rows = df.count()
+    total_cols = len(df.columns)
+    
+    profile = {
+        'dataset_name': dataset_name,
+        'total_rows': total_rows,
+        'total_columns': total_cols,
+        'memory_usage_mb': 0,  # Estimate
+        'quality_issues': []
+    }
+    
+    # TODO: Calculate missing value patterns
+    print("📋 Missing Value Analysis:")
+    missing_analysis = {}
+    for col in df.columns:
+        missing_count = df.filter(F.col(col).isNull()).count()
+        missing_pct = (missing_count / total_rows) * 100 if total_rows > 0 else 0
+        missing_analysis[col] = {'count': missing_count, 'percentage': missing_pct}
+        
+        if missing_pct > 5:  # Flag columns with >5% missing
+            profile['quality_issues'].append(f"High missing values in {col}: {missing_pct:.2f}%")
+        
+        if missing_count > 0:
+            print(f"   {col}: {missing_count:,} ({missing_pct:.2f}%)")
+    
+    profile['missing_analysis'] = missing_analysis
+    
+    # TODO: Temporal data gaps (if timestamp column exists)
+    if time_col in df.columns:
+        print("⏰ Temporal Analysis:")
+        
+        # Get time range
+        time_stats = df.agg(
+            F.min(time_col).alias('min_time'),
+            F.max(time_col).alias('max_time'),
+            F.count(time_col).alias('time_count')
+        ).collect()[0]
+        
+        print(f"   Time Range: {time_stats['min_time']} to {time_stats['max_time']}")
+        print(f"   Records with timestamps: {time_stats['time_count']:,}")
+        
+        # TODO: Check for temporal gaps
+        # Calculate expected vs actual record counts
+        if dataset_name == 'traffic':
+            expected_interval_minutes = 5
+        elif dataset_name == 'air_quality':
+            expected_interval_minutes = 15
+        elif dataset_name == 'weather':
+            expected_interval_minutes = 30
+        elif dataset_name == 'energy':
+            expected_interval_minutes = 10
+        else:
+            expected_interval_minutes = 15
+        
+        # TODO: Add your gap detection logic here
+        print(f"   Expected interval: {expected_interval_minutes} minutes")
+        # HINT: Calculate expected number of records based on time range and interval
+        
+    # TODO: Numeric column distributions
+    numeric_cols = [field.name for field in df.schema.fields 
+                   if field.dataType in [IntegerType(), DoubleType(), FloatType(), LongType()]]
+    
+    if numeric_cols:
+        print("📈 Numeric Column Analysis:")
+        # Get basic statistics for numeric columns
+        stats_df = df.select(numeric_cols).describe()
+        stats_df.show()
+        
+        # TODO: Check for suspicious patterns in numeric data
+        for col in numeric_cols:
+            if col not in ['location_lat', 'location_lon']:
+                # Check for columns with very low variance (potentially stuck sensors)
+                variance_check = df.agg(F.variance(col).alias('variance')).collect()[0]['variance']
+                if variance_check is not None and variance_check < 0.001:
+                    profile['quality_issues'].append(f"Very low variance in {col}: {variance_check}")
+    
+    # TODO: Categorical column analysis
+    categorical_cols = [field.name for field in df.schema.fields 
+                       if field.dataType == StringType() and field.name not in [time_col]]
+    
+    if categorical_cols:
+        print("📂 Categorical Column Analysis:")
+        for col in categorical_cols:
+            distinct_count = df.select(col).distinct().count()
+            print(f"   {col}: {distinct_count} distinct values")
+            
+            # Show top values
+            if distinct_count < 20:
+                top_values = df.groupBy(col).count().orderBy(F.desc("count")).limit(5)
+                print(f"      Top values:")
+                top_values.show(5, truncate=False)
+    
+    # TODO: Check for duplicate records
+    duplicate_count = total_rows - df.dropDuplicates().count()
+    if duplicate_count > 0:
+        profile['quality_issues'].append(f"Duplicate records found: {duplicate_count}")
+        print(f"🔄 Duplicate Records: {duplicate_count:,}")
+    
+    # TODO: Data freshness (for time series data)
+    if time_col in df.columns:
+        latest_record = df.agg(F.max(time_col).alias('latest')).collect()[0]['latest']
+        if latest_record:
+            hours_old = (datetime.now() - latest_record).total_seconds() / 3600
+            print(f"📅 Data Freshness: Latest record is {hours_old:.1f} hours old")
+    
+    return profile
+
+# TODO: Profile all datasets
+print("🔍 Starting comprehensive data profiling...")
+
+profiles = {}
+for name, df in datasets.items():
+    if df is not None:
+        try:
+            profiles[name] = comprehensive_data_profile(df, name)
+        except Exception as e:
+            print(f"❌ Error profiling {name}: {str(e)}")
+
+# =============================================================================
+# TODO 1.3: Sensor Health Analysis (45 minutes)
+# =============================================================================
+
+"""
+🎯 TASK: Identify sensors with potential operational issues
+💡 HINT: Look for patterns that indicate sensor malfunctions
+📚 CONCEPTS: Sensor diagnostics, operational monitoring, health scoring
+"""
+
+def analyze_sensor_health(df, sensor_id_col, value_cols, time_col="timestamp"):
+    """
+    Analyze individual sensor health and identify problematic sensors
+    
+    Args:
+        df: DataFrame with sensor data
+        sensor_id_col: Column name for sensor ID
+        value_cols: List of measurement columns to analyze
+        time_col: Timestamp column
+    
+    Returns:
+        DataFrame with sensor health metrics
+    """
+    print(f"\n🏥 Sensor Health Analysis")
+    print("-" * 30)
+    
+    # TODO: Calculate health metrics per sensor
+    window_spec = Window.partitionBy(sensor_id_col)
+    
+    health_metrics = df.groupBy(sensor_id_col).agg(
+        F.count("*").alias("total_readings"),
+        F.min(time_col).alias("first_reading"),
+        F.max(time_col).alias("last_reading")
+    )
+    
+    # TODO: Add missing data percentage per sensor
+    for col in value_cols:
+        missing_col_name = f"{col}_missing_pct"
+        health_metrics = health_metrics.withColumn(
+            missing_col_name,
+            # TODO: Calculate percentage of missing values for this sensor and column
+            # HINT: Use window functions to calculate missing percentage per sensor
+        )
+    
+    # TODO: Add variance analysis (detect stuck sensors)
+    for col in value_cols:
+        if col in df.columns:
+            variance_col_name = f"{col}_variance"
+            sensor_variance = df.groupBy(sensor_id_col).agg(
+                F.variance(col).alias(variance_col_name)
+            )
+            health_metrics = health_metrics.join(sensor_variance, sensor_id_col, "left")
+    
+    # TODO: Calculate data gaps (irregular reporting)
+    # This is more complex - calculate time differences between consecutive readings
+    
+    # TODO: Create overall health score
+    # Combine multiple factors into a single health score (0-100)
+    health_metrics = health_metrics.withColumn(
+        "health_score",
+        # TODO: Create a formula that combines:
+        # - Missing data percentage (lower is better)
+        # - Data variance (too low = stuck sensor, too high = noisy sensor)
+        # - Reporting regularity
+        # - Recent data availability
+        F.lit(100.0)  # Placeholder - implement your scoring logic
+    )
+    
+    # TODO: Flag problematic sensors
+    health_metrics = health_metrics.withColumn(
+        "status",
+        F.when(F.col("health_score") > 80, "healthy")
+         .when(F.col("health_score") > 60, "warning")
+         .otherwise("critical")
+    )
+    
+    return health_metrics
+
+# TODO: Analyze health for each sensor type
+print("🏥 Analyzing sensor health across all datasets...")
+
+sensor_health_results = {}
+
+# Traffic sensors
+if 'traffic' in datasets:
+    traffic_health = analyze_sensor_health(
+        datasets['traffic'], 
+        'sensor_id', 
+        ['vehicle_count', 'avg_speed']
+    )
+    sensor_health_results['traffic'] = traffic_health
+    
+    print("🚗 Traffic Sensor Health Summary:")
+    traffic_health.groupBy("status").count().show()
+
+# TODO: Analyze other sensor types
+# Air quality sensors
+if 'air_quality' in datasets:
+    # TODO: Implement air quality sensor health analysis
+    pass
+
+# Weather sensors  
+if 'weather' in datasets:
+    # TODO: Implement weather sensor health analysis
+    pass
+
+# Energy sensors
+if 'energy' in datasets:
+    # TODO: Implement energy sensor health analysis
+    pass
+
+# =============================================================================
+# SECTION 2: MISSING DATA STRATEGY (Morning - 2 hours)
+# =============================================================================
+
+print("\n" + "=" * 60)
+print("🕳️ SECTION 2: MISSING DATA HANDLING STRATEGY")
+print("=" * 60)
+
+# =============================================================================
+# TODO 2.1: Missing Data Pattern Analysis (60 minutes)
+# =============================================================================
+
+"""
+🎯 TASK: Understand patterns in missing data across time and sensors
+💡 HINT: Missing data in IoT often has temporal or spatial patterns
+📚 CONCEPTS: Missing data mechanisms, pattern analysis, imputation strategies
+"""
+
+def analyze_missing_patterns(df, time_col="timestamp", sensor_col=None):
+    """
+    Analyze patterns in missing data
+    
+    Args:
+        df: DataFrame to analyze
+        time_col: Timestamp column
+        sensor_col: Sensor ID column (if applicable)
+    
+    Returns:
+        Dictionary with missing data insights
+    """
+    print("\n🔍 Missing Data Pattern Analysis")
+    print("-" * 40)
+    
+    patterns = {}
+    
+    # TODO: Temporal patterns in missing data
+    if time_col in df.columns:
+        print("⏰ Temporal Missing Data Patterns:")
+        
+        # Create time-based aggregations
+        df_with_time_features = df.withColumn("hour", F.hour(time_col)) \
+                                 .withColumn("day_of_week", F.dayofweek(time_col)) \
+                                 .withColumn("date", F.to_date(time_col))
+        
+        # TODO: Check missing data by hour of day
+        numeric_cols = [field.name for field in df.schema.fields 
+                       if field.dataType in [IntegerType(), DoubleType(), FloatType()]]
+        
+        for col in numeric_cols[:3]:  # Analyze first 3 numeric columns
+            missing_by_hour = df_with_time_features.groupBy("hour").agg(
+                F.count("*").alias("total_records"),
+                F.sum(F.when(F.col(col).isNull(), 1).otherwise(0)).alias("missing_count")
+            ).withColumn(
+                "missing_pct", 
+                (F.col("missing_count") / F.col("total_records")) * 100
+            ).orderBy("hour")
+            
+            print(f"\n   Missing data by hour for {col}:")
+            missing_by_hour.show(24)
+            
+            # TODO: Identify problematic hours
+            high_missing_hours = missing_by_hour.filter(F.col("missing_pct") > 10)
+            if high_missing_hours.count() > 0:
+                print(f"   ⚠️ High missing data hours for {col}:")
+                high_missing_hours.show()
+    
+    # TODO: Sensor-specific missing patterns (if sensor column provided)
+    if sensor_col and sensor_col in df.columns:
+        print(f"\n📡 Sensor-specific Missing Patterns:")
+        
+        # Calculate missing percentage per sensor
+        sensor_missing = df.groupBy(sensor_col).agg(
+            F.count("*").alias("total_readings")
+        )
+        
+        numeric_cols = [field.name for field in df.schema.fields 
+                       if field.dataType in [IntegerType(), DoubleType(), FloatType()]]
+        
+        for col in numeric_cols[:2]:  # Analyze first 2 numeric columns
+            col_missing = df.groupBy(sensor_col).agg(
+                F.sum(F.when(F.col(col).isNull(), 1).otherwise(0)).alias(f"{col}_missing")
+            )
+            sensor_missing = sensor_missing.join(col_missing, sensor_col, "left")
+        
+        # Calculate percentages and identify problematic sensors
+        for col in numeric_cols[:2]:
+            sensor_missing = sensor_missing.withColumn(
+                f"{col}_missing_pct",
+                (F.col(f"{col}_missing") / F.col("total_readings")) * 100
+            )
+        
+        print("   Sensors with highest missing data:")
+        sensor_missing.orderBy(F.desc(f"{numeric_cols[0]}_missing_pct")).show(10)
+    
+    return patterns
+
+# TODO: Analyze missing patterns for each dataset
+for name, df in datasets.items():
+    if df is not None and name != 'zones':
+        try:
+            sensor_col = None
+            if 'sensor_id' in df.columns:
+                sensor_col = 'sensor_id'
+            elif 'station_id' in df.columns:
+                sensor_col = 'station_id'
+            elif 'meter_id' in df.columns:
+                sensor_col = 'meter_id'
+            
+            patterns = analyze_missing_patterns(df, sensor_col=sensor_col)
+        except Exception as e:
+            print(f"❌ Error analyzing missing patterns for {name}: {str(e)}")
+
+# =============================================================================
+# TODO 2.2: Time Series Interpolation (60 minutes)
+# =============================================================================
+
+"""
+🎯 TASK: Implement interpolation strategies for time series gaps
+💡 HINT: Different gap sizes need different strategies
+📚 CONCEPTS: Linear interpolation, forward fill, seasonal patterns
+"""
+
+def interpolate_time_series_gaps(df, value_columns, time_col="timestamp", sensor_col=None, max_gap_hours=6):
+    """
+    Implement time series interpolation for missing values
+    
+    Args:
+        df: DataFrame with time series data
+        value_columns: List of columns to interpolate
+        time_col: Timestamp column
+        sensor_col: Sensor ID column for per-sensor interpolation
+        max_gap_hours: Maximum gap size to interpolate (larger gaps left as missing)
+    
+    Returns:
+        DataFrame with interpolated values
+    """
+    print(f"\n🔧 Time Series Interpolation")
+    print("-" * 30)
+    
+    result_df = df
+    
+    # TODO: For each sensor (if sensor_col provided), interpolate separately
+    if sensor_col:
+        # This is complex in Spark - we'll implement a simplified version
+        # In practice, you might use pandas UDFs or process sensor by sensor
+        
+        # TODO: Create window specification for each sensor
+        window_spec = Window.partitionBy(sensor_col).orderBy(time_col)
+        
+        for col in value_columns:
+            if col in df.columns:
+                print(f"   Interpolating {col}...")
+                
+                # TODO: Simple forward fill for small gaps
+                # Use lag and lead functions to fill gaps
+                result_df = result_df.withColumn(
+                    f"{col}_filled",
+                    F.when(
+                        F.col(col).isNull(),
+                        # TODO: Implement interpolation logic
+                        # For now, use last observation carried forward
+                        F.last(col, True).over(window_spec.rowsBetween(Window.unboundedPreceding, -1))
+                    ).otherwise(F.col(col))
+                )
+                
+                # TODO: Add metadata column to track what was interpolated
+                result_df = result_df.withColumn(
+                    f"{col}_interpolated",
+                    F.when(F.col(col).isNull() & F.col(f"{col}_filled").isNotNull(), True).otherwise(False)
+                )
+        
+    else:
+        # Global interpolation (simpler case)
+        window_spec = Window.orderBy(time_col)
+        
+        for col in value_columns:
+            if col in df.columns:
+                print(f"   Interpolating {col} (global)...")
+                
+                # Simple forward fill
+                result_df = result_df.withColumn(
+                    f"{col}_filled",
+                    F.when(
+                        F.col(col).isNull(),
+                        F.last(col, True).over(window_spec.rowsBetween(Window.unboundedPreceding, -1))
+                    ).otherwise(F.col(col))
+                )
+    
+    # TODO: Report interpolation statistics
+    print("📊 Interpolation Summary:")
+    for col in value_columns:
+        if f"{col}_filled" in result_df.columns:
+            interpolated_count = result_df.filter(F.col(f"{col}_interpolated") == True).count()
+            total_missing = df.filter(F.col(col).isNull()).count()
+            print(f"   {col}: {interpolated_count}/{total_missing} missing values interpolated")
+    
+    return result_df
+
+# TODO: Test interpolation on traffic data
+if 'traffic' in datasets:
+    print("🚗 Testing interpolation on traffic data...")
+    traffic_interpolated = interpolate_time_series_gaps(
+        datasets['traffic'],
+        ['vehicle_count', 'avg_speed'],
+        sensor_col='sensor_id'
+    )
+    
+    # Show before/after comparison
+    print("\n📊 Before/After Interpolation Comparison:")
+    comparison = datasets['traffic'].agg(
+        F.sum(F.when(F.col("vehicle_count").isNull(), 1).otherwise(0)).alias("vehicle_count_missing_before")
+    ).join(
+        traffic_interpolated.agg(
+            F.sum(F.when(F.col("vehicle_count_filled").isNull(), 1).otherwise(0)).alias("vehicle_count_missing_after")
+        )
+    )
+    comparison.show()
+
+# =============================================================================
+# SECTION 3: OUTLIER DETECTION & TREATMENT (Afternoon - 2 hours)
+# =============================================================================
+
+print("\n" + "=" * 60)
+print("🎯 SECTION 3: OUTLIER DETECTION & TREATMENT")
+print("=" * 60)
+
+# =============================================================================
+# TODO 3.1: Statistical Outlier Detection (60 minutes)
+# =============================================================================
+
+"""
+🎯 TASK: Implement multiple outlier detection methods
+💡 HINT: Different methods work better for different data distributions
+📚 CONCEPTS: IQR method, Z-score, isolation forest, domain-specific rules
+"""
+
+def detect_statistical_outliers(df, columns, methods=['iqr', 'zscore'], sensor_col=None):
+    """
+    Detect outliers using statistical methods
+    
+    Args:
+        df: DataFrame to analyze
+        columns: List of numeric columns to check
+        methods: List of detection methods to use
+        sensor_col: Sensor ID column for per-sensor analysis
+    
+    Returns:
+        DataFrame with outlier flags added
+    """
+    print(f"\n🔍 Statistical Outlier Detection")
+    print("-" * 35)
+    
+    result_df = df
+    
+    for col in columns:
+        if col not in df.columns:
+            continue
+            
+        print(f"   Analyzing {col}...")
+        
+        # TODO: IQR Method
+        if 'iqr' in methods:
+            # Calculate quartiles
+            if sensor_col:
+                # Per-sensor IQR (more complex)
+                # For simplicity, we'll do global IQR first
+                pass
+            
+            # Global IQR calculation
+            quartiles = df.select(
+                F.expr(f"percentile_approx({col}, 0.25)").alias("q1"),
+                F.expr(f"percentile_approx({col}, 0.75)").alias("q3")
+            ).collect()[0]
+            
+            q1, q3 = quartiles['q1'], quartiles['q3']
+            if q1 is not None and q3 is not None:
+                iqr = q3 - q1
+                lower_bound = q1 - 1.5 * iqr
+                upper_bound = q3 + 1.5 * iqr
+                
+                result_df = result_df.withColumn(
+                    f"{col}_outlier_iqr",
+                    F.when(
+                        (F.col(col) < lower_bound) | (F.col(col) > upper_bound),
+                        True
+                    ).otherwise(False)
+                )
+                
+                outlier_count = result_df.filter(F.col(f"{col}_outlier_iqr") == True).count()
+                print(f"      IQR method: {outlier_count} outliers detected")
+        
+        # TODO: Z-Score Method  
+        if 'zscore' in methods:
+            # Calculate mean and standard deviation
+            stats = df.select(
+                F.mean(col).alias("mean_val"),
+                F.stddev(col).alias("stddev_val")
+            ).collect()[0]
+            
+            mean_val, stddev_val = stats['mean_val'], stats['stddev_val']
+            if mean_val is not None and stddev_val is not None and stddev_val > 0:
+                result_df = result_df.withColumn(
+                    f"{col}_zscore",
+                    F.abs((F.col(col) - mean_val) / stddev_val)
+                ).withColumn(
+                    f"{col}_outlier_zscore",
+                    F.when(F.col(f"{col}_zscore") > 3, True).otherwise(False)
+                )
+                
+                outlier_count = result_df.filter(F.col(f"{col}_outlier_zscore") == True).count()
+                print(f"      Z-Score method: {outlier_count} outliers detected")
+    
+    return result_df
+
+# TODO: Domain-specific outlier rules
+def detect_domain_outliers(df, dataset_type):
+    """
+    Apply domain-specific outlier detection rules
+    
+    Args:
+        df: DataFrame to analyze
+        dataset_type: Type of sensor data (traffic, air_quality, weather, energy)
+    
+    Returns:
+        DataFrame with domain-specific outlier flags
+    """
+    print(f"\n🏭 Domain-Specific Outlier Detection: {dataset_type}")
+    print("-" * 45)
+    
+    result_df = df
+    
+    if dataset_type == 'traffic':
+        # TODO: Traffic-specific rules
+        if 'avg_speed' in df.columns:
+            result_df = result_df.withColumn(
+                "speed_outlier_domain",
+                F.when(
+                    # Speed should be reasonable for the road type
+                    (F.col("avg_speed") < 0) | (F.col("avg_speed") > 120),  # Impossible speeds
+                    True
+                ).otherwise(False)
+            )
+        
+        if 'vehicle_count' in df.columns:
+            result_df = result_df.withColumn(
+                "vehicle_count_outlier_domain", 
+                F.when(
+                    F.col("vehicle_count") < 0,  # Negative vehicle count impossible
+                    True
+                ).otherwise(False)
+            )
+            
+    elif dataset_type == 'air_quality':
+        # TODO: Air quality specific rules
+        if 'pm25' in df.columns:
+            result_df = result_df.withColumn(
+                "pm25_outlier_domain",
+                F.when(
+                    (F.col("pm25") < 0) | (F.col("pm25") > 500),  # PM2.5 reasonable range
+                    True
+                ).otherwise(False)
+            )
+        
+        # TODO: Add more air quality rules
+        
+    elif dataset_type == 'weather':
+        # TODO: Weather-specific rules  
+        if 'temperature' in df.columns:
+            result_df = result_df.withColumn(
+                "temperature_outlier_domain",
+                F.when(
+                    (F.col("temperature") < -50) | (F.col("temperature") > 60),  # Extreme temperatures
+                    True
+                ).otherwise(False)
+            )
+            
+    elif dataset_type == 'energy':
+        # TODO: Energy-specific rules
+        if 'power_consumption' in df.columns:
+            result_df = result_df.withColumn(
+                "power_outlier_domain",
+                F.when(
+                    F.col("power_consumption") < 0,  # Negative power consumption
+                    True
+                ).otherwise(False)
+            )
+    
+    # Count domain outliers
+    outlier_cols = [col for col in result_df.columns if col.endswith('_outlier_domain')]
+    if outlier_cols:
+        for col in outlier_cols:
+            outlier_count = result_df.filter(F.col(col) == True).count()
+            print(f"   {col}: {outlier_count} outliers detected")
+    
+    return result_df
+
+# TODO: Test outlier detection on all datasets
+print("🎯 Testing outlier detection across all datasets...")
+
+outlier_results = {}
+
+for name, df in datasets.items():
+    if df is not None and name != 'zones':
+        try:
+            # Get numeric columns for statistical outlier detection
+            numeric_cols = [field.name for field in df.schema.fields 
+                           if field.dataType in [IntegerType(), DoubleType(), FloatType()] 
+                           and field.name not in ['location_lat', 'location_lon']]
+            
+            if numeric_cols:
+                # Statistical outlier detection
+                df_with_outliers = detect_statistical_outliers(df, numeric_cols[:3])  # First 3 columns
+                
+                # Domain-specific outlier detection
+                df_with_all_outliers = detect_domain_outliers(df_with_outliers, name)
+                
+                outlier_results[name] = df_with_all_outliers
+                
+                print(f"\n✅ Outlier detection completed for {name}")
+                
+        except Exception as e:
+            print(f"❌ Error in outlier detection for {name}: {str(e)}")
+
+# =============================================================================
+# TODO 3.2: Outlier Treatment Strategies (60 minutes)
+# =============================================================================
+
+"""
+🎯 TASK: Implement different strategies for handling detected outliers
+💡 HINT: Consider business impact when choosing treatment methods
+📚 CONCEPTS: Capping, removal, imputation, flagging
+"""
+
+def treat_outliers(df, treatment_strategy='cap', outlier_columns=None):
+    """
+    Apply outlier treatment strategies
+    
+    Args:
+        df: DataFrame with outlier flags
+        treatment_strategy: 'cap', 'remove', 'impute', or 'flag_only'
+        outlier_columns: List of outlier flag columns to process
+    
+    Returns:
+        DataFrame with outliers treated
+    """
+    print(f"\n🔧 Outlier Treatment Strategy: {treatment_strategy}")
+    print("-" * 45)
+    
+    result_df = df
+    
+    if outlier_columns is None:
+        # Find all outlier flag columns
+        outlier_columns = [col for col in df.columns if '_outlier_' in col]
+    
+    treatment_stats = {}
+    
+    for outlier_col in outlier_columns:
+        # Extract the original column name
+        original_col = outlier_col.split('_outlier_')[0]
+        
+        if original_col not in df.columns:
+            continue
+            
+        outlier_count = df.filter(F.col(outlier_col) == True).count()
+        treatment_stats[outlier_col] = {'original_outliers': outlier_count}
+        
+        if treatment_strategy == 'remove':
+            # TODO: Remove outlier rows
+            result_df = result_df.filter(F.col(outlier_col) == False)
+            treatment_stats[outlier_col]['action'] = 'removed'
+            
+        elif treatment_strategy == 'cap':
+            # TODO: Cap outliers to reasonable bounds
+            # Calculate 5th and 95th percentiles for capping
+            percentiles = df.select(
+                F.expr(f"percentile_approx({original_col}, 0.05)").alias("p5"),
+                F.expr(f"percentile_approx({original_col}, 0.95)").alias("p95")
+            ).collect()[0]
+            
+            p5, p95 = percentiles['p5'], percentiles['p95']
+            if p5 is not None and p95 is not None:
+                result_df = result_df.withColumn(
+                    f"{original_col}_capped",
+                    F.when(F.col(outlier_col) == True,
+                           F.when(F.col(original_col) < p5, p5)
+                            .when(F.col(original_col) > p95, p95)
+                            .otherwise(F.col(original_col))
+                    ).otherwise(F.col(original_col))
+                )
+                treatment_stats[outlier_col]['action'] = 'capped'
+                
+        elif treatment_strategy == 'impute':
+            # TODO: Replace outliers with median/mean
+            median_val = df.filter(F.col(outlier_col) == False).select(
+                F.expr(f"percentile_approx({original_col}, 0.5)").alias("median")
+            ).collect()[0]['median']
+            
+            if median_val is not None:
+                result_df = result_df.withColumn(
+                    f"{original_col}_imputed",
+                    F.when(F.col(outlier_col) == True, median_val)
+                     .otherwise(F.col(original_col))
+                )
+                treatment_stats[outlier_col]['action'] = 'imputed'
+                
+        elif treatment_strategy == 'flag_only':
+            # TODO: Just keep the outlier flags for downstream analysis
+            treatment_stats[outlier_col]['action'] = 'flagged_only'
+    
+    # Print treatment summary
+    print("📊 Treatment Summary:")
+    for col, stats in treatment_stats.items():
+        action = stats.get('action', 'none')
+        count = stats.get('original_outliers', 0)
+        print(f"   {col}: {count} outliers {action}")
+    
+    return result_df
+
+# TODO: Test different treatment strategies
+if 'traffic' in outlier_results:
+    print("\n🚗 Testing outlier treatment on traffic data...")
+    
+    # Try capping strategy
+    traffic_treated = treat_outliers(
+        outlier_results['traffic'], 
+        treatment_strategy='cap'
+    )
+    
+    print("✅ Outlier treatment completed for traffic data")
+
+# =============================================================================
+# SECTION 4: DATA STANDARDIZATION (Afternoon - 2 hours)
+# =============================================================================
+
+print("\n" + "=" * 60)
+print("📏 SECTION 4: DATA STANDARDIZATION")
+print("=" * 60)
+
+# =============================================================================
+# TODO 4.1: Unit Standardization (60 minutes)
+# =============================================================================
+
+"""
+🎯 TASK: Ensure consistent units across all measurements
+💡 HINT: Different sensors might use different units for similar measurements
+📚 CONCEPTS: Unit conversion, standardization, metadata management
+"""
+
+def standardize_measurement_units(df, sensor_type):
+    """
+    Standardize measurement units for a sensor type
+    
+    Args:
+        df: DataFrame with sensor measurements
+        sensor_type: Type of sensor (traffic, air_quality, weather, energy)
+    
+    Returns:
+        DataFrame with standardized units
+    """
+    print(f"\n📏 Standardizing units for {sensor_type} sensors")
+    print("-" * 40)
+    
+    result_df = df
+    conversions_applied = []
+    
+    if sensor_type == 'traffic':
+        # TODO: Standardize speed to km/h (if needed)
+        if 'avg_speed' in df.columns:
+            # Assume data is already in km/h, but add validation
+            result_df = result_df.withColumn(
+                "avg_speed_kmh", 
+                F.col("avg_speed")  # Already in km/h
+            ).withColumn(
+                "avg_speed_unit",
+                F.lit("km/h")
+            )
+            conversions_applied.append("Speed: km/h")
+            
+    elif sensor_type == 'air_quality':
+        # TODO: Standardize pollution measurements to μg/m³
+        if 'pm25' in df.columns:
+            result_df = result_df.withColumn(
+                "pm25_ugm3",
+                F.col("pm25")  # Assume already in μg/m³
+            ).withColumn(
+                "pm25_unit",
+                F.lit("μg/m³")
+            )
+            conversions_applied.append("PM2.5: μg/m³")
+            
+        # TODO: Temperature to Celsius
+        if 'temperature' in df.columns:
+            result_df = result_df.withColumn(
+                "temperature_celsius",
+                F.col("temperature")  # Assume already in Celsius
+            ).withColumn(
+                "temperature_unit",
+                F.lit("°C")
+            )
+            conversions_applied.append("Temperature: °C")
+            
+    elif sensor_type == 'weather':
+        # TODO: Standardize weather measurements
+        if 'temperature' in df.columns:
+            result_df = result_df.withColumn(
+                "temperature_celsius",
+                F.col("temperature")
+            ).withColumn(
+                "temperature_unit",
+                F.lit("°C")
+            )
+            
+        if 'wind_speed' in df.columns:
+            result_df = result_df.withColumn(
+                "wind_speed_kmh",
+                F.col("wind_speed")  # Assume already in km/h
+            ).withColumn(
+                "wind_speed_unit", 
+                F.lit("km/h")
+            )
+            conversions_applied.append("Wind Speed: km/h")
+            
+        if 'pressure' in df.columns:
+            result_df = result_df.withColumn(
+                "pressure_hpa",
+                F.col("pressure")  # Assume already in hPa
+            ).withColumn(
+                "pressure_unit",
+                F.lit("hPa")
+            )
+            conversions_applied.append("Pressure: hPa")
+            
+    elif sensor_type == 'energy':
+        # TODO: Standardize energy measurements
+        if 'power_consumption' in df.columns:
+            result_df = result_df.withColumn(
+                "power_consumption_kw",
+                F.col("power_consumption")  # Assume already in kW
+            ).withColumn(
+                "power_unit",
+                F.lit("kW")
+            )
+            conversions_applied.append("Power: kW")
+            
+        if 'voltage' in df.columns:
+            result_df = result_df.withColumn(
+                "voltage_v",
+                F.col("voltage")  # Assume already in V
+            ).withColumn(
+                "voltage_unit",
+                F.lit("V")
+            )
+            conversions_applied.append("Voltage: V")
+    
+    print("🔄 Unit conversions applied:")
+    for conversion in conversions_applied:
+        print(f"   ✅ {conversion}")
+        
+    return result_df
+
+# TODO: Apply unit standardization to all datasets
+standardized_datasets = {}
+
+for name, df in datasets.items():
+    if df is not None and name != 'zones':
+        try:
+            standardized_df = standardize_measurement_units(df, name)
+            standardized_datasets[name] = standardized_df
+            print(f"✅ Unit standardization completed for {name}")
+        except Exception as e:
+            print(f"❌ Error standardizing {name}: {str(e)}")
+
+# =============================================================================
+# TODO 4.2: Data Lineage Tracking (60 minutes)
+# =============================================================================
+
+"""
+🎯 TASK: Track data transformation history and quality metadata
+💡 HINT: Important for understanding data processing steps and debugging
+📚 CONCEPTS: Data lineage, metadata management, audit trails
+"""
+
+def add_data_lineage(df, transformations_applied, data_quality_score=None):
+    """
+    Add data lineage and quality tracking columns
+    
+    Args:
+        df: DataFrame to augment
+        transformations_applied: List of transformation descriptions
+        data_quality_score: Overall quality score (0-1)
+    
+    Returns:
+        DataFrame with lineage metadata
+    """
+    print(f"\n📋 Adding Data Lineage Tracking")
+    print("-" * 35)
+    
+    result_df = df
+    
+    # TODO: Add processing timestamp
+    result_df = result_df.withColumn(
+        "processed_at",
+        F.current_timestamp()
+    )
+    
+    # TODO: Add transformation history
+    transformations_json = str(transformations_applied)  # Convert to string for Spark
+    result_df = result_df.withColumn(
+        "transformations_applied",
+        F.lit(transformations_json)
+    )
+    
+    # TODO: Add data quality score
+    if data_quality_score is not None:
+        result_df = result_df.withColumn(
+            "data_quality_score",
+            F.lit(data_quality_score)
+        )
+    
+    # TODO: Add data completeness score per row
+    # Calculate percentage of non-null values per row
+    numeric_cols = [field.name for field in df.schema.fields 
+                   if field.dataType in [IntegerType(), DoubleType(), FloatType()]]
+    
+    if len(numeric_cols) > 0:
+        # Count non-null numeric columns per row
+        non_null_count = sum([F.when(F.col(col).isNotNull(), 1).otherwise(0) for col in numeric_cols])
+        total_numeric_cols = len(numeric_cols)
+        
+        result_df = result_df.withColumn(
+            "row_completeness_score",
+            non_null_count / total_numeric_cols
+        )
+    
+    # TODO: Add record-level quality flags
+    result_df = result_df.withColumn(
+        "has_outliers",
+        # Check if any outlier flag columns are True
+        # This is a simplified version - in practice you'd check all outlier flag columns
+        F.lit(False)  # Placeholder
+    )
+    
+    result_df = result_df.withColumn(
+        "has_interpolated_values",
+        # Check if any interpolated flag columns are True
+        F.lit(False)  # Placeholder
+    )
+    
+    print("📊 Lineage metadata added:")
+    print("   ✅ Processing timestamp")
+    print("   ✅ Transformation history")
+    print("   ✅ Data quality scores")
+    print("   ✅ Record-level quality flags")
+    
+    return result_df
+
+# TODO: Add lineage to all processed datasets
+final_datasets = {}
+
+for name, df in standardized_datasets.items():
+    try:
+        # Create transformation history for this dataset
+        transformations = [
+            "missing_data_analysis",
+            "outlier_detection",
+            "unit_standardization"
+        ]
+        
+        # Calculate a simple quality score based on completeness
+        total_rows = df.count()
+        if total_rows > 0:
+            # Simplified quality score - you could make this more sophisticated
+            quality_score = 0.85  # Placeholder
+        else:
+            quality_score = 0.0
+        
+        final_df = add_data_lineage(df, transformations, quality_score)
+        final_datasets[name] = final_df
+        
+        print(f"✅ Lineage tracking added to {name}")
+        
+    except Exception as e:
+        print(f"❌ Error adding lineage to {name}: {str(e)}")
+
+# =============================================================================
+# DAY 2 DELIVERABLES & VALIDATION
+# =============================================================================
+
+print("\n" + "=" * 60)
+print("📋 DAY 2 COMPLETION CHECKLIST")
+print("=" * 60)
+
+def validate_day2_completion():
+    """Validate that Day 2 objectives have been met"""
+    
+    checklist = {
+        "data_profiling_completed": False,
+        "sensor_health_analyzed": False,
+        "missing_data_patterns_identified": False,
+        "interpolation_implemented": False,
+        "outlier_detection_working": False,
+        "outlier_treatment_applied": False,
+        "units_standardized": False,
+        "data_lineage_tracked": False,
+        "quality_scores_calculated": False
+    }
+    
+    try:
+        # Check if profiling was completed
+        if len(profiles) > 0:
+            checklist["data_profiling_completed"] = True
+            
+        # Check if sensor health analysis was done
+        if len(sensor_health_results) > 0:
+            checklist["sensor_health_analyzed"] = True
+            
+        # Check if outlier detection was implemented
+        if len(outlier_results) > 0:
+            checklist["outlier_detection_working"] = True
+            
+        # Check if standardization was applied
+        if len(standardized_datasets) > 0:
+            checklist["units_standardized"] = True
+            
+        # Check if final datasets have lineage
+        if len(final_datasets) > 0:
+            checklist["data_lineage_tracked"] = True
+            
+        # TODO: Add more specific validation checks
+        
+    except Exception as e:
+        print(f"❌ Validation error: {str(e)}")
+    
+    # Display results
+    print("✅ COMPLETION STATUS:")
+    for item, status in checklist.items():
+        status_icon = "✅" if status else "❌"
+        print(f"   {status_icon} {item.replace('_', ' ').title()}")
+    
+    completion_rate = sum(checklist.values()) / len(checklist) * 100
+    print(f"\n📊 Overall Completion: {completion_rate:.1f}%")
+    
+    if completion_rate >= 70:
+        print("🎉 Great progress! You're ready for Day 3!")
+        print("\n📈 KEY INSIGHTS FROM DAY 2:")
+        print("- Data quality patterns identified across sensors")
+        print("- Missing data handling strategies implemented") 
+        print("- Outlier detection and treatment procedures established")
+        print("- Standardized data formats for consistent analysis")
+    else:
+        print("📝 Please review incomplete items before proceeding to Day 3.")
+    
+    return checklist
+
+# Run the validation
+completion_status = validate_day2_completion()
+
+# =============================================================================
+# SAVE CLEANED DATA FOR DAY 3
+# =============================================================================
+
+print("\n💾 SAVING CLEANED DATA FOR DAY 3")
+print("=" * 40)
+
+# TODO: Save the cleaned datasets for use in Day 3
+cleaned_data_dir = "data/processed"
+
+for name, df in final_datasets.items():
+    try:
+        # Save as Parquet for efficient storage and fast loading
+        output_path = f"{cleaned_data_dir}/{name}_cleaned.parquet"
+        
+        # TODO: You would normally save like this:
+        # df.write.mode("overwrite").parquet(output_path)
+        
+        print(f"✅ Saved cleaned {name} data to {output_path}")
+        
+    except Exception as e:
+        print(f"❌ Error saving {name}: {str(e)}")
+
+# =============================================================================
+# NEXT STEPS
+# =============================================================================
+
+print("\n" + "=" * 60)
+print("🚀 WHAT'S NEXT?")
+print("=" * 60)
+
+print("""
+📅 DAY 3 PREVIEW: Time Series Analysis & Feature Engineering
+
+Tomorrow you'll work on:
+1. 📈 Seasonal decomposition and temporal pattern analysis
+2. 🔗 Cross-sensor correlation studies
+3. ⚙️ Advanced feature engineering for machine learning
+4. 📊 Trend detection and forecasting preparation
+5. 🎯 Predictive feature creation
+
+📚 RECOMMENDED PREPARATION:
+- Review time series analysis concepts
+- Understand correlation and causation
+- Read about feature engineering best practices
+- Familiarize yourself with window functions in Spark
+
+💡 KEY TAKEAWAYS FROM DAY 2:
+- Data quality assessment is crucial for IoT data
+- Missing data patterns often reveal operational insights
+- Outlier detection requires both statistical and domain knowledge
+- Standardization enables consistent cross-sensor analysis
+- Data lineage tracking is essential for production systems
+
+🤝 QUESTIONS FOR REFLECTION:
+- Which sensors showed the most quality issues and why?
+- What patterns did you notice in missing data?
+- How might seasonal factors affect your cleaning strategies?
+- What domain knowledge would improve outlier detection?
+
+💾 SAVE YOUR WORK:
+- Commit your notebook with findings and insights
+- Document any custom cleaning rules you developed
+- Note any sensors that may need maintenance
+""")
+
+print("\n💾 Don't forget to save your notebook and commit your changes!")
