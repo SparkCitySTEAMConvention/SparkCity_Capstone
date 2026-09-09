@@ -436,9 +436,11 @@ smart-city-iot-pipeline/
 
 ### 🚀 Getting Started
 
+> Team setup instructions and verification commands are in
+> [TEAM_SETUP.md](TEAM_SETUP.md).
+
 1. **Prerequisites Check:**
    - Docker and Docker Compose installed
-   - Python 3.8+ with pip
    - Git for version control
    - 8GB+ RAM recommended
 
@@ -446,14 +448,15 @@ smart-city-iot-pipeline/
    ```bash
    git clone [repository-url]
    cd smart-city-iot-pipeline
-   pip install -r requirements.txt
+   # Python dependencies are installed in the Jupyter Docker image.
    ```
 
 3. **Start Infrastructure:**
    ```bash
-   docker-compose up -d
+   make setup
+   make start
    # Wait for services to be ready (check logs)
-   docker-compose logs -f
+   make verify
    ```
 
 4. **Verify Setup:**

@@ -78,6 +78,11 @@ target/
 # Jupyter Notebook
 .ipynb_checkpoints
 
+# Local Spark runtime output
+spark-warehouse/
+metastore_db/
+derby.log
+
 # IPython
 profile_default/
 ipython_config.py
