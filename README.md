@@ -442,12 +442,14 @@ smart-city-iot-pipeline/
 1. **Prerequisites Check:**
    - Docker and Docker Compose installed
    - Git for version control
+   - Make and curl (included with most macOS/Linux installations; Windows users can use WSL)
    - 8GB+ RAM recommended
 
 2. **Repository Setup:**
    ```bash
-   git clone [repository-url]
-   cd smart-city-iot-pipeline
+   git clone https://github.com/SparkCity-data/SparkCity.git
+   cd SparkCity
+   git switch dev
    # Python dependencies are installed in the Jupyter Docker image.
    ```
 

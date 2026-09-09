@@ -8,6 +8,7 @@ Python, Java, Spark, or PostgreSQL directly on their computers.
 
 - Git
 - Docker Desktop (macOS/Windows) or Docker Engine with the Compose plugin
+- Make and curl (Windows users can run the commands from WSL)
 - At least 8 GB of memory available to Docker
 
 ## First-time setup
@@ -39,6 +40,10 @@ the local Docker cache.
 Inside Docker, connect to Spark at `spark://spark-master:7077` and PostgreSQL
 at `postgres:5432`. Use relative data paths such as
 `data/raw/energy_meters.csv` from Jupyter.
+
+The checked-in passwords are local-development defaults only. Override them
+without committing secrets by setting `POSTGRES_PASSWORD` and
+`GRAFANA_ADMIN_PASSWORD` in a local `.env` file.
 
 All published ports bind only to the host's loopback interface. Other machines
 cannot connect directly. On a shared server, keep these bindings and use an SSH
