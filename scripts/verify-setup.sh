@@ -11,7 +11,7 @@ check_url() {
   attempts=12
 
   while [ "$attempts" -gt 0 ]; do
-    if curl --fail --silent --max-time 5 "$url" >/dev/null; then
+    if curl --fail --silent --show-error --max-time 5 "$url" >/dev/null; then
       echo "OK   $name ($url)"
       return
     fi
@@ -44,7 +44,7 @@ else
 fi
 
 if docker compose exec -T jupyter python -c \
-  'from pyspark.sql import SparkSession; s=SparkSession.builder.getOrCreate(); assert s.read.option("header", True).csv("data/raw/energy_meters.csv").count() > 0; print("OK   Distributed Spark dataset read"); s.stop()'; then
+  'from pyspark.sql import SparkSession; s=SparkSession.builder.getOrCreate(); assert s.read.option("header", True).csv("file:///home/jovyan/work/data/raw/energy_meters.csv").count() > 0; print("OK   Distributed Spark dataset read"); s.stop()'; then
   :
 else
   echo "FAIL Distributed Spark dataset read"
