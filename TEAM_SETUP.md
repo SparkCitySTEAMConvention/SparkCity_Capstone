@@ -29,7 +29,7 @@ the local Docker cache.
 
 | Service | Address |
 | --- | --- |
-| JupyterLab | http://localhost:8888/lab?token=smartcity123 |
+| JupyterLab | http://localhost:8888/lab (no local login required) |
 | Spark master UI | http://localhost:8080 |
 | Spark worker 1 | http://localhost:8081 |
 | Spark worker 2 | http://localhost:8082 |
@@ -39,6 +39,10 @@ the local Docker cache.
 Inside Docker, connect to Spark at `spark://spark-master:7077` and PostgreSQL
 at `postgres:5432`. Use relative data paths such as
 `data/raw/energy_meters.csv` from Jupyter.
+
+All published ports bind only to the host's loopback interface. Other machines
+cannot connect directly. On a shared server, keep these bindings and use an SSH
+tunnel rather than opening Jupyter, Spark, or PostgreSQL to the internet.
 
 ## Everyday commands
 
