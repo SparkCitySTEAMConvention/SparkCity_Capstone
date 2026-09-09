@@ -1,31 +1,18 @@
-# jupyter.Dockerfile
-# Custom Jupyter image with PySpark and required dependencies
+FROM python:3.10-slim-bookworm
 
-FROM jupyter/pyspark-notebook:spark-3.4.0
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openjdk-17-jre-headless curl procps \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --create-home --uid 1000 --shell /bin/bash jovyan
 
-USER root
+COPY requirements.txt /tmp/requirements.txt
+RUN python -m pip install --no-cache-dir -r /tmp/requirements.txt
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    curl \
-    vim \
-    git \
-    postgresql-client \
-    && rm -rf /var/lib/apt/lists/*
+RUN mkdir -p /opt/spark-conf /home/jovyan/work \
+    && chown -R jovyan:jovyan /opt/spark-conf /home/jovyan
+COPY --chown=jovyan:jovyan config/spark-defaults.conf /opt/spark-conf/spark-defaults.conf
 
-USER $NB_UID
-
-# Install Python packages
-COPY requirements.txt /tmp/
-RUN pip install -r /tmp/requirements.txt
-
-# Install additional Jupyter extensions
-RUN pip install \
-    jupyterlab-git \
-    jupyter-resource-usage \
-    ipywidgets
-
-# Spark JVM options
-ENV SPARK_OPTS="--driver-java-options=-Xms2g --driver-java-options=-Xmx4g"
-
+ENV SPARK_CONF_DIR=/opt/spark-conf
+USER jovyan
 WORKDIR /home/jovyan/work
+CMD ["sh", "-c", "exec jupyter lab --ip=0.0.0.0 --no-browser --ServerApp.token=\"$JUPYTER_TOKEN\" --ServerApp.allow_remote_access=True"]
