@@ -15,4 +15,4 @@ COPY --chown=jovyan:jovyan config/spark-defaults.conf /opt/spark-conf/spark-defa
 ENV SPARK_CONF_DIR=/opt/spark-conf
 USER jovyan
 WORKDIR /home/jovyan/work
-CMD ["sh", "-c", "exec jupyter lab --ip=0.0.0.0 --no-browser --ServerApp.token=\"$JUPYTER_TOKEN\" --ServerApp.allow_remote_access=True"]
+CMD ["sh", "-c", "exec jupyter lab --ip=0.0.0.0 --no-browser --IdentityProvider.token=\"$JUPYTER_TOKEN\" --ServerApp.allow_remote_access=True"]

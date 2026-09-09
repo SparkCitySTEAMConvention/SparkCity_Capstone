@@ -29,7 +29,7 @@ the local Docker cache.
 
 | Service | Address |
 | --- | --- |
-| JupyterLab | http://localhost:8888 (token `smartcity123`) |
+| JupyterLab | http://localhost:8888/lab?token=smartcity123 |
 | Spark master UI | http://localhost:8080 |
 | Spark worker 1 | http://localhost:8081 |
 | Spark worker 2 | http://localhost:8082 |
@@ -67,4 +67,3 @@ git push -u origin feature_name
 Open pull requests from feature branches into `dev`. Do not commit directly to
 `main`, and do not commit passwords, SSH keys, notebook checkpoints, or
 generated output.
-
