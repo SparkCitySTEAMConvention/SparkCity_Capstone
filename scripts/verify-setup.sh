@@ -2,6 +2,8 @@
 set -eu
 
 failed=0
+spark_ui_port="${SPARK_UI_PORT:-9501}"
+postgres_port="${POSTGRES_PORT:-9502}"
 
 check_url() {
   name="$1"
@@ -21,15 +23,15 @@ check_url() {
   failed=1
 }
 
-check_url "Spark master" "http://localhost:8080"
+check_url "Spark master" "http://localhost:${spark_ui_port}"
 check_url "Spark worker 1" "http://localhost:8081"
 check_url "Spark worker 2" "http://localhost:8082"
 check_url "JupyterLab" "http://localhost:8888"
 
 if docker compose exec -T postgres pg_isready -U postgres -d smartcity >/dev/null; then
-  echo "OK   PostgreSQL (localhost:5432)"
+  echo "OK   PostgreSQL (localhost:${postgres_port})"
 else
-  echo "FAIL PostgreSQL (localhost:5432)"
+  echo "FAIL PostgreSQL (localhost:${postgres_port})"
   failed=1
 fi
 

@@ -31,15 +31,21 @@ the local Docker cache.
 | Service | Address |
 | --- | --- |
 | JupyterLab | http://localhost:8888/lab (no local login required) |
-| Spark master UI | http://localhost:8080 |
+| Spark master UI | http://localhost:9501 |
 | Spark worker 1 | http://localhost:8081 |
 | Spark worker 2 | http://localhost:8082 |
 | Spark application UI | http://localhost:4040 while an application runs |
-| PostgreSQL from the host | `localhost:5432` |
+| PostgreSQL from the host | `localhost:9502` |
 
 Inside Docker, connect to Spark at `spark://spark-master:7077` and PostgreSQL
 at `postgres:5432`. Use relative data paths such as
 `data/raw/energy_meters.csv` from Jupyter.
+
+The host ports follow the S2 allocation. Override `SPARK_UI_PORT` or
+`POSTGRES_PORT` in a local `.env` file if either port conflicts on your machine.
+`HOST_BIND_ADDRESS` defaults to `127.0.0.1`; an S2 administrator can set it to
+an approved network interface after restricting inbound access with the host
+firewall or security group.
 
 The checked-in passwords are local-development defaults only. Override them
 without committing secrets by setting `POSTGRES_PASSWORD` and

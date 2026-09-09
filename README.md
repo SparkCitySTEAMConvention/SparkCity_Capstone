@@ -462,9 +462,9 @@ smart-city-iot-pipeline/
    ```
 
 4. **Verify Setup:**
-   - Spark UI: http://localhost:8080
+   - Spark UI: http://localhost:9501
    - Jupyter: http://localhost:8888
-   - Database: localhost:5432
+   - Database: localhost:9502
 
 5. **Begin Day 1 Activities:**
    - Open `notebooks/day1_setup_and_exploration.ipynb`
