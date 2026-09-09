@@ -1,0 +1,6 @@
+zone_id,zone_name,zone_type,lat_min,lat_max,lon_min,lon_max,population
+ZONE_001,Downtown Manhattan,commercial,40.7100,40.7200,-74.0100,-73.9900,250000
+ZONE_002,Midtown East,commercial,40.7250,40.7350,-73.9950,-73.9750,180000
+ZONE_003,Upper East Side,residential,40.7450,40.7550,-73.9800,-73.9600,220000
+ZONE_004,Astoria Queens,residential,40.7500,40.7600,-73.9900,-73.9700,195000
+ZONE_005,Long Island City,industrial,40.7600,40.7700,-73.9850,-73.9650,85000
