@@ -29,16 +29,20 @@ PROHIBITED_PATTERNS = {
 
 
 def find_prohibited_operations(sql: str) -> list[str]:
-    normalized = sql.upper()
+    normalized = _without_sql_comments(sql).upper()
     return [
         operation
         for operation, pattern in PROHIBITED_PATTERNS.items()
         if re.search(pattern, normalized)
     ]
+def _without_sql_comments(sql: str) -> str:
+    sql = re.sub(r"/\*[\s\S]*?\*/", "", sql)
+    return re.sub(r"--[^\n]*", "", sql)
 
 
 def test_schema_migration_is_additive_and_idempotent() -> None:
     migration = MIGRATION.read_text(encoding="utf-8")
+    migration = _without_sql_comments(migration)
     normalized = migration.upper()
     assert "CREATE SCHEMA IF NOT EXISTS SPARKCITY" in normalized
     assert normalized.count("CREATE TABLE IF NOT EXISTS") == 7
