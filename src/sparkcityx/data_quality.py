@@ -117,7 +117,8 @@ _ALIASES = {
 }
 
 
-def _canonical_name(dataset_type: str) -> str:
+def normalize_dataset_type(dataset_type: str) -> str:
+    """Return the canonical configured name for a dataset type or alias."""
     name = dataset_type.strip().lower().replace("-", "_").replace(" ", "_")
     name = _ALIASES.get(name, name)
     if name not in _CONFIGS:
@@ -128,13 +129,13 @@ def _canonical_name(dataset_type: str) -> str:
 
 def get_validation_config(dataset_type: str) -> dict[str, Any]:
     """Return an independent copy of the rules for ``dataset_type``."""
-    return deepcopy(_CONFIGS[_canonical_name(dataset_type)])
+    return deepcopy(_CONFIGS[normalize_dataset_type(dataset_type)])
 
 
 def validate_dataframe(df: DataFrame, dataset_type: str) -> dict[str, Any]:
     """Evaluate a Spark DataFrame and return a notebook-friendly validation report."""
     config = get_validation_config(dataset_type)
-    dataset = _canonical_name(dataset_type)
+    dataset = normalize_dataset_type(dataset_type)
     columns = set(df.columns)
     missing_columns = [c for c in config["required_columns"] if c not in columns]
     present_required = [c for c in config["required_columns"] if c in columns]

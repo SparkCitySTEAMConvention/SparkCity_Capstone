@@ -80,6 +80,19 @@ uv run python scripts/inspect-database.py
 The migration creates the `sparkcity` schema and seven empty tables. It contains
 no drop, truncate, update, delete, or data-loading operations.
 
+### Loading one dataset
+
+Each dataset owner should preview and then load only their assigned dataset:
+
+```bash
+uv run python scripts/load-dataset.py traffic
+uv run python scripts/load-dataset.py traffic --apply
+```
+
+The loader validates the Spark DataFrame before opening a database transaction,
+targets the existing `sparkcity` table, and uses `ON CONFLICT DO NOTHING`. A
+repeat run preserves existing rows and constraints instead of replacing tables.
+
 # Smart City IoT Analytics Pipeline
 ## 5-Day PySpark Data Engineering Lab
 
