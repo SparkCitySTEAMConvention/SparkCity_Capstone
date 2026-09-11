@@ -57,33 +57,6 @@ def test_validation_reports_missing_null_and_incompatible_columns(spark) -> None
     assert report["valid"] is False
 
 
-@pytest.mark.parametrize(
-    ("dataset_type", "schema", "row", "expected_rule"),
-    [
-        (
-            "city_zones",
-            "zone_id string, zone_name string, zone_type string, lat_min double, "
-            "lat_max double, lon_min double, lon_max double, population int",
-            ("Z1", "Invalid", "park", 42.0, 41.0, -73.0, -74.0, 10),
-            "lat_min <= lat_max",
-        ),
-        (
-            "occupancy",
-            "sensor_id string, timestamp string, location_lat double, "
-            "location_lon double, available_rooms int, occupied_rooms int, guests int",
-            ("O1", "2026-01-01", 40.0, -74.0, 10, 11, 20),
-            "occupied_rooms <= available_rooms",
-        ),
-    ],
-)
-def test_cross_field_constraints_fail_before_loading(
-    spark, dataset_type: str, schema: str, row: tuple, expected_rule: str
-) -> None:
-    report = validate_dataframe(spark.createDataFrame([row], schema), dataset_type)
-    assert report["valid"] is False
-    assert report["comparison_violations"][expected_rule] == 1
-
-
 def test_duplicate_check_requires_full_key(spark) -> None:
     df = spark.createDataFrame(
         [("S1", 10.0), ("S1", 12.0)],
@@ -92,6 +65,31 @@ def test_duplicate_check_requires_full_key(spark) -> None:
     report = validate_dataframe(df, "traffic")
     assert report["duplicate_count"] == 0
     assert "timestamp" in report["missing_columns"]
+
+
+def test_validation_reports_cross_field_schema_failures(spark) -> None:
+    zone_df = spark.createDataFrame(
+        [("Z1", "Zone 1", "residential", 41.0, 40.0, -74.0, -73.0, 100)],
+        (
+            "zone_id string, zone_name string, zone_type string, lat_min double, "
+            "lat_max double, lon_min double, lon_max double, population int"
+        ),
+    )
+    occupancy_df = spark.createDataFrame(
+        [("S1", "2026-01-01", 40.0, -74.0, 10, 11, 20)],
+        (
+            "sensor_id string, timestamp string, location_lat double, "
+            "location_lon double, available_rooms int, occupied_rooms int, guests int"
+        ),
+    )
+
+    zone_report = validate_dataframe(zone_df, "city_zones")
+    occupancy_report = validate_dataframe(occupancy_df, "occupancy")
+
+    assert zone_report["cross_field_violations"] == {"lat_bounds": 1}
+    assert zone_report["valid"] is False
+    assert occupancy_report["cross_field_violations"] == {"occupied_vs_available_rooms": 1}
+    assert occupancy_report["valid"] is False
 
 
 def test_json_directory_load_avoids_local_file_probe(spark, tmp_path) -> None:

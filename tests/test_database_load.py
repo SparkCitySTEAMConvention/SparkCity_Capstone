@@ -69,32 +69,40 @@ def test_loader_inserts_only_new_rows(validate: MagicMock) -> None:
     connection = MagicMock()
     cursor = connection.cursor.return_value.__enter__.return_value
     cursor.fetchone.side_effect = [(10,), (12,)]
-    cursor.rowcount = 1
+    cursor.fetchall.side_effect = [[(1,)], [(1,)]]
 
     result = load_dataframe(connection, df, "traffic", batch_size=1)
 
     assert result.rows_inserted == 2
     assert result.rows_before == 10
     assert result.rows_after == 12
-    assert cursor.executemany.call_count == 2
+    assert cursor.execute.call_count == 4
 
 
 @patch("sparkcityx.database_load.validate_dataframe")
-def test_inserted_count_does_not_use_concurrent_table_growth(validate: MagicMock) -> None:
-    validate.return_value = {"valid": True, "record_count": 1}
+def test_loader_reports_inserted_rows_independently_from_table_delta(validate: MagicMock) -> None:
+    validate.return_value = {"valid": True, "record_count": 2}
     row = {
-        "zone_id": "Z1", "zone_name": "One", "zone_type": "park",
-        "lat_min": 40.0, "lat_max": 41.0, "lon_min": -74.0,
-        "lon_max": -73.0, "population": 10,
+        "sensor_id": "S1",
+        "timestamp": "2026-01-01",
+        "location_lat": 40.0,
+        "location_lon": -74.0,
+        "vehicle_count": 2,
+        "avg_speed": 20.0,
+        "congestion_level": "low",
+        "road_type": "street",
     }
     df = MagicMock()
-    df.select.return_value.toLocalIterator.return_value = iter([row])
+    df.select.return_value.toLocalIterator.return_value = iter(
+        [row, {**row, "sensor_id": "S2"}]
+    )
     connection = MagicMock()
     cursor = connection.cursor.return_value.__enter__.return_value
-    cursor.fetchone.side_effect = [(0,), (50,)]
-    cursor.rowcount = 0
+    cursor.fetchone.side_effect = [(10,), (12,)]
+    cursor.fetchall.side_effect = [[], []]
 
-    result = load_dataframe(connection, df, "city_zones")
+    result = load_dataframe(connection, df, "traffic", batch_size=1)
 
-    assert result.rows_after == 50
     assert result.rows_inserted == 0
+    assert result.rows_before == 10
+    assert result.rows_after == 12

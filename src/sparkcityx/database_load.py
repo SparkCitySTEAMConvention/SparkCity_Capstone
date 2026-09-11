@@ -127,25 +127,31 @@ def load_dataframe(
     count_query = sql.SQL("SELECT count(*) FROM {}.{}").format(
         sql.Identifier("sparkcity"), sql.Identifier(table)
     )
-    insert_query = sql.SQL(
-        "INSERT INTO {}.{} ({}) VALUES ({}) ON CONFLICT ({}) DO NOTHING"
-    ).format(
-        sql.Identifier("sparkcity"),
-        sql.Identifier(table),
-        sql.SQL(", ").join(map(sql.Identifier, columns)),
-        sql.SQL(", ").join(sql.Placeholder() for _ in columns),
-        sql.SQL(", ").join(map(sql.Identifier, key_columns)),
-    )
-
     with connection.cursor() as cursor:
         cursor.execute(count_query)
         rows_before = cursor.fetchone()[0]
-        rows_inserted = 0
         selected_rows = df.select(*columns).toLocalIterator()
         values = (tuple(row[column] for column in columns) for row in selected_rows)
+        rows_inserted = 0
         for batch in _batches(values, batch_size):
-            cursor.executemany(insert_query, batch)
-            rows_inserted += cursor.rowcount
+            values_clause = sql.SQL(", ").join(
+                sql.SQL("({})").format(
+                    sql.SQL(", ").join(sql.Placeholder() for _ in columns)
+                )
+                for _ in batch
+            )
+            insert_query = sql.SQL(
+                "INSERT INTO {}.{} ({}) VALUES {} ON CONFLICT ({}) DO NOTHING RETURNING 1"
+            ).format(
+                sql.Identifier("sparkcity"),
+                sql.Identifier(table),
+                sql.SQL(", ").join(map(sql.Identifier, columns)),
+                values_clause,
+                sql.SQL(", ").join(map(sql.Identifier, key_columns)),
+            )
+            parameters = [value for row in batch for value in row]
+            cursor.execute(insert_query, parameters)
+            rows_inserted += len(cursor.fetchall())
         cursor.execute(count_query)
         rows_after = cursor.fetchone()[0]
 
