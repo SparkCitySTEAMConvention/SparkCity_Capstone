@@ -31,6 +31,31 @@ newline-delimited JSON. Supported validation types are `traffic`, `air_quality`,
 `weather`, `energy`, `city_zones`, `occupancy`, and `fiscal`; fiscal aliases include
 `financial`, `financial_data`, and `fiscal_data`.
 
+## Shared PostgreSQL connection
+
+Copy `.env.example` to `secrets/.env`, replace its placeholders with the
+instructor-provided credentials, and keep that file local. Verify the connection
+without reading or changing application data:
+
+```bash
+uv run python scripts/check-database.py
+```
+
+Application code should use the shared helper rather than embedding credentials:
+
+```python
+from sparkcityx.database import connect_database
+
+with connect_database() as connection:
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT 1")
+        assert cursor.fetchone() == (1,)
+```
+
+`connect_database` reads `DATABASE_URL` from the process environment. The helper
+does not create schemas, tables, or rows; those operations require explicit team
+ownership and review.
+
 
 # Smart City IoT Analytics Pipeline
 ## 5-Day PySpark Data Engineering Lab
