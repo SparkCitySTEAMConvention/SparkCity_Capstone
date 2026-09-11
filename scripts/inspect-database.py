@@ -21,7 +21,7 @@ def main() -> None:
         "--env-file",
         type=Path,
         default=ROOT / "secrets" / ".env",
-        help="Ignored environment file containing DATABASE_URL",
+        help="Environment file supplying DATABASE_URL",
     )
     args = parser.parse_args()
     if args.env_file.exists():
