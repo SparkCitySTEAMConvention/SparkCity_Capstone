@@ -68,7 +68,7 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
     ports:
-      - "127.0.0.1:8888:8888"
+      - "127.0.0.1:${JUPYTER_PORT:-8888}:8888"
       - "127.0.0.1:4040:4040"
     volumes:
       - ./notebooks:/home/jovyan/work/notebooks

@@ -47,6 +47,12 @@ The host ports follow the S2 allocation. Override `SPARK_UI_PORT` or
 an approved network interface after restricting inbound access with the host
 firewall or security group.
 
+If startup reports that port 8888 is already in use, set `JUPYTER_PORT=9503`
+in your local `.env` file, then run `make start` and `make verify` again.
+Open http://localhost:9503/lab in that case. The container still uses port 8888
+internally. Verification checks running containers and their actual published
+ports, including overrides from `.env`.
+
 The checked-in passwords are local-development defaults only. Override them
 without committing secrets by setting `POSTGRES_PASSWORD` and
 `GRAFANA_ADMIN_PASSWORD` in a local `.env` file.
