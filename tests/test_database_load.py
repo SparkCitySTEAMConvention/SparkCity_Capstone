@@ -47,6 +47,7 @@ def test_invalid_dataframe_is_never_written(validate: MagicMock) -> None:
     with pytest.raises(ValueError, match="validation failed"):
         load_dataframe(connection, MagicMock(), "traffic")
 
+    connection.transaction.assert_not_called()
     connection.cursor.assert_not_called()
 
 
@@ -76,6 +77,7 @@ def test_loader_inserts_only_new_rows(validate: MagicMock) -> None:
     assert result.rows_inserted == 2
     assert result.rows_before == 10
     assert result.rows_after == 12
+    connection.transaction.assert_called_once_with()
     assert cursor.execute.call_count == 4
 
 
@@ -106,3 +108,4 @@ def test_loader_reports_inserted_rows_independently_from_table_delta(validate: M
     assert result.rows_inserted == 0
     assert result.rows_before == 10
     assert result.rows_after == 12
+    connection.transaction.assert_called_once_with()

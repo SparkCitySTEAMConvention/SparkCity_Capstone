@@ -92,6 +92,19 @@ def test_validation_reports_cross_field_schema_failures(spark) -> None:
     assert occupancy_report["valid"] is False
 
 
+def test_validation_reports_invalid_timestamps(spark) -> None:
+    columns = get_validation_config("traffic")["required_columns"]
+    df = spark.createDataFrame(
+        [("S1", "not-a-timestamp", 40.0, -74.0, 2, 20.0, "low", "street")],
+        columns,
+    )
+
+    report = validate_dataframe(df, "traffic")
+
+    assert report["timestamp_violations"] == {"timestamp": 1}
+    assert report["valid"] is False
+
+
 def test_json_directory_load_avoids_local_file_probe(spark, tmp_path) -> None:
     dataset_dir = tmp_path / "json-data"
     dataset_dir.mkdir()

@@ -191,6 +191,14 @@ def validate_dataframe(df: DataFrame, dataset_type: str) -> dict[str, Any]:
                 F.col(column).isNotNull() & ~F.col(column).isin(allowed)
             ).count()
 
+    timestamp_violations: dict[str, int] = {}
+    for column in config.get("required_columns", []):
+        if column != "timestamp" or column not in columns:
+            continue
+        timestamp_violations[column] = df.filter(
+            F.col(column).isNotNull() & F.try_to_timestamp(F.col(column)).isNull()
+        ).count()
+
     cross_field_violations: dict[str, int] = {}
     for rule in config.get("cross_field_rules", []):
         left = rule["left"]
@@ -221,12 +229,14 @@ def validate_dataframe(df: DataFrame, dataset_type: str) -> dict[str, Any]:
         "duplicate_count": int(duplicate_count),
         "range_violations": {k: v for k, v in range_violations.items() if v},
         "value_violations": {k: v for k, v in value_violations.items() if v},
+        "timestamp_violations": {k: v for k, v in timestamp_violations.items() if v},
         "cross_field_violations": {k: v for k, v in cross_field_violations.items() if v},
     }
     valid = record_count > 0 and not any([
         issues["missing_columns"], issues["non_numeric_columns"],
         issues["null_counts"], issues["duplicate_count"],
         issues["range_violations"], issues["value_violations"],
+        issues["timestamp_violations"],
         issues["cross_field_violations"],
     ])
     return {
