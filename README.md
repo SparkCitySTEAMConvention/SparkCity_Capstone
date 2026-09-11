@@ -1,6 +1,36 @@
 # SparkCity
 an apache spark project.
 
+## Standard Python setup
+
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/) and a Java
+runtime supported by Spark (Java 17 or 21 is recommended), then run these commands
+from the repository root:
+
+```bash
+uv python install 3.13
+uv sync --dev
+uv run pytest
+```
+
+In notebooks and Python modules, import the shared utilities from the installed
+`sparkcityx` package:
+
+```python
+from sparkcityx.data_quality import get_validation_config, validate_dataframe
+from sparkcityx.loaders import load_dataset
+
+traffic_df = load_dataset(spark, "data/reference/traffic_sensors.csv")
+report = validate_dataframe(traffic_df, "traffic")
+print(report["valid"], report["record_count"])
+```
+
+Validation operates on an existing PySpark DataFrame and does not access files or
+databases. `load_dataset` separately supports CSV, Parquet, JSON arrays, and
+newline-delimited JSON. Supported validation types are `traffic`, `air_quality`,
+`weather`, `energy`, `city_zones`, `occupancy`, and `fiscal`; fiscal aliases include
+`financial`, `financial_data`, and `fiscal_data`.
+
 
 # Smart City IoT Analytics Pipeline
 ## 5-Day PySpark Data Engineering Lab
