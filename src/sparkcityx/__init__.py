@@ -2,6 +2,7 @@
 
 from .data_quality import get_validation_config, validate_dataframe
 from .database import check_database_connection, connect_database
+from .database_load import load_dataframe
 from .loaders import load_dataset
 
 __all__ = [
@@ -9,6 +10,7 @@ __all__ = [
     "connect_database",
     "get_validation_config",
     "load_dataset",
+    "load_dataframe",
     "validate_dataframe",
 ]
 
