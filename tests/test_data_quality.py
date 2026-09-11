@@ -67,6 +67,31 @@ def test_duplicate_check_requires_full_key(spark) -> None:
     assert "timestamp" in report["missing_columns"]
 
 
+def test_validation_reports_cross_field_schema_failures(spark) -> None:
+    zone_df = spark.createDataFrame(
+        [("Z1", "Zone 1", "residential", 41.0, 40.0, -74.0, -73.0, 100)],
+        (
+            "zone_id string, zone_name string, zone_type string, lat_min double, "
+            "lat_max double, lon_min double, lon_max double, population int"
+        ),
+    )
+    occupancy_df = spark.createDataFrame(
+        [("S1", "2026-01-01", 40.0, -74.0, 10, 11, 20)],
+        (
+            "sensor_id string, timestamp string, location_lat double, "
+            "location_lon double, available_rooms int, occupied_rooms int, guests int"
+        ),
+    )
+
+    zone_report = validate_dataframe(zone_df, "city_zones")
+    occupancy_report = validate_dataframe(occupancy_df, "occupancy")
+
+    assert zone_report["cross_field_violations"] == {"lat_bounds": 1}
+    assert zone_report["valid"] is False
+    assert occupancy_report["cross_field_violations"] == {"occupied_vs_available_rooms": 1}
+    assert occupancy_report["valid"] is False
+
+
 def test_json_directory_load_avoids_local_file_probe(spark, tmp_path) -> None:
     dataset_dir = tmp_path / "json-data"
     dataset_dir.mkdir()

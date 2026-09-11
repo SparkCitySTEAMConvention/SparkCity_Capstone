@@ -81,6 +81,10 @@ _CONFIGS: dict[str, dict[str, Any]] = {
             "lon_max": {"min": -180, "max": 180},
             "population": {"min": 0},
         },
+        "cross_field_rules": [
+            {"name": "lat_bounds", "left": "lat_min", "right": "lat_max"},
+            {"name": "lon_bounds", "left": "lon_min", "right": "lon_max"},
+        ],
         "duplicate_columns": ["zone_id"],
     },
     "occupancy": {
@@ -93,6 +97,13 @@ _CONFIGS: dict[str, dict[str, Any]] = {
             "available_rooms": {"min": 0}, "occupied_rooms": {"min": 0},
             "guests": {"min": 0},
         },
+        "cross_field_rules": [
+            {
+                "name": "occupied_vs_available_rooms",
+                "left": "occupied_rooms",
+                "right": "available_rooms",
+            }
+        ],
         "duplicate_columns": ["sensor_id", "timestamp"],
     },
     "fiscal": {
@@ -180,6 +191,17 @@ def validate_dataframe(df: DataFrame, dataset_type: str) -> dict[str, Any]:
                 F.col(column).isNotNull() & ~F.col(column).isin(allowed)
             ).count()
 
+    cross_field_violations: dict[str, int] = {}
+    for rule in config.get("cross_field_rules", []):
+        left = rule["left"]
+        right = rule["right"]
+        if (
+            left not in columns or right not in columns
+            or left in non_numeric_columns or right in non_numeric_columns
+        ):
+            continue
+        cross_field_violations[rule["name"]] = df.filter(F.col(left) > F.col(right)).count()
+
     numeric_columns = [
         field.name for field in df.schema.fields
         if isinstance(field.dataType, NumericType)
@@ -195,11 +217,13 @@ def validate_dataframe(df: DataFrame, dataset_type: str) -> dict[str, Any]:
         "duplicate_count": int(duplicate_count),
         "range_violations": {k: v for k, v in range_violations.items() if v},
         "value_violations": {k: v for k, v in value_violations.items() if v},
+        "cross_field_violations": {k: v for k, v in cross_field_violations.items() if v},
     }
     valid = record_count > 0 and not any([
         issues["missing_columns"], issues["non_numeric_columns"],
         issues["null_counts"], issues["duplicate_count"],
         issues["range_violations"], issues["value_violations"],
+        issues["cross_field_violations"],
     ])
     return {
         "dataset_type": dataset,

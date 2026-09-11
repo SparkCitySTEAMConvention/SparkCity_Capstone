@@ -142,8 +142,10 @@ def load_dataframe(
         rows_before = cursor.fetchone()[0]
         selected_rows = df.select(*columns).toLocalIterator()
         values = (tuple(row[column] for column in columns) for row in selected_rows)
+        rows_inserted = 0
         for batch in _batches(values, batch_size):
             cursor.executemany(insert_query, batch)
+            rows_inserted += max(cursor.rowcount, 0)
         cursor.execute(count_query)
         rows_after = cursor.fetchone()[0]
 
@@ -153,5 +155,5 @@ def load_dataframe(
         source_rows=report["record_count"],
         rows_before=rows_before,
         rows_after=rows_after,
-        rows_inserted=rows_after - rows_before,
+        rows_inserted=rows_inserted,
     )
