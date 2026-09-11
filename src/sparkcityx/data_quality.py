@@ -81,6 +81,10 @@ _CONFIGS: dict[str, dict[str, Any]] = {
             "lon_max": {"min": -180, "max": 180},
             "population": {"min": 0},
         },
+        "comparisons": [
+            {"left": "lat_min", "operator": "<=", "right": "lat_max"},
+            {"left": "lon_min", "operator": "<=", "right": "lon_max"},
+        ],
         "duplicate_columns": ["zone_id"],
     },
     "occupancy": {
@@ -93,6 +97,13 @@ _CONFIGS: dict[str, dict[str, Any]] = {
             "available_rooms": {"min": 0}, "occupied_rooms": {"min": 0},
             "guests": {"min": 0},
         },
+        "comparisons": [
+            {
+                "left": "occupied_rooms",
+                "operator": "<=",
+                "right": "available_rooms",
+            },
+        ],
         "duplicate_columns": ["sensor_id", "timestamp"],
     },
     "fiscal": {
@@ -180,6 +191,22 @@ def validate_dataframe(df: DataFrame, dataset_type: str) -> dict[str, Any]:
                 F.col(column).isNotNull() & ~F.col(column).isin(allowed)
             ).count()
 
+    comparison_violations: dict[str, int] = {}
+    for comparison in config.get("comparisons", []):
+        left = comparison["left"]
+        right = comparison["right"]
+        operator = comparison["operator"]
+        if left not in columns or right not in columns:
+            continue
+        if operator != "<=":
+            raise ValueError(f"Unsupported comparison operator: {operator}")
+        label = f"{left} {operator} {right}"
+        comparison_violations[label] = df.filter(
+            F.col(left).isNotNull()
+            & F.col(right).isNotNull()
+            & ~(F.col(left) <= F.col(right))
+        ).count()
+
     numeric_columns = [
         field.name for field in df.schema.fields
         if isinstance(field.dataType, NumericType)
@@ -195,11 +222,15 @@ def validate_dataframe(df: DataFrame, dataset_type: str) -> dict[str, Any]:
         "duplicate_count": int(duplicate_count),
         "range_violations": {k: v for k, v in range_violations.items() if v},
         "value_violations": {k: v for k, v in value_violations.items() if v},
+        "comparison_violations": {
+            k: v for k, v in comparison_violations.items() if v
+        },
     }
     valid = record_count > 0 and not any([
         issues["missing_columns"], issues["non_numeric_columns"],
         issues["null_counts"], issues["duplicate_count"],
         issues["range_violations"], issues["value_violations"],
+        issues["comparison_violations"],
     ])
     return {
         "dataset_type": dataset,

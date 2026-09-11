@@ -57,6 +57,33 @@ def test_validation_reports_missing_null_and_incompatible_columns(spark) -> None
     assert report["valid"] is False
 
 
+@pytest.mark.parametrize(
+    ("dataset_type", "schema", "row", "expected_rule"),
+    [
+        (
+            "city_zones",
+            "zone_id string, zone_name string, zone_type string, lat_min double, "
+            "lat_max double, lon_min double, lon_max double, population int",
+            ("Z1", "Invalid", "park", 42.0, 41.0, -73.0, -74.0, 10),
+            "lat_min <= lat_max",
+        ),
+        (
+            "occupancy",
+            "sensor_id string, timestamp string, location_lat double, "
+            "location_lon double, available_rooms int, occupied_rooms int, guests int",
+            ("O1", "2026-01-01", 40.0, -74.0, 10, 11, 20),
+            "occupied_rooms <= available_rooms",
+        ),
+    ],
+)
+def test_cross_field_constraints_fail_before_loading(
+    spark, dataset_type: str, schema: str, row: tuple, expected_rule: str
+) -> None:
+    report = validate_dataframe(spark.createDataFrame([row], schema), dataset_type)
+    assert report["valid"] is False
+    assert report["comparison_violations"][expected_rule] == 1
+
+
 def test_duplicate_check_requires_full_key(spark) -> None:
     df = spark.createDataFrame(
         [("S1", 10.0), ("S1", 12.0)],
