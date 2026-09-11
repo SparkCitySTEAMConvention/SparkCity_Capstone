@@ -14,15 +14,20 @@ def load_dataset(
     file_format: str | None = None,
 ) -> DataFrame:
     """Load CSV, JSON array/JSON-lines, or Parquet into a Spark DataFrame."""
-    source = Path(path)
-    format_name = (file_format or source.suffix.lstrip(".")).lower()
+    source = str(path)
+    source_path = Path(source)
+    format_name = (file_format or source_path.suffix.lstrip(".")).lower()
     if format_name == "csv":
-        return spark.read.option("header", True).option("inferSchema", True).csv(str(source))
+        return spark.read.option("header", True).option("inferSchema", True).csv(source)
     if format_name in {"json", "jsonl", "ndjson"}:
-        multiline = format_name == "json" and _starts_with_json_array(source)
-        return spark.read.option("multiLine", multiline).json(str(source))
+        multiline = (
+            format_name == "json"
+            and source_path.is_file()
+            and _starts_with_json_array(source_path)
+        )
+        return spark.read.option("multiLine", multiline).json(source)
     if format_name in {"parquet", "pq"}:
-        return spark.read.parquet(str(source))
+        return spark.read.parquet(source)
     raise ValueError(f"Unsupported file format {format_name!r}; use csv, json, or parquet")
 
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from sparkcityx.data_quality import get_validation_config, validate_dataframe
+from sparkcityx.loaders import load_dataset
 
 
 @pytest.mark.parametrize("alias", ["fiscal", "financial", "financial_data", "fiscal_data"])
@@ -54,3 +55,23 @@ def test_validation_reports_missing_null_and_incompatible_columns(spark) -> None
     assert report["null_counts"] == {"sensor_id": 1}
     assert report["non_numeric_columns"] == ["vehicle_count"]
     assert report["valid"] is False
+
+
+def test_duplicate_check_requires_full_key(spark) -> None:
+    df = spark.createDataFrame(
+        [("S1", 10.0), ("S1", 12.0)],
+        "sensor_id string, avg_speed double",
+    )
+    report = validate_dataframe(df, "traffic")
+    assert report["duplicate_count"] == 0
+    assert "timestamp" in report["missing_columns"]
+
+
+def test_json_directory_load_avoids_local_file_probe(spark, tmp_path) -> None:
+    dataset_dir = tmp_path / "json-data"
+    dataset_dir.mkdir()
+    (dataset_dir / "part-1.json").write_text('{"sensor_id":"S1","timestamp":"2026-01-01"}\n')
+    (dataset_dir / "part-2.json").write_text('{"sensor_id":"S2","timestamp":"2026-01-01"}\n')
+
+    df = load_dataset(spark, dataset_dir, file_format="json")
+    assert df.count() == 2

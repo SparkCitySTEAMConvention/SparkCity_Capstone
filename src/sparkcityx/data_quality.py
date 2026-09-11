@@ -153,9 +153,9 @@ def validate_dataframe(df: DataFrame, dataset_type: str) -> dict[str, Any]:
         ]).first()
         null_counts = null_row.asDict() if null_row else {}
 
-    duplicate_columns = [c for c in config["duplicate_columns"] if c in columns]
     duplicate_count = 0
-    if duplicate_columns:
+    duplicate_columns = config["duplicate_columns"]
+    if all(column in columns for column in duplicate_columns):
         duplicate_count = (
             df.groupBy(*duplicate_columns).count().filter(F.col("count") > 1)
             .agg(F.sum(F.col("count") - 1).alias("duplicates")).first()["duplicates"] or 0
