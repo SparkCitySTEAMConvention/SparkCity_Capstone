@@ -50,19 +50,14 @@ def test_loader_inserts_only_new_rows(validate: MagicMock) -> None:
     connection = MagicMock()
     cursor = connection.cursor.return_value.__enter__.return_value
     cursor.fetchone.side_effect = [(10,), (12,)]
-    rowcounts = iter([1, 1])
-
-    def record_rowcount(*_args, **_kwargs) -> None:
-        cursor.rowcount = next(rowcounts)
-
-    cursor.executemany.side_effect = record_rowcount
+    cursor.fetchall.side_effect = [[(1,)], [(1,)]]
 
     result = load_dataframe(connection, df, "traffic", batch_size=1)
 
     assert result.rows_inserted == 2
     assert result.rows_before == 10
     assert result.rows_after == 12
-    assert cursor.executemany.call_count == 2
+    assert cursor.execute.call_count == 4
 
 
 @patch("sparkcityx.database_load.validate_dataframe")
@@ -83,12 +78,7 @@ def test_loader_reports_inserted_rows_independently_from_table_delta(validate: M
     connection = MagicMock()
     cursor = connection.cursor.return_value.__enter__.return_value
     cursor.fetchone.side_effect = [(10,), (12,)]
-    rowcounts = iter([0, 0])
-
-    def record_rowcount(*_args, **_kwargs) -> None:
-        cursor.rowcount = next(rowcounts)
-
-    cursor.executemany.side_effect = record_rowcount
+    cursor.fetchall.side_effect = [[], []]
 
     result = load_dataframe(connection, df, "traffic", batch_size=1)
 
