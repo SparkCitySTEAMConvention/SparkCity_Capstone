@@ -14,20 +14,20 @@ check_url() {
   fi
 }
 
-check_url "Spark master" "http://localhost:8080"
+check_url "Spark master" "http://localhost:9501"
 check_url "Spark worker 1" "http://localhost:8081"
 check_url "Spark worker 2" "http://localhost:8082"
 check_url "JupyterLab" "http://localhost:8888"
 
 if docker compose exec -T postgres pg_isready -U postgres -d smartcity >/dev/null; then
-  echo "OK   PostgreSQL (localhost:5432)"
+  echo "OK   PostgreSQL (localhost:9502)"
 else
-  echo "FAIL PostgreSQL (localhost:5432)"
+  echo "FAIL PostgreSQL (localhost:9502)"
   failed=1
 fi
 
 if docker compose exec -T jupyter python -c \
-  'from pathlib import Path; required=["air_quality.json", "city_zones.csv", "energy_meters.csv", "traffic_sensors.csv", "weather_data.json"]; assert all((Path("data/raw") / name).is_file() for name in required); print("OK   Raw datasets mounted")'; then
+  'from pathlib import Path; required=["air_quality.json", "city_zones.csv", "energy_meters.csv", "traffic_sensors.csv", "weather_data.parquet"]; assert all((Path("data/raw") / name).exists() for name in required); print("OK   Raw datasets mounted")'; then
   :
 else
   echo "FAIL Raw datasets mounted"
