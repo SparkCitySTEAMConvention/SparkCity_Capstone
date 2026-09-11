@@ -61,6 +61,25 @@ The helper requires an encrypted SSL mode and rejects `disable`, `allow`, and
 Certificate and hostname verification should be upgraded to `verify-full` with
 the approved `sslrootcert` when the S2 certificate authority is provided.
 
+### Shared schema setup
+
+Preview the additive schema migration before applying it:
+
+```bash
+uv run python scripts/setup-database.py
+```
+
+After team review, the infrastructure owner can apply it once and inspect the
+result. Both commands are safe to repeat:
+
+```bash
+uv run python scripts/setup-database.py --apply
+uv run python scripts/inspect-database.py
+```
+
+The migration creates the `sparkcity` schema and seven empty tables. It contains
+no drop, truncate, update, delete, or data-loading operations.
+
 # Smart City IoT Analytics Pipeline
 ## 5-Day PySpark Data Engineering Lab
 
