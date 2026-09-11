@@ -8,6 +8,7 @@ from typing import Any
 
 import psycopg
 from psycopg import Connection
+from psycopg.conninfo import conninfo_to_dict
 
 
 @dataclass(frozen=True)
@@ -34,6 +35,11 @@ def get_database_url(database_url: str | None = None) -> str:
         raise ValueError("DATABASE_URL must use the postgresql:// URL format")
     if "USERNAME" in url or "PASSWORD" in url:
         raise ValueError("DATABASE_URL still contains placeholder credentials")
+    sslmode = conninfo_to_dict(url).get("sslmode")
+    if sslmode not in {"require", "verify-ca", "verify-full"}:
+        raise ValueError(
+            "DATABASE_URL must set sslmode=require, verify-ca, or verify-full"
+        )
     return url
 
 
@@ -66,4 +72,6 @@ def check_database_connection(database_url: str | None = None) -> DatabaseStatus
                 """
             )
             database, server_version, ssl_enabled = cursor.fetchone()
+    if not ssl_enabled:
+        raise RuntimeError("PostgreSQL health check failed: SSL is not enabled")
     return DatabaseStatus(database, server_version, ssl_enabled)

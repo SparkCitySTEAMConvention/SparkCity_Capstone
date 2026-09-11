@@ -56,6 +56,10 @@ with connect_database() as connection:
 does not create schemas, tables, or rows; those operations require explicit team
 ownership and review.
 
+The helper requires an encrypted SSL mode and rejects `disable`, `allow`, and
+`prefer`. The instructor-provided endpoint currently uses `sslmode=require`.
+Certificate and hostname verification should be upgraded to `verify-full` with
+the approved `sslrootcert` when the S2 certificate authority is provided.
 
 # Smart City IoT Analytics Pipeline
 ## 5-Day PySpark Data Engineering Lab

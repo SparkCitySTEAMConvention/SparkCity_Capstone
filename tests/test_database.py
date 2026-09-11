@@ -21,7 +21,13 @@ def test_missing_database_url_has_setup_guidance(monkeypatch) -> None:
 
 @pytest.mark.parametrize(
     "url",
-    ["mysql://user:secret@example/db", "postgresql://USERNAME:PASSWORD@example/db"],
+    [
+        "mysql://user:secret@example/db",
+        "postgresql://USERNAME:PASSWORD@example/db?sslmode=require",
+        "postgresql://user:secret@example/db",
+        "postgresql://user:secret@example/db?sslmode=disable",
+        "postgresql://user:secret@example/db?sslmode=prefer",
+    ],
 )
 def test_database_url_rejects_invalid_configuration(url: str) -> None:
     with pytest.raises(ValueError):
@@ -33,7 +39,8 @@ def test_health_check_returns_only_safe_metadata(connect: MagicMock) -> None:
     cursor = connect.return_value.__enter__.return_value.cursor.return_value.__enter__.return_value
     cursor.fetchone.return_value = ("smartcity_db", "16.15", True)
 
-    status = check_database_connection("postgresql://user:secret@example/db")
+    url = "postgresql://user:secret@example/db?sslmode=require"
+    status = check_database_connection(url)
 
     assert status.as_dict() == {
         "database": "smartcity_db",
@@ -41,6 +48,17 @@ def test_health_check_returns_only_safe_metadata(connect: MagicMock) -> None:
         "ssl_enabled": True,
     }
     connect.assert_called_once_with(
-        "postgresql://user:secret@example/db",
+        url,
         connect_timeout=10,
     )
+
+
+@patch("sparkcityx.database.psycopg.connect")
+def test_health_check_rejects_unencrypted_session(connect: MagicMock) -> None:
+    cursor = connect.return_value.__enter__.return_value.cursor.return_value.__enter__.return_value
+    cursor.fetchone.return_value = ("smartcity_db", "16.15", False)
+
+    with pytest.raises(RuntimeError, match="SSL is not enabled"):
+        check_database_connection(
+            "postgresql://user:secret@example/db?sslmode=require"
+        )
