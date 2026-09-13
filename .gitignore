@@ -213,3 +213,9 @@ __marimo__/
 data/raw/*.csv
 data/raw/*.json
 data/raw/*.parquet
+
+# macOS system files
+.DS_Store
+
+# Generated processed datasets
+data/processed/
