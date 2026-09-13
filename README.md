@@ -31,6 +31,67 @@ newline-delimited JSON. Supported validation types are `traffic`, `air_quality`,
 `weather`, `energy`, `city_zones`, `occupancy`, and `fiscal`; fiscal aliases include
 `financial`, `financial_data`, and `fiscal_data`.
 
+## Shared PostgreSQL connection
+
+Copy `.env.example` to `secrets/.env`, replace its placeholders with the
+instructor-provided credentials, and keep that file local. Verify the connection
+without reading or changing application data:
+
+```bash
+uv run python scripts/check-database.py
+```
+
+Application code should use the shared helper rather than embedding credentials:
+
+```python
+from sparkcityx.database import connect_database
+
+with connect_database() as connection:
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT 1")
+        assert cursor.fetchone() == (1,)
+```
+
+`connect_database` reads `DATABASE_URL` from the process environment. The helper
+does not create schemas, tables, or rows; those operations require explicit team
+ownership and review.
+
+The helper requires an encrypted SSL mode and rejects `disable`, `allow`, and
+`prefer`. The instructor-provided endpoint currently uses `sslmode=require`.
+Certificate and hostname verification should be upgraded to `verify-full` with
+the approved `sslrootcert` when the S2 certificate authority is provided.
+
+### Shared schema setup
+
+Preview the additive schema migration before applying it:
+
+```bash
+uv run python scripts/setup-database.py
+```
+
+After team review, the infrastructure owner can apply it once and inspect the
+result. Both commands are safe to repeat:
+
+```bash
+uv run python scripts/setup-database.py --apply
+uv run python scripts/inspect-database.py
+```
+
+The migration creates the `sparkcity` schema and seven empty tables. It contains
+no drop, truncate, update, delete, or data-loading operations.
+
+### Loading one dataset
+
+Each dataset owner should preview and then load only their assigned dataset:
+
+```bash
+uv run python scripts/load-dataset.py traffic
+uv run python scripts/load-dataset.py traffic --apply
+```
+
+The loader validates the Spark DataFrame before opening a database transaction,
+targets the existing `sparkcity` table, and uses `ON CONFLICT DO NOTHING`. A
+repeat run preserves existing rows and constraints instead of replacing tables.
 
 # Smart City IoT Analytics Pipeline
 ## 5-Day PySpark Data Engineering Lab
@@ -121,20 +182,20 @@ lon_max: double
 population: integer
 ```
 
-**6. Occupancy Data (`occupancy.csv`)**
+**6. Occupancy Data (`occupancy_data.csv`)**
 ```sql
-hotel_id: string
+sensor_id: string
 timestamp: timestamp
 location_lat: double
 location_lon: double
-rooms_available: integer
-rooms_occupied: integer
+available_rooms: integer
+occupied_rooms: integer
 guests: integer
 ```
 
-**7. Financial Data (`financial_data.csv`)**
+**7. Fiscal Data (`fiscal_data.csv`)**
 ```sql
-fiscal_id: string
+sensor_id: string
 timestamp: timestamp
 location_lat: double
 location_lon: double
