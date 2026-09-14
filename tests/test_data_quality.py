@@ -113,3 +113,38 @@ def test_json_directory_load_avoids_local_file_probe(spark, tmp_path) -> None:
 
     df = load_dataset(spark, dataset_dir, file_format="json")
     assert df.count() == 2
+
+
+def test_weather_validation_reports_domain_failures(spark) -> None:
+    columns = get_validation_config("weather")["required_columns"]
+    invalid_row = (
+        "WTH-001",
+        "2026-01-01 00:00:00",
+        91.0,     # Invalid latitude
+        -181.0,   # Invalid longitude
+        52.0,     # Temperature unit not yet formally defined
+        101.0,    # Invalid humidity
+        -1.0,     # Invalid wind speed
+        361.0,    # Invalid wind direction
+        -0.1,     # Invalid precipitation
+        -5.0,     # Invalid pressure
+    )
+    df = spark.createDataFrame(
+        [invalid_row, invalid_row],
+        columns,
+    )
+
+    report = validate_dataframe(df, "weather")
+
+    assert report["valid"] is False
+    assert report["record_count"] == 2
+    assert report["duplicate_count"] == 1
+    assert report["range_violations"] == {
+        "location_lat": 2,
+        "location_lon": 2,
+        "humidity": 2,
+        "wind_speed": 2,
+        "wind_direction": 2,
+        "precipitation": 2,
+        "pressure": 2,
+    }
