@@ -219,3 +219,6 @@ data/raw/*.parquet
 
 # Generated processed datasets
 data/processed/
+
+# Generated feature-engineered datasets
+data/features/
