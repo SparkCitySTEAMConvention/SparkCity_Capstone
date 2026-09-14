@@ -213,3 +213,10 @@ __marimo__/
 data/raw/*.csv
 data/raw/*.json
 data/raw/*.parquet
+
+# Generated Day 2 analysis datasets and run reports
+data/processed/day1/
+data/processed/day2/
+data/processed/day3/
+data/processed/day4/
+data/processed/convention/
