@@ -13,6 +13,11 @@ from .weather_features import (
     aggregate_zone_hourly_weather,
     map_weather_to_zones,
 )
+from .weather_anomaly import (
+    WeatherAlertThresholds,
+    add_multivariate_anomaly_scores,
+    add_threshold_alerts,
+)
 
 __all__ = [
     "check_database_connection",
@@ -28,6 +33,9 @@ __all__ = [
     "aggregate_hourly_weather",
     "aggregate_zone_hourly_weather",
     "map_weather_to_zones",
+    "WeatherAlertThresholds",
+    "add_multivariate_anomaly_scores",
+    "add_threshold_alerts",
 ]
 
 
