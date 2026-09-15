@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
+from sklearn.ensemble import IsolationForest
 
 
 @dataclass(frozen=True)
@@ -18,6 +19,15 @@ class WeatherAlertThresholds:
     maximum_precipitation: float
     minimum_pressure: float
     maximum_pressure: float
+
+
+@dataclass(frozen=True)
+class IsolationForestResult:
+    """Fitted Isolation Forest model and scored Spark DataFrame."""
+
+    model: IsolationForest
+    scored_dataframe: DataFrame
+    feature_columns: tuple[str, ...]
 
 
 def add_threshold_alerts(
@@ -197,4 +207,101 @@ def add_multivariate_anomaly_scores(
             F.col("multivariate_anomaly_score")
             > F.lit(score_threshold),
         )
+    )
+
+
+def score_isolation_forest(
+    df: DataFrame,
+    *,
+    feature_columns: tuple[str, ...] = (
+        "temperature",
+        "humidity",
+        "wind_speed",
+        "precipitation",
+        "pressure",
+    ),
+    contamination: float = 0.02,
+    random_state: int = 42,
+) -> IsolationForestResult:
+    """Fit Isolation Forest and attach anomaly scores to Spark rows."""
+    if not 0 < contamination <= 0.5:
+        raise ValueError("contamination must be greater than 0 and at most 0.5")
+
+    missing_columns = [
+        column
+        for column in feature_columns
+        if column not in df.columns
+    ]
+
+    if missing_columns:
+        raise ValueError(
+            f"Missing Isolation Forest columns: {missing_columns}"
+        )
+
+    indexed_df = (
+        df
+        .withColumn(
+            "_isolation_row_id",
+            F.monotonically_increasing_id(),
+        )
+        .localCheckpoint(eager=True)
+    )
+
+    pandas_features = indexed_df.select(
+        "_isolation_row_id",
+        *feature_columns,
+    ).toPandas()
+
+    if pandas_features.empty:
+        raise ValueError("Isolation Forest requires at least one row")
+
+    if pandas_features[list(feature_columns)].isnull().any().any():
+        raise ValueError(
+            "Isolation Forest feature columns cannot contain null values"
+        )
+
+    model = IsolationForest(
+        n_estimators=100,
+        contamination=contamination,
+        random_state=random_state,
+        n_jobs=1,
+    )
+
+    feature_values = pandas_features[list(feature_columns)]
+    predictions = model.fit_predict(feature_values)
+    scores = -model.score_samples(feature_values)
+
+    score_rows = [
+        (
+            int(row_id),
+            float(score),
+            bool(prediction == -1),
+        )
+        for row_id, score, prediction in zip(
+            pandas_features["_isolation_row_id"],
+            scores,
+            predictions,
+            strict=True,
+        )
+    ]
+
+    score_df = df.sparkSession.createDataFrame(
+        score_rows,
+        (
+            "_isolation_row_id long, "
+            "isolation_forest_score double, "
+            "is_isolation_forest_anomaly boolean"
+        ),
+    )
+
+    scored_dataframe = (
+        indexed_df
+        .join(score_df, "_isolation_row_id", "inner")
+        .drop("_isolation_row_id")
+    )
+
+    return IsolationForestResult(
+        model=model,
+        scored_dataframe=scored_dataframe,
+        feature_columns=feature_columns,
     )

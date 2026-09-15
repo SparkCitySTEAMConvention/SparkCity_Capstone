@@ -5,6 +5,12 @@ from sparkcityx.weather_anomaly import (
     add_multivariate_anomaly_scores,
     add_threshold_alerts,
 )
+from sparkcityx.weather_anomaly import (
+    WeatherAlertThresholds,
+    add_multivariate_anomaly_scores,
+    add_threshold_alerts,
+    score_isolation_forest,
+)
 
 
 def test_threshold_alerts_assign_severity(spark: SparkSession) -> None:
@@ -101,3 +107,51 @@ def test_multivariate_scoring_flags_extreme_weather(spark) -> None:
     assert rows["EXTREME"].is_multivariate_anomaly is True
     assert rows["EXTREME"].multivariate_anomaly_score > 3.0
     assert rows["WTH-000"].multivariate_anomaly_score >= 0.0
+
+
+def test_isolation_forest_flags_extreme_weather(spark) -> None:
+    normal_rows = [
+        (
+            f"WTH-{index:03d}",
+            50.0 + (index % 5),
+            45.0 + (index % 7),
+            5.0 + (index % 3),
+            0.1 * (index % 2),
+            1010.0 + (index % 4),
+        )
+        for index in range(100)
+    ]
+
+    extreme_row = (
+        "EXTREME",
+        200.0,
+        100.0,
+        100.0,
+        10.0,
+        800.0,
+    )
+
+    df = spark.createDataFrame(
+        normal_rows + [extreme_row],
+        (
+            "station_id string, temperature double, humidity double, "
+            "wind_speed double, precipitation double, pressure double"
+        ),
+    )
+
+    result = score_isolation_forest(
+        df,
+        contamination=0.01,
+        random_state=42,
+    )
+
+    rows = {
+        row.station_id: row
+        for row in result.scored_dataframe.collect()
+    }
+
+    assert rows["EXTREME"].is_isolation_forest_anomaly is True
+    assert (
+        rows["EXTREME"].isolation_forest_score
+        > rows["WTH-000"].isolation_forest_score
+    )

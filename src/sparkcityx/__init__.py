@@ -14,9 +14,11 @@ from .weather_features import (
     map_weather_to_zones,
 )
 from .weather_anomaly import (
+    IsolationForestResult,
     WeatherAlertThresholds,
     add_multivariate_anomaly_scores,
     add_threshold_alerts,
+    score_isolation_forest,
 )
 from .weather_model import (
     WeatherForecastResult,
@@ -44,6 +46,8 @@ __all__ = [
     "add_threshold_alerts",
     "WeatherForecastResult",
     "train_temperature_forecaster",
+    "IsolationForestResult",
+    "score_isolation_forest",
 ]
 
 
