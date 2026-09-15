@@ -18,6 +18,12 @@ from .weather_anomaly import (
     add_multivariate_anomaly_scores,
     add_threshold_alerts,
 )
+from .weather_model import (
+    WeatherForecastResult,
+    train_temperature_forecaster,
+)
+
+
 
 __all__ = [
     "check_database_connection",
@@ -36,6 +42,8 @@ __all__ = [
     "WeatherAlertThresholds",
     "add_multivariate_anomaly_scores",
     "add_threshold_alerts",
+    "WeatherForecastResult",
+    "train_temperature_forecaster",
 ]
 
 
