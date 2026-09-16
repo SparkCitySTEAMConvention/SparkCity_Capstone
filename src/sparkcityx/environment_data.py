@@ -59,3 +59,53 @@ def load_monthly_environment(
 
     result = air.merge(weather, on="month", how="outer")
     return result.sort_values("month").reset_index(drop=True)
+
+
+def load_air_monitoring_status(
+    connection: Connection,
+    year: int,
+) -> dict[str, int]:
+    """Count readings using the air team's historical 90th-percentile rule."""
+    if not 1900 <= year <= 2100:
+        raise ValueError("year must be between 1900 and 2100")
+
+    start = datetime(year, 1, 1)
+    end = datetime(year + 1, 1, 1)
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            WITH thresholds AS (
+                SELECT
+                    percentile_cont(0.9) WITHIN GROUP
+                        (ORDER BY pm25) AS pm25_limit,
+                    percentile_cont(0.9) WITHIN GROUP
+                        (ORDER BY pm10) AS pm10_limit,
+                    percentile_cont(0.9) WITHIN GROUP
+                        (ORDER BY no2) AS no2_limit,
+                    percentile_cont(0.9) WITHIN GROUP
+                        (ORDER BY co) AS co_limit
+                FROM sparkcity.air_quality
+            )
+            SELECT
+                COUNT(*)::int AS total,
+                COUNT(*) FILTER (
+                    WHERE air.pm25 >= thresholds.pm25_limit
+                       OR air.pm10 >= thresholds.pm10_limit
+                       OR air.no2 >= thresholds.no2_limit
+                       OR air.co >= thresholds.co_limit
+                )::int AS monitor
+            FROM sparkcity.air_quality AS air
+            CROSS JOIN thresholds
+            WHERE air.timestamp >= %s
+              AND air.timestamp < %s
+            """,
+            (start, end),
+        )
+        total, monitor = cursor.fetchone()
+
+    return {
+        "total": total,
+        "normal": total - monitor,
+        "monitor": monitor,
+    }

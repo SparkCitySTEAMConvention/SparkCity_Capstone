@@ -10,7 +10,10 @@ import streamlit as st
 from dotenv import load_dotenv
 
 from sparkcityx.database import connect_database
-from sparkcityx.environment_data import load_monthly_environment
+from sparkcityx.environment_data import (
+    load_air_monitoring_status,
+    load_monthly_environment,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -27,6 +30,18 @@ def get_monthly_environment(year: int) -> pd.DataFrame:
 
         return load_monthly_environment(connection, year)
 
+
+
+@st.cache_data(ttl=300, show_spinner="Calculating air monitoring status...")
+def get_air_monitoring_status(year: int) -> dict[str, int]:
+    """Read the air team's monitoring counts for the selected year."""
+    load_dotenv(ROOT / "secrets" / ".env", override=False)
+
+    with connect_database() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute("SET TRANSACTION READ ONLY")
+
+        return load_air_monitoring_status(connection, year)
 
 def render_environment_page() -> None:
     """Render the Environment section for the team dashboard."""
@@ -76,13 +91,56 @@ def render_environment_page() -> None:
 
             if not april.empty and not july.empty:
                 left, right = st.columns(2)
-                left.metric("April average PM2.5", f"{april.iloc[0]:.2f}")
-                right.metric("July average PM2.5", f"{july.iloc[0]:.2f}")
+                left.metric(
+                    "April average PM2.5",
+                    f"{april.iloc[0]:.2f}",
+                )
+                right.metric(
+                    "July average PM2.5",
+                    f"{july.iloc[0]:.2f}",
+                )
 
-            st.info(
-                "The NORMAL/MONITOR indicator will be added when the "
-                "air quality team confirms its classification rule."
-            )
+            st.subheader("Air Quality Monitoring Indicator")
+
+            try:
+                status = get_air_monitoring_status(year)
+            except Exception:
+                st.warning(
+                    "Monitoring counts could not be loaded from S2."
+                )
+            else:
+                total = status["total"]
+                normal_percent = (
+                    status["normal"] / total * 100
+                    if total
+                    else 0
+                )
+                monitor_percent = (
+                    status["monitor"] / total * 100
+                    if total
+                    else 0
+                )
+
+                left, right = st.columns(2)
+                left.metric(
+                    "NORMAL",
+                    f"{status['normal']:,}",
+                    f"{normal_percent:.1f}% of {year} readings",
+                )
+                right.metric(
+                    "MONITOR",
+                    f"{status['monitor']:,}",
+                    f"{monitor_percent:.1f}% of {year} readings",
+                )
+
+                st.progress(normal_percent / 100)
+                st.caption(
+                    "MONITOR means at least one pollutant met or "
+                    "exceeded its historical 90th-percentile threshold "
+                    "across all S2 air quality readings. This is a "
+                    "statistical monitoring indicator, not a "
+                    "public-health classification."
+                )
 
     with weather_tab:
         weather = monthly.dropna(

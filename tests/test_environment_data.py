@@ -41,3 +41,31 @@ def test_monthly_environment_rejects_invalid_year() -> None:
         load_monthly_environment(connection, 1800)
 
     connection.cursor.assert_not_called()
+
+
+from sparkcityx.environment_data import (
+    load_air_monitoring_status,
+    load_monthly_environment,
+)
+
+
+def test_air_monitoring_status_uses_full_history_thresholds() -> None:
+    connection = MagicMock()
+    cursor = connection.cursor.return_value.__enter__.return_value
+    cursor.fetchone.return_value = (35_040, 10_494)
+
+    result = load_air_monitoring_status(connection, 2025)
+
+    assert result == {
+        "total": 35_040,
+        "normal": 24_546,
+        "monitor": 10_494,
+    }
+
+    query, dates = cursor.execute.call_args.args
+    assert "percentile_cont(0.9)" in query
+    assert "FROM sparkcity.air_quality" in query
+    assert dates == (
+        datetime(2025, 1, 1),
+        datetime(2026, 1, 1),
+    )
