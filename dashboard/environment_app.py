@@ -5,6 +5,7 @@ from __future__ import annotations
 import calendar
 from pathlib import Path
 
+import altair as alt
 import pandas as pd
 import streamlit as st
 from dotenv import load_dotenv
@@ -31,7 +32,6 @@ def get_monthly_environment(year: int) -> pd.DataFrame:
         return load_monthly_environment(connection, year)
 
 
-
 @st.cache_data(ttl=300, show_spinner="Calculating air monitoring status...")
 def get_air_monitoring_status(year: int) -> dict[str, int]:
     """Read the air team's monitoring counts for the selected year."""
@@ -42,6 +42,7 @@ def get_air_monitoring_status(year: int) -> dict[str, int]:
             cursor.execute("SET TRANSACTION READ ONLY")
 
         return load_air_monitoring_status(connection, year)
+
 
 def render_environment_page() -> None:
     """Render the Environment section for the team dashboard."""
@@ -66,40 +67,113 @@ def render_environment_page() -> None:
     monthly["month_name"] = monthly["month"].map(
         lambda month: calendar.month_abbr[int(month)]
     )
+    month_order = list(calendar.month_abbr)[1:]
 
-    air_tab, weather_tab = st.tabs(["Air Quality", "Weather"])
+    # Top row: air quality and weather charts
+    air_column, weather_column = st.columns(2, gap="medium")
 
-    with air_tab:
-        air = monthly.dropna(subset=["average_pm25"]).copy()
+    with air_column:
+        with st.container(border=True):
+            air = monthly.dropna(subset=["average_pm25"]).copy()
 
-        if air.empty:
-            st.info(f"No air quality readings are available for {year}.")
-        else:
-            st.subheader("Average PM2.5 by month")
-            st.line_chart(
-                air,
-                x="month_name",
-                y="average_pm25",
-            )
-            st.caption(
-                f"{int(air['air_readings'].sum()):,} air quality "
-                f"readings in {year}. PM2.5 units await team confirmation."
-            )
-
-            april = air.loc[air["month"] == 4, "average_pm25"]
-            july = air.loc[air["month"] == 7, "average_pm25"]
-
-            if not april.empty and not july.empty:
-                left, right = st.columns(2)
-                left.metric(
-                    "April average PM2.5",
-                    f"{april.iloc[0]:.2f}",
+            if air.empty:
+                st.info(f"No air quality readings are available for {year}.")
+            else:
+                st.subheader("Average PM2.5 by month")
+                air_chart = alt.Chart(air).encode(
+                    x=alt.X("month_name:N", sort=month_order, title=None),
+                    y=alt.Y("average_pm25:Q", title="Average PM2.5"),
+                    tooltip=[
+                        alt.Tooltip("month_name:N", title="Month"),
+                        alt.Tooltip("average_pm25:Q", title="Average PM2.5", format=".2f"),
+                    ],
                 )
-                right.metric(
-                    "July average PM2.5",
-                    f"{july.iloc[0]:.2f}",
+                if len(air) == 1:
+                    air_chart = air_chart.mark_bar(color="#2563EB", size=32)
+                else:
+                    air_chart = air_chart.mark_line(color="#2563EB", point=True)
+                st.altair_chart(air_chart, use_container_width=True)
+                st.caption(
+                    f"{int(air['air_readings'].sum()):,} air quality readings in {year}. "
+                    "PM2.5 units await team confirmation."
+                )
+                april_air = air.loc[air["month"] == 4, "average_pm25"]
+                july_air = air.loc[air["month"] == 7, "average_pm25"]
+                if not april_air.empty and not july_air.empty:
+                    left, right = st.columns(2)
+                    left.metric("April average PM2.5", f"{april_air.iloc[0]:.2f}")
+                    right.metric("July average PM2.5", f"{july_air.iloc[0]:.2f}")
+
+    with weather_column:
+        with st.container(border=True):
+            weather = monthly.dropna(
+                subset=["average_temperature"]
+            ).copy()
+
+            if weather.empty:
+                st.info(f"No weather readings are available for {year}.")
+            else:
+                st.subheader("Average weather temperature by month")
+
+                weather_chart = (
+                    alt.Chart(weather)
+                    .mark_bar(color="#F59E0B", size=32)
+                    .encode(
+                        x=alt.X(
+                            "month_name:N",
+                            sort=month_order,
+                            title=None,
+                        ),
+                        y=alt.Y(
+                            "average_temperature:Q",
+                            title="Average temperature",
+                        ),
+                        tooltip=[
+                            alt.Tooltip("month_name:N", title="Month"),
+                            alt.Tooltip(
+                                "average_temperature:Q",
+                                title="Average temperature",
+                                format=".2f",
+                            ),
+                        ],
+                    )
+                )
+                st.altair_chart(
+                    weather_chart,
+                    use_container_width=True,
+                )
+                st.caption(
+                    f"{int(weather['weather_readings'].sum()):,} weather "
+                    f"readings in {year}. Temperature units await "
+                    "team confirmation."
                 )
 
+                april_weather = weather.loc[
+                    weather["month"] == 4, "average_temperature"
+                ]
+                july_weather = weather.loc[
+                    weather["month"] == 7, "average_temperature"
+                ]
+
+                if not april_weather.empty and not july_weather.empty:
+                    left, right = st.columns(2)
+                    left.metric(
+                        "April average temperature",
+                        f"{april_weather.iloc[0]:.2f}",
+                    )
+                    right.metric(
+                        "July average temperature",
+                        f"{july_weather.iloc[0]:.2f}",
+                    )
+
+    # Bottom row: monitoring indicator and data-driven insights
+    monitoring_column, insights_column = st.columns(
+        2,
+        gap="medium",
+    )
+
+    with monitoring_column:
+        with st.container(border=True):
             st.subheader("Air Quality Monitoring Indicator")
 
             try:
@@ -122,18 +196,54 @@ def render_environment_page() -> None:
                 )
 
                 left, right = st.columns(2)
-                left.metric(
-                    "NORMAL",
-                    f"{status['normal']:,}",
-                    f"{normal_percent:.1f}% of {year} readings",
-                )
-                right.metric(
-                    "MONITOR",
-                    f"{status['monitor']:,}",
-                    f"{monitor_percent:.1f}% of {year} readings",
+
+
+                indicator_data = pd.DataFrame(
+                    [
+                        {
+                            "group": "Readings",
+                            "status": "NORMAL",
+                            "count": status["normal"],
+                        },
+                        {
+                            "group": "Readings",
+                            "status": "MONITOR",
+                            "count": status["monitor"],
+                        },
+                    ]
                 )
 
-                st.progress(normal_percent / 100)
+                indicator_chart = (
+                    alt.Chart(indicator_data)
+                    .mark_bar()
+                    .encode(
+                        x=alt.X(
+                            "count:Q",
+                            stack="normalize",
+                            axis=None,
+                        ),
+                        y=alt.Y("group:N", axis=None),
+                        color=alt.Color(
+                            "status:N",
+                            scale=alt.Scale(
+                                domain=["NORMAL", "MONITOR"],
+                                range=["#26A269", "#F59E0B"],
+                            ),
+                            legend=None,
+                        ),
+                        tooltip=[
+                            alt.Tooltip("status:N", title="Status"),
+                            alt.Tooltip("count:Q", title="Readings"),
+                        ],
+                    )
+                    .properties(height=36)
+                )
+                st.altair_chart(
+                    indicator_chart,
+                    use_container_width=True,
+                )
+
+
                 st.caption(
                     "MONITOR means at least one pollutant met or "
                     "exceeded its historical 90th-percentile threshold "
@@ -142,87 +252,60 @@ def render_environment_page() -> None:
                     "public-health classification."
                 )
 
-    with weather_tab:
-        weather = monthly.dropna(
-            subset=["average_temperature"]
-        ).copy()
+    with insights_column:
+        with st.container(border=True):
+            st.subheader("Key Insights")
 
-        if weather.empty:
-            st.info(f"No weather readings are available for {year}.")
-        else:
-            st.subheader("Average weather temperature by month")
-            st.bar_chart(
-                weather,
-                x="month_name",
-                y="average_temperature",
-            )
-            st.caption(
-                f"{int(weather['weather_readings'].sum()):,} weather "
-                f"readings in {year}. Temperature units await "
-                "team confirmation."
-            )
+            april = monthly.loc[monthly["month"] == 4]
+            july = monthly.loc[monthly["month"] == 7]
 
-            april = weather.loc[
-                weather["month"] == 4, "average_temperature"
-            ]
-            july = weather.loc[
-                weather["month"] == 7, "average_temperature"
-            ]
-
-            if not april.empty and not july.empty:
-                left, right = st.columns(2)
-                left.metric(
-                    "April average temperature",
-                    f"{april.iloc[0]:.2f}",
+            if april.empty or july.empty:
+                st.info(
+                    "An April–July comparison is unavailable for "
+                    "this year. Select 2025 for the complete "
+                    "comparison."
                 )
-                right.metric(
-                    "July average temperature",
-                    f"{july.iloc[0]:.2f}",
-                )
+            else:
+                april = april.iloc[0]
+                july = july.iloc[0]
 
+                if pd.notna(april["average_pm25"]) and pd.notna(
+                    july["average_pm25"]
+                ):
+                    direction = (
+                        "lower"
+                        if july["average_pm25"]
+                        < april["average_pm25"]
+                        else "higher"
+                    )
+                    st.write(
+                        f"July average PM2.5 was **{direction}** "
+                        f"than April: {july['average_pm25']:.2f} "
+                        f"versus {april['average_pm25']:.2f}."
+                    )
+                else:
+                    st.caption(
+                        "The April–July PM2.5 comparison is "
+                        f"unavailable for {year}."
+                    )
 
-    st.subheader("Key Insights")
-
-    april = monthly.loc[monthly["month"] == 4]
-    july = monthly.loc[monthly["month"] == 7]
-
-    if april.empty or july.empty:
-        st.info(
-            "An April–July comparison is unavailable for this year. "
-            "Select 2025 for the complete comparison."
-        )
-    else:
-        april = april.iloc[0]
-        july = july.iloc[0]
-
-        if pd.notna(april["average_pm25"]) and pd.notna(
-            july["average_pm25"]
-        ):
-            direction = (
-                "lower"
-                if july["average_pm25"] < april["average_pm25"]
-                else "higher"
-            )
-            st.write(
-                f"July average PM2.5 was **{direction}** than April: "
-                f"{july['average_pm25']:.2f} versus "
-                f"{april['average_pm25']:.2f}."
-            )
-
-        if pd.notna(april["average_temperature"]) and pd.notna(
-            july["average_temperature"]
-        ):
-            direction = (
-                "lower"
-                if july["average_temperature"]
-                < april["average_temperature"]
-                else "higher"
-            )
-            st.write(
-                f"July average weather temperature was **{direction}** "
-                f"than April: {july['average_temperature']:.2f} "
-                f"versus {april['average_temperature']:.2f}."
-            )
+                if pd.notna(
+                    april["average_temperature"]
+                ) and pd.notna(
+                    july["average_temperature"]
+                ):
+                    direction = (
+                        "lower"
+                        if july["average_temperature"]
+                        < april["average_temperature"]
+                        else "higher"
+                    )
+                    st.write(
+                        "July average weather temperature was "
+                        f"**{direction}** than April: "
+                        f"{july['average_temperature']:.2f} versus "
+                        f"{april['average_temperature']:.2f}."
+                    )
 
 
 if __name__ == "__main__":
