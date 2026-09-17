@@ -20,6 +20,10 @@ from pages.overview import render_overview, render_pending
 
 if destination == "Overview":
     render_overview()
+elif destination == "Environment":
+    from environment_app import render_environment_page
+
+    render_environment_page()
 else:
     # Teammates: import your domain renderer here and route its destination to
     # that function. Mobility & Traffic is Leigh's; it stays on the neutral

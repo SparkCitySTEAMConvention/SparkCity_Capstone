@@ -46,10 +46,30 @@ def get_air_monitoring_status(year: int) -> dict[str, int]:
 
 def render_environment_page() -> None:
     """Render the Environment section for the team dashboard."""
+    st.markdown(
+        """
+        <style>
+        .stApp [data-testid="stMetricLabel"],
+        .stApp [data-testid="stMetricValue"] {
+            color: #172b46 !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
     st.title("Environment")
     st.caption("Air quality and weather observations from SparkCity S2")
 
-    year = st.selectbox("Year", [2025, 2026], index=0)
+    st.markdown(
+        '<p style="color:#172B46;font-weight:600;">Year</p>',
+        unsafe_allow_html=True,
+    )
+    year = st.selectbox(
+        "Year",
+        [2025, 2026],
+        index=0,
+        label_visibility="collapsed",
+    )
 
     try:
         monthly = get_monthly_environment(year)
@@ -92,7 +112,17 @@ def render_environment_page() -> None:
                     air_chart = air_chart.mark_bar(color="#2563EB", size=32)
                 else:
                     air_chart = air_chart.mark_line(color="#2563EB", point=True)
-                st.altair_chart(air_chart, use_container_width=True)
+                air_chart = (
+                    air_chart
+                    .configure(background="#FFFFFF")
+                    .configure_view(stroke=None)
+                    .configure_axis(
+                        labelColor="#172B46",
+                        titleColor="#172B46",
+                        gridColor="#DCE5EF",
+                    )
+                )
+                st.altair_chart(air_chart, use_container_width=True, theme=None)
                 st.caption(
                     f"{int(air['air_readings'].sum()):,} air quality readings in {year}. "
                     "PM2.5 units await team confirmation."
@@ -138,9 +168,20 @@ def render_environment_page() -> None:
                         ],
                     )
                 )
+                weather_chart = (
+                    weather_chart
+                    .configure(background="#FFFFFF")
+                    .configure_view(stroke=None)
+                    .configure_axis(
+                        labelColor="#172B46",
+                        titleColor="#172B46",
+                        gridColor="#DCE5EF",
+                    )
+                )
                 st.altair_chart(
                     weather_chart,
                     use_container_width=True,
+                    theme=None,
                 )
                 st.caption(
                     f"{int(weather['weather_readings'].sum()):,} weather "
@@ -196,51 +237,25 @@ def render_environment_page() -> None:
                 )
 
                 left, right = st.columns(2)
+                left.metric("NORMAL", f"{status['normal']:,}")
+                right.metric("MONITOR", f"{status['monitor']:,}")
 
-
-                indicator_data = pd.DataFrame(
-                    [
-                        {
-                            "group": "Readings",
-                            "status": "NORMAL",
-                            "count": status["normal"],
-                        },
-                        {
-                            "group": "Readings",
-                            "status": "MONITOR",
-                            "count": status["monitor"],
-                        },
-                    ]
+                st.caption(
+                    f"NORMAL {normal_percent:.1f}% · "
+                    f"MONITOR {monitor_percent:.1f}% of {year} readings"
                 )
 
-                indicator_chart = (
-                    alt.Chart(indicator_data)
-                    .mark_bar()
-                    .encode(
-                        x=alt.X(
-                            "count:Q",
-                            stack="normalize",
-                            axis=None,
-                        ),
-                        y=alt.Y("group:N", axis=None),
-                        color=alt.Color(
-                            "status:N",
-                            scale=alt.Scale(
-                                domain=["NORMAL", "MONITOR"],
-                                range=["#26A269", "#F59E0B"],
-                            ),
-                            legend=None,
-                        ),
-                        tooltip=[
-                            alt.Tooltip("status:N", title="Status"),
-                            alt.Tooltip("count:Q", title="Readings"),
-                        ],
-                    )
-                    .properties(height=36)
-                )
-                st.altair_chart(
-                    indicator_chart,
-                    use_container_width=True,
+                st.markdown(
+                    '<div style="display:flex;height:20px;'
+                    'border-radius:5px;overflow:hidden;background:#E5E7EB;" '
+                    f'role="img" aria-label="{normal_percent:.1f}% normal, '
+                    f'{monitor_percent:.1f}% monitor">'
+                    f'<div style="width:{normal_percent:.1f}%;'
+                    'background:#26A269;"></div>'
+                    f'<div style="width:{monitor_percent:.1f}%;'
+                    'background:#F59E0B;"></div>'
+                    '</div>',
+                    unsafe_allow_html=True,
                 )
 
 
