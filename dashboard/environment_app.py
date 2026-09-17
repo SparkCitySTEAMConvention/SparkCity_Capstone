@@ -13,6 +13,8 @@ from dotenv import load_dotenv
 from sparkcityx.database import connect_database
 from sparkcityx.environment_data import (
     load_air_monitoring_status,
+    load_convention_air_history,
+    load_convention_weather_history,
     load_monthly_environment,
 )
 
@@ -42,6 +44,21 @@ def get_air_monitoring_status(year: int) -> dict[str, int]:
             cursor.execute("SET TRANSACTION READ ONLY")
 
         return load_air_monitoring_status(connection, year)
+
+
+@st.cache_data(ttl=300, show_spinner="Loading convention history from S2...")
+def get_convention_history() -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Fetch April 6–8 weather and air history without writing to S2."""
+    load_dotenv(ROOT / "secrets" / ".env", override=False)
+
+    with connect_database() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute("SET TRANSACTION READ ONLY")
+
+        weather = load_convention_weather_history(connection)
+        air = load_convention_air_history(connection)
+
+    return weather, air
 
 
 def render_environment_page() -> None:
@@ -320,6 +337,105 @@ def render_environment_page() -> None:
                         f"**{direction}** than April: "
                         f"{july['average_temperature']:.2f} versus "
                         f"{april['average_temperature']:.2f}."
+                    )
+
+
+    st.subheader("April 6–8, 2027 convention planning outlook")
+    st.caption(
+        "Historical planning context, not a forecast for April 2027. "
+        "Measurement units await team confirmation."
+    )
+
+    try:
+        weather_history, air_history = get_convention_history()
+    except Exception:
+        st.warning("Convention history could not be loaded from S2.")
+    else:
+        weather_plan_column, air_plan_column = st.columns(2, gap="medium")
+
+        with weather_plan_column:
+            with st.container(border=True):
+                st.subheader("Weather planning")
+                if weather_history.empty:
+                    st.info("No matching historical weather readings are available.")
+                else:
+                    weather_history = weather_history.copy()
+                    weather_history["average_temperature"] = pd.to_numeric(
+                        weather_history["average_temperature"]
+                    )
+                    daily_weather = (
+                        weather_history.groupby("day", as_index=False)
+                        ["average_temperature"].mean()
+                    )
+
+                    day_columns = st.columns(3)
+                    for column, row in zip(
+                        day_columns, daily_weather.itertuples(), strict=False
+                    ):
+                        column.metric(
+                            f"April {row.day}",
+                            f"{row.average_temperature:.1f}",
+                        )
+
+                    st.caption(
+                        f"Based on {len(weather_history)} matching days "
+                        f"from {weather_history['year'].nunique()} historical years."
+                    )
+                    st.markdown(
+                        "- **Bring a layer:** Historical daily averages vary "
+                        "across the three dates.\n"
+                        "- **Keep umbrellas and covered routes available:** "
+                        "Precipitation appeared in the historical readings.\n"
+                        "- **Offer shade and water:** Prepare comfortable "
+                        "outdoor waiting areas if conditions are sunny."
+                    )
+                    st.caption(
+                        "Historical precipitation readings do not give the "
+                        "probability of rain in 2027. Check a current forecast "
+                        "closer to the event."
+                    )
+
+
+        with air_plan_column:
+            with st.container(border=True):
+                st.subheader("Air quality planning")
+                if air_history.empty:
+                    st.info("No matching historical air readings are available.")
+                else:
+                    air_history = air_history.copy()
+                    air_history["average_pm25"] = pd.to_numeric(
+                        air_history["average_pm25"]
+                    )
+
+                    day_columns = st.columns(3)
+                    for column, row in zip(
+                        day_columns, air_history.itertuples(), strict=False
+                    ):
+                        column.metric(
+                            f"April {row.day} PM2.5",
+                            f"{row.average_pm25:.2f}",
+                        )
+
+                    years = ", ".join(
+                        str(year) for year in sorted(air_history["year"].unique())
+                    )
+                    st.caption(
+                        f"Based on {int(air_history['readings'].sum()):,} "
+                        f"readings from {years}. No April 6–8, 2026 air "
+                        "readings are available; these are not 2027 predictions."
+                    )
+                    st.markdown(
+                        "- **Check current air readings** shortly before "
+                        "and during each convention day.\n"
+                        "- **Keep an indoor option** for outdoor activities "
+                        "if current conditions warrant a change.\n"
+                        "- **Share updates with attendees** if the outdoor "
+                        "plan changes."
+                    )
+                    st.caption(
+                        "The dashboard's NORMAL/MONITOR indicator is based "
+                        "on historical data percentiles, not a public "
+                        "health classification."
                     )
 
 

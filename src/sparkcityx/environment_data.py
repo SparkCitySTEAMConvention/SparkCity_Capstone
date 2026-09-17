@@ -109,3 +109,121 @@ def load_air_monitoring_status(
         "normal": total - monitor,
         "monitor": monitor,
     }
+
+def load_convention_weather_history(
+    connection: Connection,
+) -> pd.DataFrame:
+    """Return April 6–8 weather observations from 2025 and 2026."""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT EXTRACT(YEAR FROM timestamp)::int AS year,
+                   EXTRACT(DAY FROM timestamp)::int AS day,
+                   COUNT(*)::int AS readings,
+                   AVG(temperature) AS average_temperature,
+                   AVG(wind_speed) AS average_wind_speed,
+                   AVG(precipitation) AS average_precipitation,
+                   100.0 * AVG((precipitation > 0)::int)
+                       AS percent_readings_with_precipitation
+            FROM sparkcity.weather_data
+            WHERE (timestamp >= DATE '2025-04-06'
+                   AND timestamp < DATE '2025-04-09')
+               OR (timestamp >= DATE '2026-04-06'
+                   AND timestamp < DATE '2026-04-09')
+            GROUP BY 1, 2
+            ORDER BY 1, 2
+            """
+        )
+        rows = cursor.fetchall()
+
+    return pd.DataFrame(
+        rows,
+        columns=[
+            "year",
+            "day",
+            "readings",
+            "average_temperature",
+            "average_wind_speed",
+            "average_precipitation",
+            "percent_readings_with_precipitation",
+        ],
+    )
+
+
+def load_convention_weather_history(
+    connection: Connection,
+) -> pd.DataFrame:
+    """Return April 6–8 weather observations from 2025 and 2026."""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT EXTRACT(YEAR FROM timestamp)::int AS year,
+                   EXTRACT(DAY FROM timestamp)::int AS day,
+                   COUNT(*)::int AS readings,
+                   AVG(temperature) AS average_temperature,
+                   AVG(wind_speed) AS average_wind_speed,
+                   AVG(precipitation) AS average_precipitation,
+                   100.0 * AVG((precipitation > 0)::int)
+                       AS percent_readings_with_precipitation
+            FROM sparkcity.weather_data
+            WHERE (timestamp >= DATE '2025-04-06'
+                   AND timestamp < DATE '2025-04-09')
+               OR (timestamp >= DATE '2026-04-06'
+                   AND timestamp < DATE '2026-04-09')
+            GROUP BY 1, 2
+            ORDER BY 1, 2
+            """
+        )
+        rows = cursor.fetchall()
+
+    return pd.DataFrame(
+        rows,
+        columns=[
+            "year",
+            "day",
+            "readings",
+            "average_temperature",
+            "average_wind_speed",
+            "average_precipitation",
+            "percent_readings_with_precipitation",
+        ],
+    )
+
+
+def load_convention_air_history(
+    connection: Connection,
+) -> pd.DataFrame:
+    """Return available April 6–8 air quality observations."""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT EXTRACT(YEAR FROM timestamp)::int AS year,
+                   EXTRACT(DAY FROM timestamp)::int AS day,
+                   COUNT(*)::int AS readings,
+                   AVG(pm25) AS average_pm25,
+                   AVG(pm10) AS average_pm10,
+                   AVG(no2) AS average_no2,
+                   AVG(co) AS average_co
+            FROM sparkcity.air_quality
+            WHERE (timestamp >= DATE '2025-04-06'
+                   AND timestamp < DATE '2025-04-09')
+               OR (timestamp >= DATE '2026-04-06'
+                   AND timestamp < DATE '2026-04-09')
+            GROUP BY 1, 2
+            ORDER BY 1, 2
+            """
+        )
+        rows = cursor.fetchall()
+
+    return pd.DataFrame(
+        rows,
+        columns=[
+            "year",
+            "day",
+            "readings",
+            "average_pm25",
+            "average_pm10",
+            "average_no2",
+            "average_co",
+        ],
+    )
