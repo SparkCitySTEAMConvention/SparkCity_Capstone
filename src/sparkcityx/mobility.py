@@ -7,34 +7,44 @@ from typing import Any
 from sparkcityx.database import connect_database
 
 
-def get_mobility_summary() -> dict[str, Any]:
+def get_mobility_summary(month: int | None = None) -> dict[str, Any]:
     """Return summary metrics for the Mobility & Traffic dashboard."""
 
-    query = """
+    month_filter = ""
+    params = ()
+
+    if month is not None:
+        month_filter = """
+            WHERE EXTRACT(MONTH FROM timestamp) = %s
+        """
+        params = (month,)
+
+    query = f"""
         SELECT
             ROUND(AVG(vehicle_count)::numeric, 2) AS average_vehicle_count,
             ROUND(AVG(avg_speed)::numeric, 2) AS average_speed_kmh,
             ROUND(
                 (
                     COUNT(*) FILTER (WHERE congestion_level = 'high')::numeric
-                    / COUNT(*)
+                    / NULLIF(COUNT(*), 0)
                 ) * 100,
                 2
             ) AS high_congestion_percent
-        FROM sparkcity.traffic_sensors;
+        FROM sparkcity.traffic_sensors
+        {month_filter};
     """
 
     with connect_database() as connection:
         with connection.cursor() as cursor:
-            cursor.execute(query)
+            cursor.execute(query, params)
             row = cursor.fetchone()
 
-    peak_hour_query = """
-
+    peak_hour_query = f"""
         SELECT
             EXTRACT(HOUR FROM timestamp)::integer AS hour,
             ROUND(AVG(vehicle_count)::numeric, 2) AS average_vehicle_count
         FROM sparkcity.traffic_sensors
+        {month_filter}
         GROUP BY EXTRACT(HOUR FROM timestamp)
         ORDER BY average_vehicle_count DESC
         LIMIT 1;
@@ -42,8 +52,15 @@ def get_mobility_summary() -> dict[str, Any]:
 
     with connect_database() as connection:
         with connection.cursor() as cursor:
-            cursor.execute(peak_hour_query)
+            cursor.execute(peak_hour_query, params)
             peak_row = cursor.fetchone()
+
+    if (
+        row is None
+        or row[0] is None
+        or peak_row is None
+    ):
+        return {}
 
     return {
         "average_vehicle_count": float(row[0]),
@@ -53,22 +70,34 @@ def get_mobility_summary() -> dict[str, Any]:
         "peak_hour_average_vehicle_count": float(peak_row[1]),
     }
 
-def get_hourly_traffic() -> list[dict[str, Any]]:
+def get_hourly_traffic(
+    month: int | None = None,
+) -> list[dict[str, Any]]:
     """Return average traffic volume and speed for each hour of the day."""
 
-    query = """
+    month_filter = ""
+    params = ()
+
+    if month is not None:
+        month_filter = """
+            WHERE EXTRACT(MONTH FROM timestamp) = %s
+        """
+        params = (month,)
+
+    query = f"""
         SELECT
             EXTRACT(HOUR FROM timestamp)::integer AS hour,
             ROUND(AVG(vehicle_count)::numeric, 2) AS average_vehicle_count,
             ROUND(AVG(avg_speed)::numeric, 2) AS average_speed_kmh
         FROM sparkcity.traffic_sensors
+        {month_filter}
         GROUP BY EXTRACT(HOUR FROM timestamp)
         ORDER BY hour;
     """
 
     with connect_database() as connection:
         with connection.cursor() as cursor:
-            cursor.execute(query)
+            cursor.execute(query, params)
             rows = cursor.fetchall()
 
     return [
@@ -80,10 +109,21 @@ def get_hourly_traffic() -> list[dict[str, Any]]:
         for row in rows
     ]
 
-def get_congestion_breakdown() -> list[dict[str, Any]]:
+def get_congestion_breakdown(
+    month: int | None = None,
+) -> list[dict[str, Any]]:
     """Return traffic record counts and percentages by congestion level."""
 
-    query = """
+    month_filter = ""
+    params = ()
+
+    if month is not None:
+        month_filter = """
+            WHERE EXTRACT(MONTH FROM timestamp) = %s
+        """
+        params = (month,)
+
+    query = f"""
         SELECT
             congestion_level,
             COUNT(*) AS record_count,
@@ -92,6 +132,7 @@ def get_congestion_breakdown() -> list[dict[str, Any]]:
                 2
             ) AS percentage
         FROM sparkcity.traffic_sensors
+        {month_filter}
         GROUP BY congestion_level
         ORDER BY
             CASE congestion_level
@@ -103,7 +144,7 @@ def get_congestion_breakdown() -> list[dict[str, Any]]:
 
     with connect_database() as connection:
         with connection.cursor() as cursor:
-            cursor.execute(query)
+            cursor.execute(query, params)
             rows = cursor.fetchall()
 
     return [
@@ -115,10 +156,21 @@ def get_congestion_breakdown() -> list[dict[str, Any]]:
         for row in rows
     ]
 
-def get_road_type_summary() -> list[dict[str, Any]]:
+def get_road_type_summary(
+    month: int | None = None,
+) -> list[dict[str, Any]]:
     """Return traffic and congestion metrics grouped by road type."""
 
-    query = """
+    month_filter = ""
+    params = ()
+
+    if month is not None:
+        month_filter = """
+            WHERE EXTRACT(MONTH FROM timestamp) = %s
+        """
+        params = (month,)
+
+    query = f"""
         SELECT
             road_type,
             COUNT(*) AS record_count,
@@ -130,13 +182,14 @@ def get_road_type_summary() -> list[dict[str, Any]]:
                 2
             ) AS high_congestion_percent
         FROM sparkcity.traffic_sensors
+        {month_filter}
         GROUP BY road_type
         ORDER BY average_vehicle_count DESC;
     """
 
     with connect_database() as connection:
         with connection.cursor() as cursor:
-            cursor.execute(query)
+            cursor.execute(query, params)
             rows = cursor.fetchall()
 
     return [
@@ -150,10 +203,21 @@ def get_road_type_summary() -> list[dict[str, Any]]:
         for row in rows
     ]
 
-def get_sensor_summary() -> list[dict[str, Any]]:
+def get_sensor_summary(
+    month: int | None = None,
+) -> list[dict[str, Any]]:
     """Return summarized traffic conditions for each sensor location."""
 
-    query = """
+    month_filter = ""
+    params = ()
+
+    if month is not None:
+        month_filter = """
+            WHERE EXTRACT(MONTH FROM timestamp) = %s
+        """
+        params = (month,)
+
+    query = f"""
         SELECT
             sensor_id,
             COUNT(*) AS observation_count,
@@ -167,13 +231,14 @@ def get_sensor_summary() -> list[dict[str, Any]]:
                 2
             ) AS high_congestion_percent
         FROM sparkcity.traffic_sensors
+        {month_filter}
         GROUP BY sensor_id
         ORDER BY high_congestion_percent DESC;
     """
 
     with connect_database() as connection:
         with connection.cursor() as cursor:
-            cursor.execute(query)
+            cursor.execute(query, params)
             rows = cursor.fetchall()
 
     return [
