@@ -15,7 +15,7 @@ dependencies = [
     "pyarrow>=25.0.1",
     "pyspark>=4.2,<4.3",
     "python-dotenv>=1.1,<2",
-    "streamlit>=1.49,<2",
+    "streamlit>=1.64,<2",
 ]
 
 [dependency-groups]
