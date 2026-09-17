@@ -1,0 +1,6 @@
+[client]
+# This app uses its own custom navigation (a radio control in the shared header),
+# not Streamlit's built-in multi-page routing. Without this, Streamlit's automatic
+# discovery of dashboard/pages/*.py (used here purely as a plain Python package for
+# code organization) adds an unwanted sidebar and reserves its width on every page.
+showSidebarNavigation = false
