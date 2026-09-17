@@ -8,12 +8,14 @@ authors = [
 ]
 requires-python = ">=3.13,<3.15"
 dependencies = [
+    "altair>=5,<7",
     "fastparquet>=2026.5.0",
     "pandas>=2.2,<3",
     "psycopg[binary]>=3.2,<4",
     "pyarrow>=25.0.1",
     "pyspark>=4.2,<4.3",
     "python-dotenv>=1.1,<2",
+    "streamlit>=1.49,<2",
 ]
 
 [dependency-groups]
