@@ -11,7 +11,25 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "dashboard"))
 
 from pages.convention_planner import get_planner_engine
-from pages.fiscal_impact import _complete_2025_months, _verify_run_artifacts
+from pages.fiscal_impact import (
+    FISCAL_RUNS_DIR,
+    _complete_2025_months,
+    _load_run,
+    _verify_run_artifacts,
+)
+
+
+def test_fiscal_dashboard_snapshot_is_packaged_and_loadable():
+    """A fresh clone must include everything needed to render Fiscal Impact."""
+    assert FISCAL_RUNS_DIR.is_relative_to(ROOT / "dashboard" / "data")
+    _load_run.clear()
+    data = _load_run()
+
+    assert data is not None
+    assert data["manifest"]["status"] == "complete"
+    assert not data["monthly"].empty
+    assert not data["candidates"].empty
+    assert not data["daily"].empty
 
 
 def test_fiscal_dashboard_verifies_signed_artifacts(tmp_path):

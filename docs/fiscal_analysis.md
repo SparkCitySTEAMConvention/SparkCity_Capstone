@@ -5,9 +5,15 @@ See [Fiscal predictive model and grading evidence](fiscal_model.md) for the Spar
 chronological evaluation, saved inference, database handoff and rubric mapping.
 
 Run `notebooks/Hakeem_fiscal_analysis.ipynb` with the project's `.venv` kernel.
-No Spark startup, S2 connection, new package installation or shared-dashboard edits
+No Spark startup, shared database connection, new package installation or shared-dashboard edits
 are needed. Outputs go to a unique, Git-ignored `data/processed/fiscal_analysis/<run>`
 directory. Keep the directory together: `report.html` references its eight PNG charts.
+
+The Fiscal Impact page uses the minimal signed snapshot packaged under
+`dashboard/data/fiscal_analysis/<run>`. Unlike notebook output, this directory is tracked
+in Git so a fresh clone can render the page and its date explorer without rerunning the
+notebook. When publishing a newer analysis, copy its manifest, findings, monthly,
+candidate-summary and daily artifacts into that directory as one complete run.
 
 ## Planning inputs and evidence boundaries
 
