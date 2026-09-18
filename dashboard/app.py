@@ -18,13 +18,13 @@ destination = render_navigation()
 
 from pages.fiscal_impact import render_fiscal_impact
 from pages.overview import render_overview, render_pending
+from pages.mobility_traffic import render_mobility_traffic
 
 if destination == "Overview":
     render_overview()
 elif destination == "Fiscal Impact":
     render_fiscal_impact()
+elif destination == "Mobility & Traffic":
+    render_mobility_traffic()
 else:
-    # Teammates: import your domain renderer here and route its destination to
-    # that function. Mobility & Traffic is Leigh's; it stays on the neutral
-    # render_pending() placeholder below until her page is wired in.
     render_pending(destination)
