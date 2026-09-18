@@ -1405,6 +1405,7 @@ name = "sparkcityx"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "altair" },
     { name = "fastparquet" },
     { name = "pandas" },
     { name = "psycopg", extra = ["binary"] },
@@ -1424,13 +1425,14 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "altair", specifier = ">=5,<7" },
     { name = "fastparquet", specifier = ">=2026.5.0" },
     { name = "pandas", specifier = ">=2.2,<3" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2,<4" },
     { name = "pyarrow", specifier = ">=25.0.1" },
     { name = "pyspark", specifier = ">=4.2,<4.3" },
     { name = "python-dotenv", specifier = ">=1.1,<2" },
-    { name = "streamlit", specifier = ">=1.64.0" },
+    { name = "streamlit", specifier = ">=1.64,<2" },
 ]
 
 [package.metadata.requires-dev]

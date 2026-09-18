@@ -22,6 +22,10 @@ from pages.mobility_traffic import render_mobility_traffic
 
 if destination == "Overview":
     render_overview()
+elif destination == "Environment":
+    from environment_app import render_environment_page
+
+    render_environment_page()
 elif destination == "Capacity & Utilization":
     render_capacity_utilization()
 elif destination == "Mobility & Traffic":
