@@ -2,7 +2,7 @@
 
 ## Objective and established fact
 
-**Current planning update:** the proposed event is April 7–9, 2027 (Wednesday–Friday),
+**Current planning update:** the proposed event is April 6–8, 2027 (Tuesday–Thursday),
 with approximately 15,000 attendees. These dates are inputs to the fiscal assessment,
 not dates inferred by the historical simulation. See `docs/fiscal_analysis.md`.
 The original assumptions and historical 27-scenario outputs below are retained unchanged;

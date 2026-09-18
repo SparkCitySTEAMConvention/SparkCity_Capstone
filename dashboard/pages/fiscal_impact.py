@@ -32,14 +32,15 @@ from sparkcityx.fiscal_analysis import MEASURES, calendar_analogues
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 FISCAL_RUNS_DIR = PROJECT_ROOT / "data" / "processed" / "fiscal_analysis"
+FISCAL_HERO_IMAGE = PROJECT_ROOT / "dashboard" / "assets" / "domains" / "fiscal_impact.png"
 
 # Kept as a live safety check, not a display fact: if the pinned notebook run's
 # dates ever drift from the team's agreed dates again, the page should say so
 # instead of silently presenting stale numbers as current.
 TEAM_PROPOSED_DATES = ("2027-04-06", "2027-04-08")
 
-METRIC_LABELS = {"revenue": "Revenue / observation", "expense": "Expense / observation",
-                  "net_per_observation": "Net / observation"}
+METRIC_LABELS = {"revenue": "Average revenue / record", "expense": "Average expense / record",
+                  "net_per_observation": "Average net / record"}
 
 
 def _month_label(month):
@@ -48,6 +49,34 @@ def _month_label(month):
         return datetime.strptime(month, "%Y-%m").strftime("%B %Y")
     except ValueError:
         return month
+
+
+def _date_label(value):
+    """Format an ISO date for planner-facing copy; preserve unknown values."""
+    try:
+        parsed = datetime.strptime(value, "%Y-%m-%d")
+        return f"{parsed.strftime('%B')} {parsed.day}, {parsed.year}"
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def _date_range_label(start, end):
+    """Compact same-month ranges, with a readable fallback for other ranges."""
+    try:
+        start_date = datetime.strptime(start, "%Y-%m-%d")
+        end_date = datetime.strptime(end, "%Y-%m-%d")
+    except (TypeError, ValueError):
+        return f"{_date_label(start)} – {_date_label(end)}"
+    if (start_date.year, start_date.month) == (end_date.year, end_date.month):
+        return f"{start_date.strftime('%B')} {start_date.day}–{end_date.day}, {start_date.year}"
+    return f"{_date_label(start)} – {_date_label(end)}"
+
+
+def _planner_range_label(start, end):
+    """Format date objects compactly, including ranges that cross a month."""
+    if (start.year, start.month) == (end.year, end.month):
+        return f"{start.strftime('%B')} {start.day}–{end.day}, {start.year}"
+    return f"{start.strftime('%B')} {start.day} – {end.strftime('%B')} {end.day}, {end.year}"
 
 
 def _latest_complete_run_in(runs_dir):
@@ -119,39 +148,61 @@ def _bar_row(tag, value, max_value, fill_color):
     )
 
 
+def _monthly_net_chart(monthly):
+    """Compact dashboard-native comparison; source PNG remains in the run artifacts."""
+    complete = monthly[monthly["complete_month"] & monthly["month"].str.startswith("2025-")].copy()
+    max_value = complete["net_per_observation"].max()
+    rows = []
+    for row in complete.itertuples():
+        month_name = datetime.strptime(row.month, "%Y-%m").strftime("%b")
+        selected = row.month == "2025-04"
+        width = 100 * row.net_per_observation / max_value if max_value else 0
+        rows.append(
+            f'<div class="fiscal-month-row{" selected" if selected else ""}">'
+            f'<span class="fiscal-month-label">{month_name}</span>'
+            '<div class="fiscal-month-track">'
+            f'<div class="fiscal-month-fill" style="width:{width:.1f}%"></div></div>'
+            f'<strong>{_fmt_units(row.net_per_observation)}</strong>'
+            f'{"<em>Selected month</em>" if selected else ""}</div>'
+        )
+    st.markdown('<div class="fiscal-month-chart">' + "".join(rows) + "</div>", unsafe_allow_html=True)
+
+
+def _candidate_range_chart(net_rows):
+    """Show candidate means and historical min–max ranges without a dense static plot."""
+    chart_min = float(net_rows["minimum"].min())
+    chart_max = float(net_rows["maximum"].max())
+    span = chart_max - chart_min or 1
+    rows = []
+    for row in net_rows.itertuples():
+        start = datetime.strptime(row.candidate_start, "%Y-%m-%d")
+        end = datetime.strptime(row.candidate_end, "%Y-%m-%d")
+        left = 100 * (row.minimum - chart_min) / span
+        width = 100 * (row.maximum - row.minimum) / span
+        mean = 100 * (row.mean - chart_min) / span
+        label = f"{start.strftime('%b')} {start.day}–{end.day}"
+        rows.append(
+            f'<div class="fiscal-range-row{" selected" if row.selected else ""}">'
+            f'<div class="fiscal-range-label"><strong>{label}</strong>'
+            f'<span>{"Recommended" if row.selected else start.strftime("%a") + " start"}</span></div>'
+            '<div class="fiscal-range-track">'
+            f'<div class="fiscal-range-line" style="left:{left:.1f}%;width:{width:.1f}%"></div>'
+            f'<div class="fiscal-range-dot" style="left:{mean:.1f}%"></div></div>'
+            f'<div class="fiscal-range-value"><strong>{_fmt_units(row.mean)}</strong><span>mean net/record</span></div>'
+            '</div>'
+        )
+    st.markdown(
+        '<div class="fiscal-range-chart">' + "".join(rows) +
+        f'<div class="fiscal-range-axis"><span>{_fmt_units(chart_min)}</span>'
+        f'<span>Historical range</span><span>{_fmt_units(chart_max)}</span></div></div>',
+        unsafe_allow_html=True,
+    )
+
+
 def _section(icon_title, note=None):
     st.markdown(f'<div class="fiscal-section-title">{icon_title}</div>', unsafe_allow_html=True)
     if note:
         st.markdown(f'<div class="fiscal-section-note">{note}</div>', unsafe_allow_html=True)
-
-
-def _render_decision_context(event_start, event_end, attendees):
-    """Why a Tue-Thu week within April, and what fiscal analysis does/doesn't own.
-
-    This is attributed context from the team's own multi-domain comparison
-    (the Feb-vs-April planning memo), not something this fiscal notebook computes
-    or independently verifies. Said plainly, rather than presented as if this
-    page's fiscal analysis alone produced the overall recommendation. February
-    only gets a brief mention here — it's not this page's focus.
-    """
-    _section("🧭 Why Spark City is looking at April 6–8, 2027")
-    st.markdown(
-        '<div class="fiscal-callout info">This is the fiscal piece of a four-factor team decision '
-        "(capacity, fiscal, air quality, weather); February was the only other month with complete "
-        "cross-dataset coverage and trailed on the team's overall score, so April carried the month-level "
-        f"call. Within April, <strong>April 6–8</strong> falls inside <strong>April 5–11</strong>, reported "
-        "as the month's strongest capacity week, and April 8 specifically was flagged as the best single "
-        "operations day (lowest traffic and PM2.5) among the candidate days. "
-        "<strong>This page independently verifies only the fiscal component</strong> — capacity, air "
-        "quality and weather figures are cited from the team's comparison document, not recomputed here."
-        "</div>",
-        unsafe_allow_html=True,
-    )
-    _kpi_row([
-        ("Recommended dates", f"{event_start} – {event_end}", "Tuesday–Thursday, 3 days"),
-        ("Attendee target", f"{attendees:,}", "Design constraint for capacity planning"),
-        ("Strongest capacity week", "April 5–11", "Per team comparison memo · cited, not recomputed here"),
-    ])
 
 
 def _render_date_explorer(daily_indexed, pinned_net):
@@ -163,27 +214,30 @@ def _render_date_explorer(daily_indexed, pinned_net):
     methodology. It reads the same historical daily series already produced by
     the pinned run; it does not touch the pinned dates, files or any chart above.
     """
-    _section(
-        "🛠️ Explore an alternative date",
-        "Run the same historical-analogue methodology used above against any start date and length, "
-        "compared against same-weekday sequences in the matching month of 2025 (the one complete "
-        "historical year in the data). This does not change the pinned April 6–8 recommendation or "
-        "any figure above — it's a sanity-check tool for comparing options.",
-    )
-    col1, col2 = st.columns([2, 1])
-    with col1:
-        start = st.date_input(
-            "Candidate start date (2027)", value=date(2027, 4, 6),
-            min_value=date(2027, 1, 1), max_value=date(2027, 12, 31),
-            key="fiscal_explorer_start",
+    _section("🛠️ Test another date")
+    with st.container(key="fiscal_explorer"):
+        st.markdown(
+            '<div class="fiscal-explorer-intro"><strong>How would another 2027 date compare?</strong>'
+            '<span>Choose a date and event length. We will find matching weekday patterns in the same '
+            'month of 2025 and compare their average fiscal records.</span></div>',
+            unsafe_allow_html=True,
         )
-    with col2:
-        duration = st.slider("Length (days)", 1, 7, 3, key="fiscal_explorer_duration")
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            start = st.date_input(
+                "Event start", value=date(2027, 4, 6),
+                min_value=date(2027, 1, 1), max_value=date(2027, 12, 31),
+                key="fiscal_explorer_start",
+            )
+        with col2:
+            duration = st.slider("Event length", 1, 7, 3, format="%d day(s)", key="fiscal_explorer_duration")
     end = start + timedelta(days=duration - 1)
     weekday_span = start.strftime("%A") if duration == 1 else f"{start.strftime('%A')}–{end.strftime('%A')}"
-    st.caption(
-        f"Testing {weekday_span}, {start.isoformat()} – {end.isoformat()} ({duration} day"
-        f"{'s' if duration != 1 else ''}) vs. {start.strftime('%B')} 2025."
+    st.markdown(
+        f'<div class="fiscal-test-summary"><span>TESTING</span><strong>{_planner_range_label(start, end)}</strong>'
+        f'<p>{weekday_span} · compared with matching '
+        f'{start.strftime("%B")} 2025 sequences</p></div>',
+        unsafe_allow_html=True,
     )
 
     try:
@@ -205,7 +259,7 @@ def _render_date_explorer(daily_indexed, pinned_net):
                 _kpi_html(
                     METRIC_LABELS[metric], _fmt_units(row["mean"]),
                     f"Range {_fmt_units(row['minimum'])}–{_fmt_units(row['maximum'])} across "
-                    f"{int(row['analogue_windows'])} analogue day(s)",
+                    f"{int(row['analogue_windows'])} historical matches",
                 ),
                 unsafe_allow_html=True,
             )
@@ -213,9 +267,10 @@ def _render_date_explorer(daily_indexed, pinned_net):
     if net_mean is not None and pinned_net:
         delta = 100 * (net_mean - pinned_net) / pinned_net
         direction = "higher than" if delta >= 0 else "lower than"
-        st.caption(
-            f"Net/observation here is {abs(delta):.0f}% {direction} the pinned April 6–8 window "
-            f"({_fmt_units(pinned_net)})."
+        st.markdown(
+            f'<div class="fiscal-comparison-result"><strong>{abs(delta):.0f}% {direction}</strong> '
+            f'the recommended window’s historical net/record benchmark ({_fmt_units(pinned_net)}).</div>',
+            unsafe_allow_html=True,
         )
 
     weekend_days = sum(1 for i in range(duration) if (start + timedelta(days=i)).weekday() >= 5)
@@ -224,10 +279,12 @@ def _render_date_explorer(daily_indexed, pinned_net):
             f"⚠️ This window includes {weekend_days} weekend day(s) — the generator applies a 15% weekend "
             "revenue premium, so higher revenue here partly reflects that, not just the date choice."
         )
-    st.caption(
-        "Same caveats as the rest of this page apply: a historical analogue from synthetic 2025 data, "
-        "not a 2027 forecast, causal estimate, or claim that any window is fiscally optimal."
-    )
+    with st.expander("How to interpret this comparison"):
+        st.write(
+            "This is a historical analogue from synthetic 2025 data, not a 2027 forecast or a claim "
+            "that a date is optimal. Matching weekdays help make alternatives comparable, but one "
+            "historical year cannot establish a repeatable seasonal pattern."
+        )
 
 
 def render_fiscal_impact():
@@ -249,17 +306,32 @@ def render_fiscal_impact():
     event_start, event_end = manifest.get("event_start"), manifest.get("event_end")
     attendees = manifest.get("attendees")
     pinned_window_label = f"{event_start} – {event_end}"
+    display_window_label = _date_range_label(event_start, event_end)
 
     # --- Hero ---
     with st.container(key="fiscal_hero"):
         st.markdown('<span class="fiscal-eyebrow">FISCAL IMPACT · THE DECISION, IN THE DATA</span>', unsafe_allow_html=True)
-        st.markdown("<h1>How the fiscal case for April 6–8, 2027 came together</h1>", unsafe_allow_html=True)
-        st.write(
-            f"Pinned dates: **{pinned_window_label}**, roughly {attendees:,} attendees. This page walks "
-            "through what the historical fiscal data shows about April, why this specific week within it, "
-            "and what the event itself could mean financially for SparkCity. All historical figures are "
-            "synthetic, per-observation values from the SparkCity fiscal sensor feed — not verified city "
-            "revenue, and not a forecast for 2027."
+        st.markdown("<h1>April is the stronger fiscal choice—but fiscal data does not pick the exact week</h1>", unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="fiscal-hero-summary">Recommended window: <strong>{escape(display_window_label)}</strong> '
+            f'· approximately <strong>{attendees:,} attendees</strong></div>',
+            unsafe_allow_html=True,
+        )
+        if FISCAL_HERO_IMAGE.exists():
+            st.image(str(FISCAL_HERO_IMAGE), width="stretch")
+        st.markdown(
+            '<div class="fiscal-hero-takeaways">'
+            '<div><span>WHAT THE DATA SUPPORTS</span><strong>April outperforms February</strong>'
+            '<p>April is the stronger fiscal option among the two months with complete cross-domain coverage.</p></div>'
+            '<div><span>WHAT IT DOES NOT PROVE</span><strong>April 6–8 is uniquely optimal</strong>'
+            '<p>The exact week was selected mainly through capacity and operating conditions.</p></div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            '<div class="fiscal-data-note">Historical figures are synthetic source units per observation—'
+            'not verified city revenue or a 2027 forecast.</div>',
+            unsafe_allow_html=True,
         )
 
     team_start, team_end = TEAM_PROPOSED_DATES
@@ -273,10 +345,7 @@ def render_fiscal_impact():
             unsafe_allow_html=True,
         )
 
-    # --- Why Feb vs April, why this week (attributed team context) ---
-    _render_decision_context(event_start, event_end, attendees)
-
-    # --- April's own fiscal snapshot (the centerpiece; February is a footnote) ---
+    # --- April's historical baseline ---
     feb = monthly[monthly["month"] == "2025-02"].iloc[0]
     apr = monthly[monthly["month"] == "2025-04"].iloc[0]
     delta_pct = 100 * (apr["net_per_observation"] - feb["net_per_observation"]) / feb["net_per_observation"]
@@ -284,37 +353,31 @@ def render_fiscal_impact():
     apr_rank = int((monthly["net_per_observation"] > apr["net_per_observation"]).sum()) + 1
 
     _section(
-        "📊 April 6–8: the fiscal snapshot",
-        "Historical April 2025, complete-month means, source units per observation (not city totals — "
-        "see Limitations).",
+        "📊 April 2025 fiscal baseline",
+        "Complete-month averages across 2,880 synthetic 15-minute records. These figures describe the "
+        "historical month, not the proposed event dates or a citywide total.",
     )
     _kpi_row([
-        ("April revenue / observation", _fmt_units(apr["revenue"]), "2025-04, complete month"),
-        ("April expense / observation", _fmt_units(apr["expense"]), "2025-04, complete month"),
-        ("April net / observation", _fmt_units(apr["net_per_observation"]), "2025-04, complete month"),
-        ("Rank among 2025's 12 months", f"#{apr_rank}", f"By net/obs · {_month_label(best_month['month'])} leads at {_fmt_units(best_month['net_per_observation'])}"),
+        ("Average revenue / record", _fmt_units(apr["revenue"]), "Synthetic source units"),
+        ("Average expense / record", _fmt_units(apr["expense"]), "Synthetic source units"),
+        ("Average net / record", _fmt_units(apr["net_per_observation"]), "Revenue minus expense"),
+        ("2025 net ranking", f"#{apr_rank} of 12", f"{_month_label(best_month['month'])} ranks first"),
     ])
-    st.caption(
-        f"For context: April's net/obs is {delta_pct:.0f}% higher than February's — the only other month "
-        "with complete cross-dataset coverage (see Why Spark City is looking at April 6–8, above). "
-        "Full year-over-year detail is in the expander below."
+    st.markdown(
+        f'<div class="fiscal-comparison-result"><strong>April’s average net is {delta_pct:.0f}% higher '
+        f'than February’s</strong> ({_fmt_units(apr["net_per_observation"])} vs. '
+        f'{_fmt_units(feb["net_per_observation"])} per record).</div>',
+        unsafe_allow_html=True,
     )
 
-    with st.expander("Full-year context: how April compares to the rest of 2025"):
+    with st.expander("See all 12 months of 2025"):
         st.write(
-            f"April is comfortably ahead of the shoulder months around it — but it is not the fiscal peak "
-            f"of the year. That's **{_month_label(best_month['month'])}** "
-            f"({_fmt_units(best_month['net_per_observation'])} net/obs). Fiscal data alone would not single "
-            "out April as the single best month to hold the event; April was the stronger fiscal choice "
-            "specifically against February, the only other month with complete cross-dataset coverage."
+            f"April is stronger than February, but it is not the annual peak. "
+            f"**{_month_label(best_month['month'])}** ranks first at "
+            f"{_fmt_units(best_month['net_per_observation'])} average net per record."
         )
-        chart_path = run_dir / "04_monthly_patterns.png"
-        if chart_path.exists():
-            st.image(str(chart_path))
-        yearly = monthly[["month", "revenue", "expense", "net_per_observation", "complete_month"]].copy()
-        for col in ("revenue", "expense", "net_per_observation"):
-            yearly[col] = yearly[col].map(_fmt_units)
-        st.dataframe(yearly, hide_index=True, width="stretch")
+        _monthly_net_chart(monthly)
+        st.caption("Bars show average net per synthetic record. April is highlighted.")
 
     # --- Why this specific week within April ---
     net_rows = candidates[candidates["metric"] == "net_per_observation"].copy()
@@ -323,48 +386,40 @@ def render_fiscal_impact():
     pinned_row = net_rows[net_rows["selected"]].iloc[0]
 
     _section(
-        "🗓️ Why this specific week, not another one in April",
-        "Every complete-weekday-sequence window inside April 2025 matching each candidate's weekday "
-        "pattern (4 analogue days per window). Min–max are historical ranges, not prediction intervals; "
-        "overlapping windows are not independent evidence.",
+        "🗓️ Does fiscal data favor April 6–8?",
+        "Not clearly. The five candidate windows have overlapping historical ranges, so their small "
+        "differences should not be treated as a ranking of future performance.",
     )
     st.markdown(
-        f'<div class="fiscal-section-note">Fiscal data does not favor {pinned_window_label} over the other four '
-        "candidate weeks — differences between them are small relative to their overlapping historical ranges, "
-        f"and the highest historical mean ({escape(highest['candidate_start'])}–{escape(highest['candidate_end'])}, "
-        f"{_fmt_units(highest['mean'])}) belongs to a different week. Per the team's comparison memo, the specific "
-        "week was set by <strong>capacity/operations</strong> factors outside fiscal scope — April 5–11 was reported "
-        "as the strongest capacity week of the month, and April 8 as the best single operations day. "
-        f"Fiscal analysis confirms {pinned_window_label} is a solid, unexceptional choice within a strong month "
-        "— not a weak one, and not a uniquely optimal one either.</div>",
+        f'<div class="fiscal-verdict"><span>FISCAL VERDICT</span><strong>A sound option, not a unique winner</strong>'
+        f'<p>The recommended window averages {_fmt_units(pinned_row["mean"])} net units per record. '
+        f'The highest historical mean belongs to {escape(highest["candidate_start"])}–'
+        f'{escape(highest["candidate_end"])} at {_fmt_units(highest["mean"])}; capacity and operations '
+        'provide the stronger reason for choosing April 6–8.</p></div>',
         unsafe_allow_html=True,
     )
-    table = net_rows[["window", "selected", "analogue_windows", "mean", "minimum", "maximum"]].rename(columns={
-        "window": "Window", "selected": "Pinned window", "analogue_windows": "Analogue days",
-        "mean": "Mean net/obs", "minimum": "Min", "maximum": "Max",
-    })
-    for col in ("Mean net/obs", "Min", "Max"):
-        table[col] = table[col].map(_fmt_units)
-    st.dataframe(table, hide_index=True, width="stretch")
-
-    chart_path = run_dir / "07_candidate_analogues.png"
-    if chart_path.exists():
-        st.image(str(chart_path))
-        st.markdown(
-            '<div class="fiscal-chart-caption">Source chart: 07_candidate_analogues.png — reused as-is from the '
-            "audited notebook run; not redrawn for this page.</div>",
-            unsafe_allow_html=True,
-        )
+    _candidate_range_chart(net_rows)
+    st.caption(
+        "Dots are historical means; lines show the minimum-to-maximum range across four matching "
+        "April 2025 sequences. They are not forecast intervals."
+    )
+    with st.expander("See the exact candidate values"):
+        table = net_rows[["window", "selected", "analogue_windows", "mean", "minimum", "maximum"]].rename(columns={
+            "window": "Window", "selected": "Recommended", "analogue_windows": "Historical matches",
+            "mean": "Mean net/record", "minimum": "Minimum", "maximum": "Maximum",
+        })
+        for col in ("Mean net/record", "Minimum", "Maximum"):
+            table[col] = table[col].map(_fmt_units)
+        st.dataframe(table, hide_index=True, width="stretch")
 
     # --- Modular date explorer ---
     _render_date_explorer(daily_indexed, pinned_net=pinned_row["mean"])
 
     # --- Financial impact of the event ---
     _section(
-        "💵 What the event itself could mean for the city",
-        "Authored assumption draws for a 3-day, ~15,000-attendee event (5,000 draws per venue archetype). "
-        "These are separately authored scenario quantiles, independent of the historical fiscal values above "
-        "— not forecast confidence intervals, and not calibrated to April weather or actual venue quotes.",
+        "💵 Illustrative event spending scenario",
+        "A planning scenario for a three-day, approximately 15,000-attendee event. These estimates come "
+        "from authored assumptions—not from the historical fiscal records above.",
     )
     mixed = scenarios[scenarios["venue_archetype"] == "Mixed-access"].set_index("metric")
     impact_kpis = []
@@ -377,11 +432,15 @@ def render_fiscal_impact():
         impact_kpis.append((label, _fmt_money(row["p50"]), f"P10–P90: {_fmt_money(row['p10'])} – {_fmt_money(row['p90'])}"))
     _kpi_row(impact_kpis)
     st.caption(
-        "Mixed-access venue archetype shown as the headline case; see all three archetypes below. "
-        "Receipts, retained spending and organizer cost are separate accounting scopes — do not subtract "
-        "one from another and call it city profit."
+        "Headline values use the mixed-access venue scenario. P10–P90 shows the range produced by 5,000 "
+        "assumption draws, not a statistical confidence interval."
     )
-    with st.expander("All venue archetypes"):
+    st.markdown(
+        '<div class="fiscal-evidence-note"><strong>Do not calculate city profit from these cards.</strong> '
+        'Visitor receipts, retained local spending, and organizer costs belong to different accounting scopes.</div>',
+        unsafe_allow_html=True,
+    )
+    with st.expander("Compare all venue scenarios"):
         scenario_table = scenarios.drop(columns=["draws"]).rename(columns={
             "venue_archetype": "Venue archetype", "metric": "Metric",
             "p10": "P10", "p50": "P50 (median)", "p90": "P90", "interpretation": "Read as",
@@ -391,39 +450,40 @@ def render_fiscal_impact():
         scenario_table["Metric"] = scenario_table["Metric"].str.replace("_", " ").str.capitalize()
         st.dataframe(scenario_table, hide_index=True, width="stretch")
 
-    # --- Key insights ---
-    _section("🔑 Key insights")
-    insights = [
-        f"April 6–8's historical net revenue per observation ({_fmt_units(pinned_row['mean'])}) sits within "
-        f"a strong month — April ranks #{apr_rank} of 2025's 12 months on net/obs, and comfortably ahead of "
-        f"February ({_fmt_units(feb['net_per_observation'])}), the only other cross-dataset-complete month.",
-        f"April is not the fiscal peak of the year, though — {_month_label(best_month['month'])} is higher "
-        f"({_fmt_units(best_month['net_per_observation'])} net/obs). The month was shortlisted for "
-        "cross-dataset coverage against February, not because it's the single richest month available.",
-        f"Within April, fiscal data is roughly flat across the five candidate weeks; the pinned "
-        f"{pinned_window_label} window is not the highest "
-        f"({escape(highest['candidate_start'])}–{escape(highest['candidate_end'])} is, at {_fmt_units(highest['mean'])}) "
-        "— the specific week was primarily a capacity/operations call, not a fiscal one.",
-        "Only one complete historical April (2025) exists in the source data, so April seasonality "
-        "and any 2027 read-through remain unconfirmed, not a repeatable pattern.",
-        "Revenue and expense correlate at 0.61 across raw observations but only 0.00 across daily means; "
-        "the relationship changes with the level of aggregation used.",
-        "Currency, accounting period, and whether values are flows or snapshots are unconfirmed — treat "
-        "these as source units per observation, not city totals, profit, or tax revenue.",
-    ]
-    st.markdown("<ul class='fiscal-insights'>" + "".join(f"<li>{escape(i)}</li>" for i in insights) + "</ul>", unsafe_allow_html=True)
+    # --- Decision takeaways ---
+    _section("🔑 What planners should take away")
+    st.markdown(
+        '<div class="fiscal-takeaway-grid">'
+        f'<div><span>01</span><strong>April clears the fiscal comparison</strong><p>Average net per record is '
+        f'{delta_pct:.0f}% higher than February.</p></div>'
+        '<div><span>02</span><strong>Operations choose the week</strong><p>Fiscal differences among the five '
+        'April windows are not decisive.</p></div>'
+        '<div><span>03</span><strong>Validate before budgeting</strong><p>Currency, accounting meaning, and '
+        'real venue costs still need confirmation.</p></div></div>',
+        unsafe_allow_html=True,
+    )
+    with st.expander("Technical findings and interpretation notes"):
+        st.markdown(
+            "- Only one complete historical April exists, so repeatable April seasonality is unconfirmed.\n"
+            "- Revenue and expense correlate at 0.61 across records but approximately 0.00 across daily means.\n"
+            "- Expense exceeds revenue in 13% of individual synthetic records.\n"
+            "- The source does not establish currency, accounting period, or whether values are flows or snapshots."
+        )
 
     # --- Limitations ---
     st.markdown(
-        '<div class="fiscal-callout warn">⚠️ <strong>Limitations to weigh in the decision:</strong> figures are '
-        "descriptive synthetic historical analysis and separately authored event-cost assumptions — "
-        "no causal effect, no date-optimality claim, and no verified city fiscal outcome is asserted. "
-        "The overall multi-domain suitability score cited above comes from the team's own comparison "
-        "memo and is not independently reproduced in this repository. Expense exceeds revenue in 13% of "
-        "raw observations. Confirm venue/hotel quotes, attendee definition, overnight share, displacement, "
-        "and organizer budget before using any of these figures for funding decisions.</div>",
+        '<div class="fiscal-callout warn">⚠️ <strong>Planning context, not budget approval:</strong> '
+        'these synthetic historical comparisons and authored scenarios do not establish causal impact, '
+        'future performance, tax revenue, or city profit.</div>',
         unsafe_allow_html=True,
     )
+    with st.expander("What must be confirmed before a funding decision"):
+        st.markdown(
+            "- Currency, accounting period, and the entity represented by each fiscal record\n"
+            "- Actual venue and hotel quotes, organizer income, and organizer budget\n"
+            "- Attendee definition, overnight share, lodging nights, and displaced normal activity\n"
+            "- Capacity, traffic, air-quality, and weather findings from their owning team analyses"
+        )
 
     st.markdown(
         f'<div class="fiscal-footer">Source: notebooks/Hakeem_fiscal_analysis.ipynb, run <code>{escape(run_dir.name)}</code> · '
