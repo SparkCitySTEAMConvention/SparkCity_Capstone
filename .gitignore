@@ -1,3 +1,6 @@
+
+.streamlit/secrets.toml
+
 # Local secrets (never commit credentials)
 secrets/
 .env
@@ -222,3 +225,5 @@ data/processed/
 
 # Generated feature-engineered datasets
 data/features/
+.agents/
+.claude/
