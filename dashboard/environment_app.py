@@ -7,9 +7,11 @@ from pathlib import Path
 
 import altair as alt
 import pandas as pd
+import pydeck as pdk
 import streamlit as st
 from dotenv import load_dotenv
 
+from sparkcityx.current_weather import load_current_weather_points
 from sparkcityx.database import connect_database
 from sparkcityx.environment_data import (
     load_air_monitoring_status,
@@ -59,6 +61,12 @@ def get_convention_history() -> tuple[pd.DataFrame, pd.DataFrame]:
         air = load_convention_air_history(connection)
 
     return weather, air
+
+
+@st.cache_data(ttl=900, show_spinner="Loading current weather...")
+def get_current_weather_points() -> list[dict]:
+    """Cache current modeled conditions for the SparkCity map."""
+    return load_current_weather_points()
 
 
 def render_environment_page() -> None:
@@ -339,6 +347,77 @@ def render_environment_page() -> None:
                         f"{april['average_temperature']:.2f}."
                     )
 
+
+    st.subheader("Current modeled weather map")
+    st.caption(
+        "Current model estimates across five SparkCity locations. "
+        "These are not live S2 station readings or an April 2027 forecast."
+    )
+
+    try:
+        map_points = get_current_weather_points()
+    except Exception:
+        st.warning("Current weather is temporarily unavailable.")
+    else:
+        with st.container(border=True):
+            center = map_points[0]
+            condition_column, temperature_column, rain_column = st.columns(3)
+            condition_column.metric(
+                "Current conditions",
+                f"{center['icon']} {center['description']}",
+            )
+            temperature_column.metric(
+                "Center temperature",
+                f"{center['temperature_f']:.1f} °F",
+            )
+            rain_column.metric(
+                "Recent precipitation",
+                f"{center['precipitation_mm']:.1f} mm",
+            )
+
+            map_layer = pdk.Layer(
+                "ScatterplotLayer",
+                data=map_points,
+                get_position="[lon, lat]",
+                get_fill_color="color",
+                get_radius=1800,
+                pickable=True,
+                stroked=True,
+                get_line_color=[255, 255, 255],
+                line_width_min_pixels=2,
+            )
+            map_view = pdk.ViewState(
+                latitude=40.76,
+                longitude=-73.97,
+                zoom=10.5,
+                pitch=0,
+            )
+            st.pydeck_chart(
+                pdk.Deck(
+                    layers=[map_layer],
+                    initial_view_state=map_view,
+                    map_style="light",
+                    tooltip={
+                        "html": (
+                            "<b>{icon} {location}</b><br/>"
+                            "{description}<br/>"
+                            "{temperature_f} °F · "
+                            "Precipitation: {precipitation_mm} mm"
+                        ),
+                        "style": {"color": "white"},
+                    },
+                ),
+                use_container_width=True,
+            )
+            st.markdown(
+                "**Map key:** ☀️ Clear · ⛅ Cloudy · 🌧️ Rain · "
+                "❄️ Snow · ⛈️ Thunderstorm"
+            )
+            st.caption(
+                f"Reported {map_points[0]['reported_at']} "
+                "America/New_York. Data: Open-Meteo current weather model. "
+                "Hover over a marker for conditions."
+            )
 
     st.subheader("April 6–8, 2027 convention planning outlook")
     st.caption(
