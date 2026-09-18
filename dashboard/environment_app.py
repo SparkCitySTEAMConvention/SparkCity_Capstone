@@ -105,16 +105,6 @@ def _render_environment_content() -> None:
             font-size: 0.95rem !important;
             line-height: 1.45 !important;
         }
-        .st-key-environment-insights [data-testid="stVerticalBlockBorderWrapper"] {
-            border: 1px solid #f2d4a5 !important;
-            border-left: 6px solid #e88c28 !important;
-            border-radius: 14px !important;
-            background: #fff9ef !important;
-            box-shadow: 0 4px 14px rgb(114 71 16 / 9%);
-        }
-        .st-key-environment-insights h3 {
-            color: #8a4a0b;
-        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -661,59 +651,87 @@ def _render_environment_content() -> None:
                 )
 
     with insights_column:
-        with st.container(border=True, key="environment-insights"):
-            st.subheader("📌 Key Insights")
+        april = monthly.loc[monthly["month"] == 4]
+        july = monthly.loc[monthly["month"] == 7]
+        insight_lines = []
 
-            april = monthly.loc[monthly["month"] == 4]
-            july = monthly.loc[monthly["month"] == 7]
+        if april.empty or july.empty:
+            insight_lines.append(
+                "<p>An April–July comparison is unavailable for this year. "
+                "Select 2025 for the complete comparison.</p>"
+            )
+        else:
+            april = april.iloc[0]
+            july = july.iloc[0]
 
-            if april.empty or july.empty:
-                st.info(
-                    "An April–July comparison is unavailable for "
-                    "this year. Select 2025 for the complete "
-                    "comparison."
+            if pd.notna(april["average_pm25"]) and pd.notna(
+                july["average_pm25"]
+            ):
+                direction = (
+                    "lower"
+                    if july["average_pm25"] < april["average_pm25"]
+                    else "higher"
+                )
+                insight_lines.append(
+                    f"<p>July average PM2.5 was <strong>{direction}</strong> "
+                    f"than April: {july['average_pm25']:.2f} "
+                    f"versus {april['average_pm25']:.2f}.</p>"
                 )
             else:
-                april = april.iloc[0]
-                july = july.iloc[0]
+                insight_lines.append(
+                    "<p>The April–July PM2.5 comparison is "
+                    f"unavailable for {year}.</p>"
+                )
 
-                if pd.notna(april["average_pm25"]) and pd.notna(
-                    july["average_pm25"]
-                ):
-                    direction = (
-                        "lower"
-                        if july["average_pm25"]
-                        < april["average_pm25"]
-                        else "higher"
-                    )
-                    st.write(
-                        f"July average PM2.5 was **{direction}** "
-                        f"than April: {july['average_pm25']:.2f} "
-                        f"versus {april['average_pm25']:.2f}."
-                    )
-                else:
-                    st.caption(
-                        "The April–July PM2.5 comparison is "
-                        f"unavailable for {year}."
-                    )
+            if pd.notna(april["average_temperature"]) and pd.notna(
+                july["average_temperature"]
+            ):
+                direction = (
+                    "lower"
+                    if july["average_temperature"]
+                    < april["average_temperature"]
+                    else "higher"
+                )
+                insight_lines.append(
+                    "<p>July average weather temperature was "
+                    f"<strong>{direction}</strong> than April: "
+                    f"{july['average_temperature']:.2f} versus "
+                    f"{april['average_temperature']:.2f}.</p>"
+                )
 
-                if pd.notna(
-                    april["average_temperature"]
-                ) and pd.notna(
-                    july["average_temperature"]
-                ):
-                    direction = (
-                        "lower"
-                        if july["average_temperature"]
-                        < april["average_temperature"]
-                        else "higher"
-                    )
-                    st.write(
-                        "July average weather temperature was "
-                        f"**{direction}** than April: "
-                        f"{july['average_temperature']:.2f} versus "
-                        f"{april['average_temperature']:.2f}."
-                    )
+        st.html(
+            """
+            <style>
+              .environment-insights-card {
+                position: relative;
+                padding: 20px 24px;
+                border: 1px solid #f2d4a5;
+                border-left: 6px solid #e88c28;
+                border-radius: 14px;
+                background: #fff9ef;
+                box-shadow: 0 4px 14px rgb(114 71 16 / 9%);
+                color: #172b46;
+              }
+              .environment-insights-card h3 {
+                margin: 0 0 12px;
+                color: #8a4a0b;
+                font-size: 1.3rem;
+                line-height: 1.25;
+              }
+              .environment-insights-card p {
+                margin: 0 0 10px;
+                font-size: 1rem;
+                line-height: 1.5;
+              }
+              .environment-insights-card p:last-child { margin-bottom: 0; }
+            </style>
+            <section class="environment-insights-card"
+                     aria-label="Key insights">
+              <h3>📌 Key Insights</h3>
+            """
+            + "".join(insight_lines)
+            + "</section>"
+        )
 
 
     st.subheader("Interactive weather map")
