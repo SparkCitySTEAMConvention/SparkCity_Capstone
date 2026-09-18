@@ -105,6 +105,16 @@ def _render_environment_content() -> None:
             font-size: 0.95rem !important;
             line-height: 1.45 !important;
         }
+        .st-key-environment-insights [data-testid="stVerticalBlockBorderWrapper"] {
+            border: 1px solid #f2d4a5 !important;
+            border-left: 6px solid #e88c28 !important;
+            border-radius: 14px !important;
+            background: #fff9ef !important;
+            box-shadow: 0 4px 14px rgb(114 71 16 / 9%);
+        }
+        .st-key-environment-insights h3 {
+            color: #8a4a0b;
+        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -651,8 +661,8 @@ def _render_environment_content() -> None:
                 )
 
     with insights_column:
-        with st.container(border=True):
-            st.subheader("Key Insights")
+        with st.container(border=True, key="environment-insights"):
+            st.subheader("📌 Key Insights")
 
             april = monthly.loc[monthly["month"] == 4]
             july = monthly.loc[monthly["month"] == 7]
