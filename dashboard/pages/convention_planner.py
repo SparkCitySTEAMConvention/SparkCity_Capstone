@@ -7,6 +7,7 @@ import altair as alt
 from pathlib import Path
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
+from sparkcityx.database import get_database_url
 
 
 
@@ -17,10 +18,9 @@ MONTHLY_INPUT_QUERY = "\n                WITH months AS (\n                    S
 
 @st.cache_resource(show_spinner=False)
 def get_planner_engine(database_url):
-    if not database_url:
-        raise ValueError("Database URL is not configured.")
+    validated_url = get_database_url(database_url)
     return create_engine(
-        database_url, pool_pre_ping=True,
+        validated_url, pool_pre_ping=True,
         connect_args={"connect_timeout": 5, "options": "-c statement_timeout=15000"},
     )
 

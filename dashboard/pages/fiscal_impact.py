@@ -19,8 +19,8 @@ prove April 6-8 is the single best date, and this page says so, alongside what
 it does show.
 """
 import json
+import hashlib
 from datetime import date, datetime, timedelta
-from functools import lru_cache
 from html import escape
 from math import ceil
 from pathlib import Path
@@ -114,14 +114,32 @@ def _latest_complete_run_in(runs_dir):
     return complete[-1] if complete else None
 
 
-@lru_cache(maxsize=1)
+def _verify_run_artifacts(run_dir, manifest, filenames):
+    """Reject missing or modified notebook outputs before the dashboard reads them."""
+    recorded = manifest.get("artifacts_sha256")
+    if not isinstance(recorded, dict):
+        raise ValueError("Fiscal run manifest has no artifact hash inventory")
+    for filename in filenames:
+        path = run_dir / filename
+        expected = recorded.get(filename)
+        if not expected or not path.is_file():
+            raise ValueError(f"Fiscal run is missing its signed {filename} artifact")
+        actual = hashlib.sha256(path.read_bytes()).hexdigest()
+        if actual != expected:
+            raise ValueError(f"Fiscal run artifact failed integrity verification: {filename}")
+
+
+@st.cache_data(ttl=300, show_spinner=False)
 def _load_run():
     run_dir = _latest_complete_run_in(FISCAL_RUNS_DIR)
     if run_dir is None:
         return None
+    manifest = json.loads((run_dir / "manifest.json").read_text())
+    filenames = ("findings.md", "monthly.csv", "candidate_summary.csv", "daily.csv")
+    _verify_run_artifacts(run_dir, manifest, filenames)
     return {
         "run_dir": run_dir,
-        "manifest": json.loads((run_dir / "manifest.json").read_text()),
+        "manifest": manifest,
         "findings": (run_dir / "findings.md").read_text(),
         "monthly": pd.read_csv(run_dir / "monthly.csv"),
         "candidates": pd.read_csv(run_dir / "candidate_summary.csv"),
@@ -166,9 +184,16 @@ def _bar_row(tag, value, max_value, fill_color):
     )
 
 
+def _complete_2025_months(monthly):
+    """Return the comparable full calendar-year rows used for ranks and charts."""
+    return monthly[
+        monthly["complete_month"] & monthly["month"].str.startswith("2025-")
+    ].copy()
+
+
 def _monthly_net_chart(monthly):
     """Compact dashboard-native comparison; source PNG remains in the run artifacts."""
-    complete = monthly[monthly["complete_month"] & monthly["month"].str.startswith("2025-")].copy()
+    complete = _complete_2025_months(monthly)
     max_value = complete["net_per_observation"].max()
     rows = []
     for row in complete.itertuples():
@@ -382,7 +407,12 @@ def render_fiscal_impact():
     load_css(section="shared")
     st.markdown(f"<style>{read_css(STYLES_PATH, section='fiscal_impact')}</style>", unsafe_allow_html=True)
 
-    data = _load_run()
+    try:
+        data = _load_run()
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        st.title("💰 Fiscal Impact")
+        st.error(f"The latest fiscal analysis run could not be verified: {exc}")
+        return
     if data is None:
         st.title("💰 Fiscal Impact")
         st.info(
@@ -440,8 +470,11 @@ def render_fiscal_impact():
     feb = monthly[monthly["month"] == "2025-02"].iloc[0]
     apr = monthly[monthly["month"] == "2025-04"].iloc[0]
     delta_pct = 100 * (apr["net_per_observation"] - feb["net_per_observation"]) / feb["net_per_observation"]
-    best_month = monthly.loc[monthly["net_per_observation"].idxmax()]
-    apr_rank = int((monthly["net_per_observation"] > apr["net_per_observation"]).sum()) + 1
+    comparable_months = _complete_2025_months(monthly)
+    best_month = comparable_months.loc[comparable_months["net_per_observation"].idxmax()]
+    apr_rank = int(
+        (comparable_months["net_per_observation"] > apr["net_per_observation"]).sum()
+    ) + 1
 
     _section(
         "📊 April 2025 fiscal baseline",
