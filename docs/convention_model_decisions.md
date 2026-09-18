@@ -2,7 +2,13 @@
 
 ## Objective and established fact
 
-Explore the conditions under which Spark City could host approximately 15,000 attendees. Attendance is the only user-established event input. No venue, date, duration, visitor share, market price or capacity has been confirmed.
+**Current planning update:** the proposed event is April 7–9, 2027 (Wednesday–Friday),
+with approximately 15,000 attendees. These dates are inputs to the fiscal assessment,
+not dates inferred by the historical simulation. See `docs/fiscal_analysis.md`.
+The original assumptions and historical 27-scenario outputs below are retained unchanged;
+their duration comparisons are not calendar forecasts.
+
+Original simulation scope: explore the conditions under which Spark City could host approximately 15,000 attendees. At that stage, attendance was the only user-established event input. No venue, date, duration, visitor share, market price or capacity had been confirmed.
 
 Update: the user also confirmed the S.T.E.A.M. theme: Science, Technology, Engineering, Arts and Mathematics. Attendance remains the only established numerical event input. The final deliverable is now an interactive city-planner dashboard, with the notebook as its calculation engine. See `docs/convention_planner_dashboard.md` for the added capacity envelopes, operational experiments, program requirements and evidence boundaries. No program-specific resource loads have been invented.
 

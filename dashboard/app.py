@@ -16,10 +16,13 @@ from components.shared import render_navigation
 
 destination = render_navigation()
 
+from pages.fiscal_impact import render_fiscal_impact
 from pages.overview import render_overview, render_pending
 
 if destination == "Overview":
     render_overview()
+elif destination == "Fiscal Impact":
+    render_fiscal_impact()
 else:
     # Teammates: import your domain renderer here and route its destination to
     # that function. Mobility & Traffic is Leigh's; it stays on the neutral

@@ -86,3 +86,31 @@ h2#explore-sparkcity {font-size:34px;padding-top:22px;}
 .st-key-sparkcity_navigation [data-testid="stElementContainer"]:has([role="radiogroup"]) {position:static;}
 .st-key-sparkcity_navigation [role="radiogroup"] {position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);margin:0;width:max-content;flex-wrap:nowrap;}
 }
+
+/* >>> fiscal_impact */
+.st-key-fiscal_hero {padding:8px 0 4px;}
+.fiscal-eyebrow {font-size:13px;font-weight:700;letter-spacing:3px;color:#428778;}
+.st-key-fiscal_hero h1 {font-size:clamp(28px,3vw,38px);color:#172b46;padding-top:6px;line-height:1.2;}
+.fiscal-callout {border-radius:12px;padding:16px 20px;margin:18px 0;font-size:14px;line-height:1.6;}
+.fiscal-callout.warn {background:#fdf3e2;border:1px solid #f0d9a8;color:#6b4e12;}
+.fiscal-callout.warn strong {color:#8a5a00;}
+.fiscal-callout.info {background:#eaf1f8;border:1px solid #d6e3f0;color:#2c4a68;}
+.fiscal-kpi-row [data-testid="stHorizontalBlock"] {gap:18px;}
+.fiscal-kpi {background:white;border:1px solid #dce5ef;border-radius:14px;padding:18px 20px;box-shadow:0 4px 14px #10294408;height:100%;}
+.fiscal-kpi-label {font-size:12px;font-weight:700;letter-spacing:.4px;color:#7c8ba0;text-transform:uppercase;margin-bottom:6px;}
+.fiscal-kpi-value {font-size:26px;font-weight:700;color:#223b57;}
+.fiscal-kpi-sub {font-size:12.5px;color:#62758a;margin-top:4px;line-height:1.4;}
+.fiscal-section-title {font-size:20px;font-weight:700;color:#223b57;margin:32px 0 4px;display:flex;align-items:center;gap:8px;}
+.fiscal-section-note {font-size:13.5px;color:#62758a;margin-bottom:16px;line-height:1.5;}
+.fiscal-bar-group {margin-bottom:18px;}
+.fiscal-bar-metric {font-size:13px;font-weight:600;color:#3d4f68;margin-bottom:6px;}
+.fiscal-bar-row {display:flex;align-items:center;gap:10px;margin-bottom:4px;}
+.fiscal-bar-tag {flex:0 0 64px;font-size:12px;color:#62758a;text-align:right;}
+.fiscal-bar-track {flex:1;background:#eef2f6;border-radius:999px;height:22px;position:relative;overflow:hidden;}
+.fiscal-bar-fill {height:100%;border-radius:999px;display:flex;align-items:center;justify-content:flex-end;padding-right:8px;box-sizing:border-box;color:white;font-size:11.5px;font-weight:700;white-space:nowrap;}
+.fiscal-bar-fill.low-fill {color:#3d4f68;justify-content:flex-start;padding-left:8px;}
+.fiscal-insights {list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;}
+.fiscal-insights li {font-size:14px;color:#3d4f68;line-height:1.55;padding-left:22px;position:relative;}
+.fiscal-insights li::before {content:"✓";position:absolute;left:0;color:#428778;font-weight:700;}
+.fiscal-chart-caption {font-size:12.5px;color:#7c8ba0;margin-top:6px;}
+.fiscal-footer {font-size:12px;color:#8a99ab;border-top:1px solid #dce5ef;padding-top:14px;margin-top:30px;}
