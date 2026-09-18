@@ -110,7 +110,7 @@
 
 .convention-forecast-eyebrow {
     color: #3f7d59 !important;
-    font-size: 12px;
+    font-size: 15px;
     font-weight: 800;
     letter-spacing: 1.2px;
     margin-bottom: 3px;
@@ -118,14 +118,14 @@
 
 .convention-forecast-title {
     color: #142b4a !important;
-    font-size: 25px;
+    font-size: 32px;
     font-weight: 750;
     line-height: 1.2;
 }
 
 .convention-forecast-subtitle {
     color: #53677f !important;
-    font-size: 14px;
+    font-size: 17px;
     margin-top: 3px;
 }
 
@@ -151,14 +151,14 @@
 
 .convention-forecast-value {
     color: #142b4a !important;
-    font-size: 27px;
+    font-size: 34px;
     font-weight: 750;
     line-height: 1.15;
 }
 
 .convention-forecast-label {
     color: #5d7184 !important;
-    font-size: 12.5px;
+    font-size: 15px;
     margin-top: 5px;
 }
 
@@ -167,13 +167,13 @@
     background: rgba(255, 255, 255, 0.62);
     border-radius: 9px;
     padding: 12px 14px;
-    font-size: 14px;
+    font-size: 17px;
     line-height: 1.55;
 }
 
 .convention-forecast-note {
     color: #6b7f75 !important;
-    font-size: 12px;
+    font-size: 14px;
     line-height: 1.5;
     margin-top: 10px;
 }
@@ -194,6 +194,40 @@
     .convention-forecast-metric:nth-child(2) {
         border-right: none;
     }
+}
+
+
+/* Fourier analysis and congestion planning cards */
+.mobility-fourier-card,
+.mobility-congestion-card {
+    background: #ffffff;
+    border: 1px solid #d8e2ee;
+    border-radius: 14px;
+    padding: 20px 22px;
+    box-shadow: 0 3px 10px rgba(15, 42, 70, 0.06);
+    min-height: 220px;
+}
+
+.mobility-fourier-card {
+    border-left: 5px solid #4d86b8;
+}
+
+.mobility-congestion-card {
+    border-left: 5px solid #e05252;
+}
+
+.mobility-fourier-card p,
+.mobility-congestion-card p {
+    color: #334e68 !important;
+    font-size: 16px;
+    line-height: 1.55;
+    margin: 8px 0;
+}
+
+.mobility-fourier-note {
+    color: #6b7f95 !important;
+    font-size: 13px !important;
+    margin-top: 14px !important;
 }
 
 /* >>> overview */

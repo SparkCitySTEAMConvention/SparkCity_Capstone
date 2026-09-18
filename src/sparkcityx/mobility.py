@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 from typing import Any
+
+import numpy as np
+import pandas as pd
+
 from sparkcityx.database import connect_database
 
 def has_month_data(month: int) -> bool:
@@ -273,6 +277,100 @@ def get_sensor_summary(
     ]
 
 
+
+def get_fourier_traffic_patterns() -> list[dict[str, Any]]:
+    """
+    Return planner-friendly recurring traffic cycles from the observed time series.
+
+    Observations are averaged by timestamp and reindexed to a regular five-minute
+    series. Short gaps are time-interpolated before the Fourier transform.
+
+    Relative strength is spectral power normalized to the strongest displayed
+    cycle. It is not a percentage of traffic volume.
+    """
+    query = """
+        SELECT
+            timestamp,
+            AVG(vehicle_count) AS vehicle_count
+        FROM sparkcity.traffic_sensors
+        WHERE timestamp >= '2025-01-01'
+        AND timestamp < '2026-01-01'
+        GROUP BY timestamp
+        ORDER BY timestamp;
+    """
+
+    with connect_database() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(query)
+            rows = cursor.fetchall()
+
+    if len(rows) < 2:
+        return []
+
+    traffic = pd.DataFrame(rows, columns=["timestamp", "vehicle_count"])
+    traffic["timestamp"] = pd.to_datetime(traffic["timestamp"])
+    traffic["vehicle_count"] = traffic["vehicle_count"].astype(float)
+    traffic = traffic.set_index("timestamp").sort_index()
+
+    full_index = pd.date_range(
+        start="2025-01-01 00:00:00",
+        end="2025-12-31 23:55:00",
+        freq="5min",
+    )
+    traffic = traffic.reindex(full_index)
+    traffic["vehicle_count"] = traffic["vehicle_count"].interpolate(method="time")
+    traffic = traffic.dropna(subset=["vehicle_count"])
+
+    if len(traffic) < 2:
+        return []
+
+    values = traffic["vehicle_count"].to_numpy(dtype=float)
+    centered = values - values.mean()
+
+    fft_values = np.fft.rfft(centered)
+    frequencies = np.fft.rfftfreq(len(centered), d=5 / 60)
+    power = np.abs(fft_values) ** 2
+
+    frequencies = frequencies[1:]
+    power = power[1:]
+
+    if len(frequencies) == 0:
+        return []
+
+    period_hours = 1 / frequencies
+
+    target_cycles = [
+        (12.0, "12-hour", "Strongest recurring half-day traffic rhythm"),
+        (8.0, "8-hour", "Strong recurring within-day traffic rhythm"),
+        (24.0, "24-hour", "Recurring daily traffic rhythm"),
+    ]
+
+    detected: list[dict[str, Any]] = []
+
+    for target_hours, label, planning_meaning in target_cycles:
+        nearest_index = int(np.argmin(np.abs(period_hours - target_hours)))
+        detected.append(
+            {
+                "cycle": label,
+                "target_hours": target_hours,
+                "period_hours": float(period_hours[nearest_index]),
+                "power": float(power[nearest_index]),
+                "planning_meaning": planning_meaning,
+            }
+        )
+
+    max_power = max(item["power"] for item in detected)
+
+    for item in detected:
+        item["relative_strength"] = (
+            round(item["power"] / max_power * 100, 1)
+            if max_power > 0
+            else 0.0
+        )
+
+    return detected
+
+
 def get_convention_mobility_outlook() -> dict[str, Any]:
     """
     Return historical mobility conditions for convention planning.
@@ -292,8 +390,9 @@ def get_convention_mobility_outlook() -> dict[str, Any]:
                 2
             )
         FROM sparkcity.traffic_sensors
-        WHERE EXTRACT(MONTH FROM timestamp) = 4
-          AND EXTRACT(ISODOW FROM timestamp) BETWEEN 2 AND 4;
+        WHERE timestamp >= '2025-04-01'
+            AND timestamp < '2025-05-01'
+            AND EXTRACT(ISODOW FROM timestamp) BETWEEN 2 AND 4
     """
 
     peak_query = """

@@ -9,9 +9,8 @@ import streamlit as st
 from sparkcityx.mobility import (
     get_congestion_breakdown,
     get_convention_mobility_outlook,
-    get_hourly_traffic,
+    get_fourier_traffic_patterns,
     get_mobility_summary,
-    get_road_type_summary,
     get_sensor_summary,
     has_month_data,
 )
@@ -159,9 +158,8 @@ scenario, not a measured 2027 traffic observation.
     # ---------------------------------------------------------
 
     summary = get_mobility_summary(query_month)
-    hourly_data = get_hourly_traffic(query_month)
     congestion_data = get_congestion_breakdown(query_month)
-    road_type_data = get_road_type_summary(query_month)
+    fourier_data = get_fourier_traffic_patterns()
 
     # The hotspot map represents the complete sensor network.
     sensor_data = get_sensor_summary()
@@ -254,319 +252,235 @@ scenario, not a measured 2027 traffic observation.
         )
 
     # ---------------------------------------------------------
-    # Prepare Hourly Data
+    # Recurring Traffic Patterns — Fourier Analysis
     # ---------------------------------------------------------
 
-    hourly_df = pd.DataFrame(hourly_data)
+    st.divider()
+    st.subheader("Recurring Traffic Patterns — Full-Year 2025 Fourier Analysis")
+    st.write(
+        "Fourier analysis of the full 2025 traffic dataset identifies repeating "
+        "traffic cycles throughout the year. These recurring patterns help "
+        "convention planners anticipate predictable transportation demand when "
+        "scheduling arrivals, departures, shuttles, and other transportation services."
+    )
 
-    if not hourly_df.empty:
-        hourly_df["time"] = hourly_df["hour"].apply(
-            lambda hour: (
-                f"{hour % 12 or 12} "
-                f"{'AM' if hour < 12 else 'PM'}"
+    fourier_df = pd.DataFrame(fourier_data)
+
+    if not fourier_df.empty:
+        cycle_order = ["12-hour", "8-hour", "24-hour"]
+        fourier_df["cycle"] = pd.Categorical(
+            fourier_df["cycle"],
+            categories=cycle_order,
+            ordered=True,
+        )
+        fourier_df = fourier_df.sort_values("cycle")
+
+        fourier_chart = (
+            alt.Chart(fourier_df)
+            .mark_bar(
+                cornerRadiusEnd=6,
+                size=32,
+                color="#F00909",
+            )
+            .encode(
+                y=alt.Y(
+                    "cycle:N",
+                    sort=cycle_order,
+                    title="Recurring Cycle",
+                    axis=alt.Axis(
+                        labelFontSize=14,
+                        titleFontSize=15,
+                        labelPadding=12,
+                        titlePadding=18,
+                    ),
+                ),
+                x=alt.X(
+                    "relative_strength:Q",
+                    title="Pattern Strength (relative)",
+                    scale=alt.Scale(domain=[0, 105]),
+                    axis=alt.Axis(
+                        labelFontSize=13,
+                        titleFontSize=15,
+                        labelPadding=8,
+                        titlePadding=16,
+                    ),
+                ),
+                tooltip=[
+                    alt.Tooltip("cycle:N", title="Recurring Cycle"),
+                    alt.Tooltip(
+                        "period_hours:Q",
+                        title="Cycle Length (hours)",
+                        format=".1f",
+                    ),
+                    alt.Tooltip(
+                        "relative_strength:Q",
+                        title="Pattern Strength",
+                        format=".1f",
+                    ),
+                ],
+            )
+            .properties(
+                height=230,
+                padding={
+                    "left": 30,
+                    "right": 25,
+                    "top": 20,
+                    "bottom": 25,
+                },
             )
         )
 
-    # ---------------------------------------------------------
-    # Traffic Volume & Average Speed
-    # ---------------------------------------------------------
+        fourier_left, fourier_right = st.columns([1.35, 1])
 
-    top_left, top_right = st.columns(2)
-
-    with top_left:
-        st.subheader("Traffic Volume by Hour")
-        st.write(
-            "Average traffic volume throughout the day."
-        )
-
-        if not hourly_df.empty:
-            traffic_volume_chart = (
-                alt.Chart(hourly_df)
-                .mark_area(
-                    line=True,
-                    point=True,
-                    opacity=0.35,
-                    color="#A63D40",
-                )
-                .encode(
-                    x=alt.X(
-                        "hour:Q",
-                        title="Time of Day",
-                        axis=alt.Axis(
-                            values=[
-                                0,
-                                3,
-                                6,
-                                9,
-                                12,
-                                15,
-                                18,
-                                21,
-                            ],
-                            labelExpr=(
-                                "datum.value == 0 ? '12 AM' : "
-                                "datum.value < 12 ? "
-                                "datum.value + ' AM' : "
-                                "datum.value == 12 ? '12 PM' : "
-                                "(datum.value - 12) + ' PM'"
-                            ),
-                        ),
-                    ),
-                    y=alt.Y(
-                        "average_vehicle_count:Q",
-                        title="Average Traffic Volume",
-                    ),
-                    tooltip=[
-                        alt.Tooltip(
-                            "time:N",
-                            title="Time",
-                        ),
-                        alt.Tooltip(
-                            "average_vehicle_count:Q",
-                            title="Average Traffic Volume",
-                            format=".1f",
-                        ),
-                    ],
-                )
+        with fourier_left:
+            st.altair_chart(fourier_chart, use_container_width=True)
+            st.caption(
+                "Higher values indicate stronger recurring patterns "
+                "in historical traffic data."
             )
 
-            st.altair_chart(
-                traffic_volume_chart,
-                width=700,
-            )
+        strongest_cycle = fourier_df.sort_values(
+            "relative_strength",
+            ascending=False,
+        ).iloc[0]
 
-    with top_right:
-        st.subheader("Average Speed by Hour")
-        st.write(
-            "Average vehicle speed throughout the day."
-        )
-
-        if not hourly_df.empty:
-            average_speed_chart = (
-                alt.Chart(hourly_df)
-                .mark_line(
-                    point=True,
-                    strokeWidth=3,
-                    color="#F2994A",
-                )
-                .encode(
-                    x=alt.X(
-                        "hour:Q",
-                        title="Time of Day",
-                        axis=alt.Axis(
-                            values=[
-                                0,
-                                3,
-                                6,
-                                9,
-                                12,
-                                15,
-                                18,
-                                21,
-                            ],
-                            labelExpr=(
-                                "datum.value == 0 ? '12 AM' : "
-                                "datum.value < 12 ? "
-                                "datum.value + ' AM' : "
-                                "datum.value == 12 ? '12 PM' : "
-                                "(datum.value - 12) + ' PM'"
-                            ),
-                        ),
-                    ),
-                    y=alt.Y(
-                        "average_speed_kmh:Q",
-                        title="Average Speed (km/h)",
-                    ),
-                    tooltip=[
-                        alt.Tooltip(
-                            "time:N",
-                            title="Time",
-                        ),
-                        alt.Tooltip(
-                            "average_speed_kmh:Q",
-                            title="Average Speed",
-                            format=".2f",
-                        ),
-                    ],
-                )
-            )
-
-            st.altair_chart(
-                average_speed_chart,
-                width=700,
+        with fourier_right:
+            st.markdown(
+                f"""
+<div class="mobility-fourier-card">
+<div class="mobility-card-title">What This Tells Planners</div>
+<p>
+The <strong>{strongest_cycle['cycle']} cycle</strong> is the strongest
+recurring traffic pattern identified across the full 2025 traffic dataset.
+</p>
+<p>
+Strong 8-hour and 24-hour cycles were also detected, showing that traffic
+demand follows recurring within-day and daily rhythms rather than varying randomly.
+</p>
+<p>
+For convention planning, these recurring patterns can help guide arrival,
+departure, shuttle, rideshare, and transportation schedules around predictable
+changes in traffic demand.
+</p>
+<p class="mobility-fourier-note">
+Relative Fourier strength compares the displayed cycles with one another.
+It is not a percentage of vehicles or a congestion probability.
+</p>
+</div>
+""",
+                unsafe_allow_html=True,
             )
 
     # ---------------------------------------------------------
-    # Congestion & Road Type
+    # Congestion Breakdown
     # ---------------------------------------------------------
 
     congestion_df = pd.DataFrame(congestion_data)
-    road_type_df = pd.DataFrame(road_type_data)
 
-    if not road_type_df.empty:
-        road_type_df["road_type_display"] = (
-            road_type_df["road_type"]
-            .str.replace("_", " ")
-            .str.title()
-        )
+    st.subheader("Congestion Breakdown")
+    st.write(
+        "Historical distribution of traffic observations by congestion level."
+    )
 
-    bottom_left, bottom_right = st.columns(2)
+    if not congestion_df.empty:
+        congestion_order = ["high", "medium", "low"]
 
-    with bottom_left:
-        st.subheader("Congestion Breakdown")
-        st.write(
-            "Distribution of traffic observations by congestion level."
-        )
-
-        if not congestion_df.empty:
-            congestion_chart = (
-                alt.Chart(congestion_df)
-                .mark_arc(
-                    innerRadius=55,
-                    outerRadius=105,
-                )
-                .encode(
-                    theta=alt.Theta(
+        congestion_chart = (
+            alt.Chart(congestion_df)
+            .mark_bar(
+                cornerRadiusEnd=6,
+                size=32,
+            )
+            .encode(
+                y=alt.Y(
+                    "congestion_level:N",
+                    sort=congestion_order,
+                    title="Congestion Level",
+                    axis=alt.Axis(
+                        labelFontSize=14,
+                        titleFontSize=15,
+                        labelPadding=12,
+                        titlePadding=18,
+                        labelExpr="upper(datum.label)",
+                    ),
+                ),
+                x=alt.X(
+                    "percentage:Q",
+                    title="Percentage of Traffic Observations",
+                    scale=alt.Scale(domain=[0, 45]),
+                    axis=alt.Axis(
+                        labelFontSize=13,
+                        titleFontSize=15,
+                        labelPadding=8,
+                        titlePadding=16,
+                        format=".0f",
+                    ),
+                ),
+                color=alt.Color(
+                    "congestion_level:N",
+                    legend=None,
+                    scale=alt.Scale(
+                        domain=["high", "medium", "low"],
+                        range=["#710505", "#F2C94C", "#5E889D"],
+                    ),
+                ),
+                tooltip=[
+                    alt.Tooltip("congestion_level:N", title="Congestion"),
+                    alt.Tooltip(
+                        "record_count:Q",
+                        title="Observations",
+                        format=",",
+                    ),
+                    alt.Tooltip(
                         "percentage:Q",
                         title="Percentage",
+                        format=".1f",
                     ),
-                    color=alt.Color(
-                        "congestion_level:N",
-                        title="Congestion Level",
-                        scale=alt.Scale(
-                            domain=[
-                                "high",
-                                "medium",
-                                "low",
-                            ],
-                            range=[
-                                "#E05252",
-                                "#F2C94C",
-                                "#58B96B",
-                            ],
-                        ),
-                        sort=[
-                            "high",
-                            "medium",
-                            "low",
-                        ],
-                    ),
-                    tooltip=[
-                        alt.Tooltip(
-                            "congestion_level:N",
-                            title="Congestion",
-                        ),
-                        alt.Tooltip(
-                            "record_count:Q",
-                            title="Observations",
-                        ),
-                        alt.Tooltip(
-                            "percentage:Q",
-                            title="Percentage",
-                            format=".2f",
-                        ),
-                    ],
-                )
-                .properties(
-                    height=260,
-                    padding={
-                        "left": 20,
-                        "right": 20,
-                        "top": 15,
-                        "bottom": 15,
-                    },
-                )
+                ],
             )
-
-            st.altair_chart(
-                congestion_chart,
-                width=700,
+            .properties(
+                height=230,
+                padding={
+                    "left": 30,
+                    "right": 25,
+                    "top": 20,
+                    "bottom": 25,
+                },
             )
-
-    with bottom_right:
-        st.subheader("Average Speed by Road Type")
-        st.write(
-            "Average vehicle speed across SparkCity road categories."
         )
 
-        if not road_type_df.empty:
-            road_speed_chart = (
-                alt.Chart(road_type_df)
-                .mark_bar(
-                    cornerRadiusEnd=5,
-                    size=24,
-                )
-                .encode(
-                    y=alt.Y(
-                        "road_type_display:N",
-                        sort="-x",
-                        title=None,
-                        axis=alt.Axis(
-                            labelFontSize=12,
-                            labelPadding=8,
-                        ),
-                    ),
-                    x=alt.X(
-                        "average_speed_kmh:Q",
-                        title="Average Speed (km/h)",
-                        scale=alt.Scale(
-                            domain=[0, 42],
-                            nice=False,
-                        ),
-                        axis=alt.Axis(
-                            grid=True,
-                            gridOpacity=0.15,
-                            tickCount=6,
-                            labelPadding=8,
-                            titlePadding=14,
-                        ),
-                    ),
-                    color=alt.Color(
-                        "road_type_display:N",
-                        scale=alt.Scale(
-                            domain=[
-                                "Highway",
-                                "Arterial",
-                                "Residential",
-                                "Downtown",
-                                "School Zone",
-                            ],
-                            range=[
-                                "#4DA3D9",
-                                "#F2A23A",
-                                "#58B96B",
-                                "#E05252",
-                                "#8E63CE",
-                            ],
-                        ),
-                        legend=None,
-                    ),
-                    tooltip=[
-                        alt.Tooltip(
-                            "road_type_display:N",
-                            title="Road Type",
-                        ),
-                        alt.Tooltip(
-                            "average_speed_kmh:Q",
-                            title="Average Speed",
-                            format=".2f",
-                        ),
-                    ],
-                )
-                .properties(
-                    height=260,
-                    padding={
-                        "left": 20,
-                        "right": 30,
-                        "top": 15,
-                        "bottom": 15,
-                    },
-                )
-            )
+        congestion_chart_col, congestion_text_col = st.columns([1.1, 1])
 
-            st.altair_chart(
-                road_speed_chart,
-                width=700,
+        with congestion_chart_col:
+            st.altair_chart(congestion_chart, use_container_width=True)
+
+        high_row = congestion_df[
+            congestion_df["congestion_level"] == "high"
+        ]
+
+        high_congestion_display = (
+            f"{float(high_row.iloc[0]['percentage']):.1f}%"
+            if not high_row.empty
+            else "N/A"
+        )
+
+        with congestion_text_col:
+            st.markdown(
+                f"""
+<div class="mobility-congestion-card">
+<div class="mobility-card-title">Why This Matters for the Convention</div>
+<p>
+<strong>{high_congestion_display}</strong> of the selected historical
+observations are classified as high congestion.
+</p>
+<p>
+That existing congestion baseline means convention-generated trips should
+be managed around recurring peak periods rather than added to them without
+coordination.
+</p>
+</div>
+""",
+                unsafe_allow_html=True,
             )
 
     # ---------------------------------------------------------
@@ -575,13 +489,14 @@ scenario, not a measured 2027 traffic observation.
 
     st.divider()
 
-    st.subheader("Convention Transportation Risk Areas")
+    st.subheader("Full-Year 2025 Transportation Risk Areas")
 
     st.write(
-        "Identifies historically congested sensor locations that may require "
-        "additional transportation planning during the April 6–8, 2027 "
-        "convention. These locations already experience recurring congestion "
-        "and could face additional pressure from convention-generated traffic."
+        "Using the full 2025 traffic dataset, this analysis identifies historically "
+        "congested sensor locations that may require additional transportation "
+        "planning during the April 6–8, 2027 convention. These locations already "
+        "experience recurring congestion and could face additional pressure from "
+        "convention-generated traffic."
     )
 
     sensor_df = pd.DataFrame(sensor_data)
@@ -626,48 +541,57 @@ scenario, not a measured 2027 traffic observation.
         )
 
         view_state = pdk.ViewState(
-            latitude=sensor_df["latitude"].mean(),
-            longitude=sensor_df["longitude"].mean(),
+            latitude=risk_df["latitude"].mean(),
+            longitude=risk_df["longitude"].mean(),
             zoom=10,
             pitch=0,
         )
 
-        risk_layer = pdk.Layer(
+        # Heatmap emphasizes areas where transportation risk clusters.
+        heatmap_layer = pdk.Layer(
+            "HeatmapLayer",
+            data=risk_df,
+            get_position="[longitude, latitude]",
+            get_weight="convention_risk_score",
+            radius_pixels=55,
+            intensity=1,
+            threshold=0.05,
+            pickable=False,
+        )
+
+        # Point layer keeps individual high-risk sensor locations available
+        # for hover details while the heatmap shows the broader pattern.
+        sensor_layer = pdk.Layer(
             "ScatterplotLayer",
             data=risk_df,
             get_position="[longitude, latitude]",
-            get_radius=150,
-            get_fill_color="[224, 82, 82, 190]",
+            get_radius=75,
+            get_fill_color=[37, 109, 180, 120],
+            get_line_color=[20, 43, 74, 180],
+            line_width_min_pixels=1,
+            stroked=True,
+            filled=True,
             pickable=True,
         )
 
         deck = pdk.Deck(
-            layers=[risk_layer],
+            layers=[
+                heatmap_layer,
+                sensor_layer,
+            ],
             initial_view_state=view_state,
-            tooltip=cast(
-                Any,
-                {
-                    "html": (
-                        "<b>Convention Risk Rank:</b> #{risk_rank}<br/>"
-                        "<b>Sensor:</b> {sensor_id}<br/>"
-                        "<b>Risk Score:</b> {convention_risk_score}<br/>"
-                        "<b>Average Traffic:</b> {average_vehicle_count}<br/>"
-                        "<b>Average Speed:</b> {average_speed_kmh} km/h<br/>"
-                        "<b>High Congestion:</b> {high_congestion_percent}%"
-                    )
-                },
-            ),
+            map_style="light",
+            tooltip=True,
         )
 
-        st.pydeck_chart(deck)
+        st.pydeck_chart(
+            deck,
+            use_container_width=True,
+        )
 
         st.caption(
-            "The map shows the 25 highest-risk sensor locations based on a "
-            "planning score that weights historical high congestion (50%), "
-            "traffic volume (30%), and lower average speed (20%). The score "
-            "ranks existing transportation vulnerabilities; it is not an "
-            "official traffic standard and does not claim that the convention "
-            "caused the historical conditions."
+            "Heat intensity highlights clusters of higher transportation "
+            "risk. Points identify the highest-risk sensor locations."
         )
 
     # ---------------------------------------------------------
@@ -692,6 +616,7 @@ scenario, not a measured 2027 traffic observation.
 <p><strong>Average traffic volume:</strong> {summary['average_vehicle_count']:.2f} vehicles</p>
 <p><strong>Average speed:</strong> {summary['average_speed_kmh']:.2f} km/h</p>
 <p><strong>High congestion:</strong> {summary['high_congestion_percent']:.2f}% of traffic observations</p>
+<p><strong>Recurring pattern:</strong> 12-hour cycle is strongest among the planner-focused Fourier patterns</p>
 </div>
 """,
             unsafe_allow_html=True,
