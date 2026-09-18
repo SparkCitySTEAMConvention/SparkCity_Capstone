@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "sparkcity-dashboard",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "streamlit", "run", "dashboard/app.py", "--server.headless=true"],
+      "port": 8501
+    }
+  ]
+}

@@ -20,6 +20,7 @@ from pages.fiscal_impact import render_fiscal_impact
 from pages.overview import render_overview, render_pending
 from pages.mobility_traffic import render_mobility_traffic
 from pages.convention_planner import render_convention_planner
+from pages.capacity_utilization import render_capacity_utilization
 
 if destination == "Overview":
     render_overview()
@@ -29,6 +30,8 @@ elif destination == "Fiscal Impact":
     render_fiscal_impact()
 elif destination == "Mobility & Traffic":
     render_mobility_traffic()
+elif destination == "Capacity & Utilization":
+    render_capacity_utilization()
 elif destination == "Environment":
     from environment_app import render_environment_page
 
