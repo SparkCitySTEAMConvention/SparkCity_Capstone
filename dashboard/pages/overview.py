@@ -61,11 +61,25 @@ def render_overview(load_data=None):
     # call is wrapped in its own st.container(key=f"domain_card_{i}") instead, so the
     # accent border, radius, shadow and hover all live on that one real wrapper element
     # that contains both the card and the button as a single visual/hoverable unit.
+    # Corner radius rounded 14px->20px (2026-09-17) to match reference image; border
+    # color/thickness stay each card's own accent, unchanged.
+    # Resting box-shadow scaled back down (2026-09-17) from a bright neon-style glow
+    # to a subtle neutral depth shadow, per request; border color (not the shadow)
+    # now carries each card's accent identity.
     card_wrapper_css = "".join(
-        f".st-key-domain_card_{i} {{border:1.5px solid {c['accent']};border-radius:14px;overflow:hidden;background:white;"
-        f"box-shadow:0 4px 14px #10294408;transition:transform .2s ease, box-shadow .2s ease, border-color .2s ease;}}\n"
+        f".st-key-domain_card_{i} {{border:1.5px solid {c['accent']};border-radius:20px;overflow:hidden;background:white;"
+        f"box-shadow:0 4px 14px rgba(16,41,68,.10);"
+        f"transition:transform .2s ease, box-shadow .2s ease, border-color .2s ease;}}\n"
         f".st-key-domain_card_{i}:hover {{transform:translateY(-5px);box-shadow:0 14px 30px rgba(16,41,68,.2);"
         f"border-color:color-mix(in srgb,{c['accent']} 70%, black);}}\n"
+        # Explore-button footer recolored from Streamlit's default gray to a pale
+        # per-card accent tint (2026-09-17, per request; tint strengthened 14%->24%
+        # same day after it read too faint). !important beats Streamlit's own button
+        # theme rule, which otherwise outweighs the plain .st-key-overview_domains
+        # button selector below. Parent's overflow:hidden + border-radius already clips
+        # this into the matching rounded bottom corners, so no radius needed here.
+        f".st-key-domain_card_{i} [data-testid='stElementContainer']:has(button),"
+        f".st-key-domain_card_{i} button {{background:color-mix(in srgb,{c['accent']} 24%,white) !important;}}\n"
         for i, c in enumerate(DOMAINS)
     )
     # The hero rule needs the runtime hero image data URI, so it can't live in the
@@ -73,9 +87,16 @@ def render_overview(load_data=None):
     # injected in exactly one st.markdown call: each such call is its own zero-height
     # flex sibling in the surrounding layout, so more calls than the original single
     # style block would silently reintroduce gaps between the real page sections.
+    # Hero's margin-bottom cut 24px->6px (2026-09-17, per request) to close the
+    # excessive gap above "Explore SparkCity"; see the matching h2#explore-sparkcity
+    # padding-top cut in styles.css's "overview" section for the other half of it.
+    # Compact pass (2026-09-17, same day): padding 64px->36px top/bottom (56px
+    # left/right unchanged, so width/horizontal layout is untouched) and
+    # min-height 460px->340px. Background image/size/position, overlay gradient,
+    # rounded corners, and the -32px pull-up under the nav are all unchanged.
     st.markdown(f'''<style>
 {read_css(STYLES_PATH, section="overview")}
-.st-key-overview_hero {{position:relative;margin-top:-32px;background:linear-gradient(90deg,rgba(6,14,30,.90) 0%,rgba(6,14,30,.78) 26%,rgba(6,14,30,.42) 50%,rgba(6,14,30,.12) 70%,rgba(6,14,30,0) 85%),url('{_hero_image_data_uri()}');background-size:cover;background-position:center;background-repeat:no-repeat;border-radius:0 0 18px 18px;padding:64px 56px;min-height:460px;margin-bottom:24px;color:white;overflow:hidden;}}
+.st-key-overview_hero {{position:relative;margin-top:-32px;background:linear-gradient(90deg,rgba(6,14,30,.90) 0%,rgba(6,14,30,.78) 26%,rgba(6,14,30,.42) 50%,rgba(6,14,30,.12) 70%,rgba(6,14,30,0) 85%),url('{_hero_image_data_uri()}');background-size:cover;background-position:center;background-repeat:no-repeat;border-radius:0 0 18px 18px;padding:36px 56px;min-height:340px;margin-bottom:6px;color:white;overflow:hidden;}}
 {card_wrapper_css}
 </style>''', unsafe_allow_html=True)
     with st.container(key="overview_hero"):
@@ -133,23 +154,38 @@ def render_domain_card(index, card):
 
 def render_suitability():
     """Team integration point: replace each card's value/status only with approved
-    results later (e.g. value="November", status="High Confidence") without
-    changing this structure."""
+    results later (e.g. value="November", status="Finalized") without changing
+    this structure. Card 2 is named "Alternative Month", not "High-Confidence
+    Alternative" (2026-09-17) — no statistical confidence measure exists yet, so
+    the docstring example above avoids "confidence" language too."""
     with st.container(key="overview_plan"):
         intro, slots = st.columns([1.1, 2], gap="large")
         with intro:
             st.markdown('<div class="plan-heading"><span class="plan-icon">📅</span><h3>Plan the STEAM Convention</h3></div>', unsafe_allow_html=True)
             st.write("Combine insights from across SparkCity to identify the best time and strategy for a successful STEAM convention.")
             st.button("Go to Convention Planner →", on_click=open_page, args=("Convention Planner",), width="stretch")
+            # Supporting bullets (2026-09-17): laid out horizontally (styles.css wraps
+            # them if space is tight) with their own pale theme-colored icon circle,
+            # per the color-consistency pass.
+            st.markdown('''<div class="plan-highlights">
+<span class="plan-highlight-item"><span class="plan-highlight-icon plan-highlight-icon-blue">📊</span>Data-driven insights</span>
+<span class="plan-highlight-item"><span class="plan-highlight-icon plan-highlight-icon-lavender">👥</span>Cross-domain analysis</span>
+<span class="plan-highlight-item"><span class="plan-highlight-icon plan-highlight-icon-yellow">💡</span>Smarter planning</span>
+</div>''', unsafe_allow_html=True)
         with slots:
+            # Card 2 renamed "High-Confidence Alternative"->"Alternative Month" and
+            # icon 🎖->📅 (2026-09-17); each card carries a `tint` used by the
+            # plan-card-{tint} class (styles.css) to color that card's icon
+            # background, thin border, and status badge together (color-consistency
+            # pass, same day) — no border/glow beyond that thin tinted border.
             cards = [
-                ("🏆", "Recommended Month"),
-                ("🎖", "High-Confidence Alternative"),
-                ("📊", "Monthly Suitability Score"),
+                ("🏆", "Recommended Month", "gold"),
+                ("📅", "Alternative Month", "mint"),
+                ("📊", "Monthly Suitability Score", "lavender"),
             ]
-            for column, (icon, title) in zip(st.columns(3), cards):
+            for column, (icon, title, tint) in zip(st.columns(3), cards):
                 with column:
-                    st.markdown(f'''<div class="plan-card">
+                    st.markdown(f'''<div class="plan-card plan-card-{tint}">
 <span class="plan-card-icon">{icon}</span>
 <div class="plan-card-title">{title}</div>
 <div class="plan-card-value">Team Analysis</div>
