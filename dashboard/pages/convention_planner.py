@@ -1,403 +1,99 @@
-# MCC / Convention Planner: load only this page's CSS section; shared shell stays in shared.py.
+"""Convention planner using verified monthly, weekly and daily 2025 exports."""
 from components.shared import load_css
+from components.planner_scores import (
+    WEIGHTS, adjusted_scores, load_scores, monthly_explorer_scores,
+)
 import pandas as pd
 import streamlit as st
-import os
 import altair as alt
-from pathlib import Path
-from dotenv import load_dotenv
-from sqlalchemy import create_engine, text
 
 
-
-# MCC: automatic monthly loading, 15-minute cache, and explicit demo fallback.
-PLANNER_SNAPSHOT = Path(__file__).resolve().parents[1] / "data" / "convention_monthly_inputs_2025.csv"
-MONTHLY_INPUT_QUERY = "\n                WITH months AS (\n                    SELECT generate_series(\n                        DATE '2025-01-01',\n                        DATE '2025-12-01',\n                        INTERVAL '1 month'\n                    )::date AS month_start\n                ),\n                capacity AS (\n                    SELECT\n                        DATE_TRUNC('month', timestamp)::date AS month_start,\n                        AVG(available_rooms) AS available_rooms,\n                        AVG(\n                            100.0 * occupied_rooms\n                            / NULLIF(\n                                occupied_rooms::numeric + available_rooms,\n                                0\n                            )\n                        ) AS occupancy_rate,\n                        COUNT(DISTINCT timestamp::date) AS capacity_days\n                    FROM sparkcity.occupancy_data\n                    WHERE timestamp >= DATE '2025-01-01'\n                      AND timestamp < DATE '2026-01-01'\n                    GROUP BY 1\n                ),\n                fiscal AS (\n                    SELECT\n                        DATE_TRUNC('month', timestamp)::date AS month_start,\n                        AVG(revenue) AS revenue,\n                        AVG(revenue - expense) AS net_profit,\n                        COUNT(DISTINCT timestamp::date) AS fiscal_days\n                    FROM sparkcity.fiscal_data\n                    WHERE timestamp >= DATE '2025-01-01'\n                      AND timestamp < DATE '2026-01-01'\n                    GROUP BY 1\n                ),\n                air AS (\n                    SELECT\n                        DATE_TRUNC('month', timestamp)::date AS month_start,\n                        AVG(pm25) AS pm25,\n                        AVG(no2) AS no2,\n                        COUNT(DISTINCT timestamp::date) AS air_days\n                    FROM sparkcity.air_quality\n                    WHERE timestamp >= DATE '2025-01-01'\n                      AND timestamp < DATE '2026-01-01'\n                    GROUP BY 1\n                ),\n                weather AS (\n                    SELECT\n                        DATE_TRUNC('month', timestamp)::date AS month_start,\n                        AVG(precipitation) AS precipitation,\n                        COUNT(DISTINCT timestamp::date) AS weather_days\n                    FROM sparkcity.weather_data\n                    WHERE timestamp >= DATE '2025-01-01'\n                      AND timestamp < DATE '2026-01-01'\n                    GROUP BY 1\n                )\n                SELECT\n                    m.month_start,\n                    c.available_rooms,\n                    c.occupancy_rate,\n                    f.revenue,\n                    f.net_profit,\n                    a.pm25,\n                    a.no2,\n                    w.precipitation,\n                    c.capacity_days,\n                    f.fiscal_days,\n                    a.air_days,\n                    w.weather_days\n                FROM months m\n                LEFT JOIN capacity c USING (month_start)\n                LEFT JOIN fiscal f USING (month_start)\n                LEFT JOIN air a USING (month_start)\n                LEFT JOIN weather w USING (month_start)\n                ORDER BY m.month_start\n            "
-
-
-@st.cache_resource(show_spinner=False)
-def get_planner_engine(database_url):
-    if not database_url:
-        raise ValueError("Database URL is not configured.")
-    return create_engine(
-        database_url, pool_pre_ping=True,
-        connect_args={"connect_timeout": 5, "options": "-c statement_timeout=15000"},
+def render_period_results(frame, period):
+    st.subheader(f"{period} suitability rankings")
+    st.caption("Each time scale is normalized separately. Compare rankings within a time scale.")
+    ordered = frame.sort_values(["suitability_rank"], na_position="last")
+    date_column = "score_date" if period == "Daily" else "start_date"
+    options = ordered[date_column].tolist()
+    selected_date = st.selectbox(
+        f"Select a {period.lower()} period", options,
+        format_func=lambda value: value.strftime("%B %d, %Y"),
+        key=f"planner_{period}_date",
     )
-
-
-@st.cache_data(ttl=900, show_spinner=False)
-def load_planner_monthly_inputs(database_url):
-    try:
-        with get_planner_engine(database_url).connect() as connection:
-            frame = pd.read_sql_query(
-                text(MONTHLY_INPUT_QUERY), connection, parse_dates=["month_start"]
-            )
-        if frame.empty or frame["available_rooms"].notna().sum() == 0:
-            raise ValueError("No usable monthly capacity data returned.")
-        return frame, "PostgreSQL", pd.Timestamp.now(tz="UTC").strftime("%Y-%m-%d %H:%M UTC")
-    except Exception:
-        # Never expose connection credentials in a user-facing error.
-        frame = pd.read_csv(PLANNER_SNAPSHOT, parse_dates=["month_start"])
-        return frame, "Saved CSV snapshot", "Export supplied September 18, 2026"
-
-
-def calculate_exploratory_scores(monthly_inputs):
-    data = monthly_inputs.copy()
-
-    def normalize(column, higher_is_better=True):
-        values = pd.to_numeric(data[column], errors="coerce")
-        minimum = values.min()
-        maximum = values.max()
-
-        # No usable range means normalization is undefined.
-        if pd.isna(minimum) or maximum == minimum:
-            return pd.Series(float("nan"), index=data.index)
-
-        if higher_is_better:
-            return 100 * (values - minimum) / (maximum - minimum)
-
-        return 100 * (maximum - values) / (maximum - minimum)
-
-    scores = pd.DataFrame(index=data.index)
-    scores["Month"] = pd.to_datetime(
-        data["month_start"]
-    ).dt.month_name()
-
-    scores["Capacity"] = (
-        normalize("available_rooms")
-        + normalize("occupancy_rate", higher_is_better=False)
-    ) / 2
-
-    scores["Fiscal"] = (
-        normalize("revenue")
-        + normalize("net_profit")
-    ) / 2
-
-    scores["Air Quality"] = (
-        normalize("pm25", higher_is_better=False)
-        + normalize("no2", higher_is_better=False)
-    ) / 2
-
-    scores["Weather"] = normalize(
-        "precipitation",
-        higher_is_better=False,
+    selected = frame.loc[frame[date_column] == selected_date].iloc[0]
+    score_col, capacity_col = st.columns(2)
+    score_col.metric("Suitability", f"{selected['suitability']:.2f}")
+    capacity_col.metric("Capacity score", f"{selected['capacity']:.2f}")
+    if period == "Weekly":
+        st.caption(f"Week ends {selected['end_date']:%B %d, %Y}. Partial weeks are excluded.")
+    display = ordered.copy()
+    for column in ["start_date", "end_date", "score_date"]:
+        if column in display:
+            display[column] = display[column].dt.strftime("%Y-%m-%d")
+    st.dataframe(display, hide_index=True, use_container_width=True)
+    st.download_button(
+        f"Download {period.lower()} scores", display.to_csv(index=False),
+        file_name=f"{period.lower()}_scores_2025.csv", mime="text/csv",
+        key=f"planner_download_{period}",
     )
-
-    scores["Baseline score"] = (
-        scores["Capacity"] * 0.35
-        + scores["Fiscal"] * 0.35
-        + scores["Air Quality"] * 0.15
-        + scores["Weather"] * 0.15
-    )
-
-    return scores
-
-
-# MCC: published category scores from Leigh's Day 4 notebook (section 8.3),
-# which used coverage-aware year-then-month averaging and Day 2/3 cleaned
-# feature data that isn't available in this checkout (data/features/ is
-# gitignored). Recomputing from the raw live tables does not reproduce these
-# values — see calculate_exploratory_scores docstring note above — so the
-# 12-Month Suitability Explorer uses these authoritative published numbers
-# directly instead, matching the team analysis document exactly.
-LEIGH_DAY4_CATEGORY_SCORES = {
-    "January":   {"Capacity": 65.81, "Fiscal": 3.95,   "Air Quality": 35.64, "Weather": 25.61, "Confidence": "HIGH"},
-    "February":  {"Capacity": 53.15, "Fiscal": 18.25,  "Air Quality": 28.30, "Weather": 36.02, "Confidence": "HIGH"},
-    "March":     {"Capacity": 50.92, "Fiscal": 47.05,  "Air Quality": 28.66, "Weather": 0.00,  "Confidence": "HIGH"},
-    "April":     {"Capacity": 48.28, "Fiscal": 69.19,  "Air Quality": 36.20, "Weather": 100.00, "Confidence": "HIGH"},
-    "May":       {"Capacity": 37.90, "Fiscal": 87.04,  "Air Quality": 22.17, "Weather": 72.08, "Confidence": "MODERATE"},
-    "June":      {"Capacity": 34.57, "Fiscal": 100.00, "Air Quality": 66.53, "Weather": 39.72, "Confidence": "MODERATE"},
-    "July":      {"Capacity": 51.88, "Fiscal": 83.82,  "Air Quality": 63.25, "Weather": 68.76, "Confidence": "MODERATE"},
-    "August":    {"Capacity": 6.66,  "Fiscal": 76.31,  "Air Quality": 21.54, "Weather": 70.08, "Confidence": "MODERATE"},
-    "September": {"Capacity": 42.97, "Fiscal": 47.35,  "Air Quality": 17.06, "Weather": 49.36, "Confidence": "MODERATE"},
-    "October":   {"Capacity": 44.88, "Fiscal": 21.48,  "Air Quality": 55.40, "Weather": 84.80, "Confidence": "LIMITED"},
-    "November":  {"Capacity": 52.79, "Fiscal": 6.33,   "Air Quality": 18.52, "Weather": 38.18, "Confidence": "LIMITED"},
-    "December":  {"Capacity": 71.14, "Fiscal": 0.00,   "Air Quality": 88.79, "Weather": 68.84, "Confidence": "LIMITED"},
-}
-
-
-def get_published_monthly_scores():
-    month_order = list(LEIGH_DAY4_CATEGORY_SCORES.keys())
-    scores = pd.DataFrame(LEIGH_DAY4_CATEGORY_SCORES).T
-    scores.insert(0, "Month", month_order)
-    scores["Capacity"] = scores["Capacity"].astype(float)
-    scores["Fiscal"] = scores["Fiscal"].astype(float)
-    scores["Air Quality"] = scores["Air Quality"].astype(float)
-    scores["Weather"] = scores["Weather"].astype(float)
-    scores["Baseline score"] = (
-        scores["Capacity"] * 0.35
-        + scores["Fiscal"] * 0.35
-        + scores["Air Quality"] * 0.15
-        + scores["Weather"] * 0.15
-    ).round(2)
-    return scores.reset_index(drop=True)
+    st.caption("Coverage counts show dates or records with required measurements, not complete sensor coverage.")
 
 
 def render_convention_planner():
-    # MCC: paired with the convention_planner section in dashboard/styles/styles.css.
     load_css(section="convention_planner")
-    env_path = Path(__file__).resolve().parents[2] / "secrets" / ".env"
-    load_dotenv(env_path)
-    DATABASE_URL = os.getenv("DATABASE_URL")
-    try:
-        engine = get_planner_engine(DATABASE_URL)
-    except Exception:
-        engine = None  # Monthly snapshot still works without database configuration.
-
-    # Candidate results from the team's analysis document
-    candidates = {
-        "April": {
-            "score": 61.54,
-            "confidence": "HIGH",
-            "proposed_week": "April 5–11, 2027",
-            "proposed_dates": "April 6–8, 2027",
-            "proposed_duration": "3 days",
-            "capacity": 48.28,
-            "fiscal": 69.19,
-            "air_quality": 36.20,
-            "weather": 100.00,
-            "status": "Recommended candidate",
-            "summary": (
-                "April is the recommended candidate among the months "
-                "evaluated with complete analytical coverage. Its stronger "
-                "fiscal and precipitation scores outweigh February's "
-                "modest capacity advantage."
-            ),
-        },
-        "February": {
-            "score": 34.64,
-            "confidence": "HIGH",
-            "proposed_week": "February 1–7, 2027",
-            "proposed_dates": "February 1–3, 2027",
-            "proposed_duration": "3 days",
-            "capacity": 53.15,
-            "fiscal": 18.25,
-            "air_quality": 28.30,
-            "weather": 36.02,
-            "status": "Alternative candidate",
-            "summary": (
-                "February offers slightly stronger relative lodging capacity "
-                "than April, but weaker fiscal and environmental scores "
-                "reduce its overall suitability."
-            ),
-        },
-    }
-
-    FACTOR_WEIGHTS = {
-        "Capacity": 0.35,
-        "Fiscal": 0.35,
-        "Air Quality": 0.15,
-        "Weather": 0.15,
-    }
-
-    # MCC: domain banner only; shared navigation is untouched.
     st.markdown(
         '<section class="planner-banner">'
         '<div><span class="planner-eyebrow">SPARKCITY · COMMUNITY PLANNING</span>'
         '<h1>Find the Best Time to Host the STEAM Convention</h1>'
-        '<p>Compare monthly suitability and explore how priorities change the ranking.</p></div>'
-        '<div class="planner-banner-meta">2027 conference planning<br>'
-        '<span>Historical source data · 2025</span></div></section>',
+        '<p>Compare monthly, weekly and daily suitability.</p></div>'
+        '<div class="planner-banner-meta">Convention planning<br>'
+        '<span>Historical observations · 2025</span></div></section>',
         unsafe_allow_html=True,
     )
-
-    # MCC: Proposed Conference Window sits right under the banner, ahead of
-    # the exploratory sections — the team's concrete recommendation, styled
-    # to match the banner (planner-window-banner in styles.css).
-    with st.container(key="planner_window"):
-        window_heading, window_selector = st.columns([3, 1])
-        with window_heading:
-            st.subheader("Proposed Conference Window")
-        with window_selector:
-            selected_month = st.selectbox(
-                "Candidate details",
-                ["April", "February"],
-            )
-
-        selected = candidates[selected_month]
-
-        factor_df = pd.DataFrame({
-            "Factor": ["Capacity", "Fiscal", "Air Quality", "Weather"],
-            "Score": [
-                selected["capacity"],
-                selected["fiscal"],
-                selected["air_quality"],
-                selected["weather"],
-            ],
-            "Weight (%)": [35, 35, 15, 15],
-        })
-        factor_df["Contribution"] = (
-            factor_df["Score"] * factor_df["Weight (%)"] / 100
-        )
-
-        month_col, week_col, dates_col, duration_col, confidence_col = st.columns(5)
-        month_col.metric("Candidate month", selected_month)
-        week_col.metric("Proposed week", selected["proposed_week"])
-        dates_col.metric("Proposed dates", selected["proposed_dates"])
-        duration_col.metric("Proposed duration", selected["proposed_duration"])
-        confidence_col.metric("Confidence", selected["confidence"])
-        st.write(
-            "Source: SparkCity February/April Convention Analysis (2027). "
-            "These windows map historical 2025 weekday patterns to 2027; "
-            "they are not forecasts of 2027 conditions or confirmed bookings."
-        )
-
-    st.divider()
-
-    explorer_area = st.container(key="planner_explorer")
-
-    st.divider()
-    st.subheader("Convention Candidate Recommendation")
-    st.caption("Team-reported scores, separate from the exploratory model above.")
-
-    # MCC: one compact team recommendation row; exploratory results remain separate.
-    # MCC: recommendation, alternative, and doc-sourced takeaways share one tile row.
-    april_card, february_card, team_takeaways_card = st.columns(3)
-    with april_card:
-        with st.container(border=True, key="planner_candidate_score"):
-            st.markdown("#### Recommended: April")
-            st.metric("April Suitability", f"{candidates['April']['score']:.2f}")
-            st.write("Stronger Fiscal and Weather scores; complete analytical coverage reported.")
-            st.caption(f"Proposed: April 6–8, 2027 • Confidence: {candidates['April']['confidence']}")
-            st.caption("Confidence is HIGH because April has complete coverage across all six time-based analytical datasets.")
-    with february_card:
-        with st.container(border=True, key="planner_candidate_alternative"):
-            st.markdown("#### Alternative: February")
-            st.metric("February Suitability", f"{candidates['February']['score']:.2f}")
-            st.write("Capacity score 53.15 versus April's 48.28, but lower overall suitability.")
-            st.caption(f"Proposed: February 1–3, 2027 • Confidence: {candidates['February']['confidence']}")
-            st.caption("Confidence is HIGH because February has complete coverage across all six time-based analytical datasets.")
-    with team_takeaways_card:
-        with st.container(border=True, key="planner_team_takeaways"):
-            st.markdown("#### Key Takeaways")
-            st.caption("Team analysis document • February vs. April")
-            st.write(
-                "April has the stronger overall suitability score "
-                "(61.54 vs. 34.64), driven by Fiscal and Weather."
-            )
-            st.write("February holds a slight capacity edge (53.15 vs. 48.28).")
-            st.write(
-                "Both months are HIGH confidence with complete coverage "
-                "across all six analytical datasets."
-            )
-            st.caption(
-                "July scored highest (67.30) but is MODERATE confidence "
-                "(Traffic ends in May); November is LIMITED (Traffic and "
-                "Energy unavailable)."
-            )
-
-    data_tab, calculation_tab, limitations_tab = st.tabs([
-        "Monthly Source Data",
-        "Score Calculation",
-        "Planning Notes",
+    try:
+        exports = {period: load_scores(period) for period in ("Monthly", "Weekly", "Daily")}
+    except (OSError, ValueError, KeyError) as exc:
+        st.error(f"Unable to load the saved score exports: {exc}")
+        return
+    st.caption("Source: saved PostgreSQL exports supplied September 18, 2026. Scores are historical comparisons, not forecasts or confirmed event dates.")
+    monthly = exports["Monthly"]
+    weekly = exports["Weekly"]
+    daily = exports["Daily"]
+    best_month = monthly.loc[monthly["suitability"].idxmax()]
+    best_week = weekly.loc[weekly["suitability"].idxmax()]
+    best_day = daily.loc[daily["suitability"].idxmax()]
+    month_card, week_card, day_card = st.columns(3)
+    month_card.metric(f"Leading month: {best_month['start_date']:%B}", f"{best_month['suitability']:.2f}")
+    week_card.metric(f"Leading week: {best_week['start_date']:%b %d} – {best_week['end_date']:%b %d}", f"{best_week['suitability']:.2f}")
+    day_card.metric(f"Leading day: {best_day['score_date']:%b %d}", f"{best_day['suitability']:.2f}")
+    st.caption(f"The leading week's Capacity score is {best_week['capacity']:.2f}. Check lodging and venue availability before choosing dates.")
+    monthly_tab, weekly_tab, daily_tab, methodology_tab = st.tabs([
+        "Monthly", "Weekly", "Daily", "Scoring method"
     ])
-
-    # MCC: monthly inputs render into this bottom tab after automatic loading.
-    with data_tab:
-        source_data_area = st.container()
-
-    with calculation_tab:
-        st.write(
-            "Metrics are min–max normalized across the observed months "
-            "to a relative 0–100 scale."
-        )
-        st.markdown(
-            "**Higher is better:** available rooms, revenue, net profit.  \n"
-            "**Lower is better:** occupancy rate, PM2.5, NO₂, precipitation."
-        )
-        st.latex(
-            r"\text{Higher-is-better score} = "
-            r"100 \times \frac{x-\min(x)}{\max(x)-\min(x)}"
-        )
-        st.latex(
-            r"\text{Lower-is-better score} = "
-            r"100 \times \frac{\max(x)-x}{\max(x)-\min(x)}"
-        )
-        st.write(
-            "Capacity, Fiscal, and Air Quality each average their two "
-            "normalized inputs. Weather uses precipitation."
-        )
-        st.latex(r"S = 0.35C + 0.35F + 0.15A + 0.15W")
-        st.dataframe(
-            factor_df.round(2),
-            hide_index=True,
-            use_container_width=True,
-        )
-        st.caption(
-            "Contributions use rounded component scores. Small differences "
-            "from reported totals can result. This score is not a probability."
-        )
-
-    with limitations_tab:
-        st.markdown("**Why July and November were not selected**")
-        st.write(
-            "July had the highest reported score, 67.30, but Traffic coverage "
-            "ends in May, giving it MODERATE confidence. November shows "
-            "occupancy advantages but has LIMITED analytical coverage because "
-            "both Traffic and Energy are unavailable for that month. The team "
-            "selected April from the final candidates with complete analytical "
-            "coverage across all six time-based datasets."
-        )
-        st.write(
-            "Traffic and Energy are outside the weighted model. "
-            "Temperature is Fahrenheit and is not part of the Weather score."
-        )
-        st.markdown("**Weekly validation**")
-        st.write(
-            "Validate the selected candidate's proposed 2027 window against "
-            "venue availability, capacity, event conflicts, and operational "
-            "conditions before confirming dates. The proposal maps historical "
-            "2025 weekday patterns to 2027; it is not a 2027 forecast."
-        )
-        st.warning(
-            "The dataset supports relative capacity comparisons. It does not "
-            "independently verify lodging for all 15,000 attendees."
-        )
-
-    st.divider()
-    st.caption(
-        "Scores and recommendation: team analysis document, using 2025 data. "
-        "Monthly inputs below: automatically loaded through SELECT queries, with a labeled snapshot fallback. "
-        "Category scores in the explorer above match the published document exactly."
-    )
-
-    with explorer_area:
-        with st.expander("Data source and refresh", expanded=False):
-            st.caption("Monthly data loads automatically and is cached for 15 minutes.")
-            refresh_inputs = st.button("Refresh monthly data", key="planner_refresh")
-            if refresh_inputs:
-                load_planner_monthly_inputs.clear(DATABASE_URL)
-
-        try:
-            with st.spinner("Loading monthly suitability inputs…"):
-                monthly_inputs, source, loaded_at = load_planner_monthly_inputs(DATABASE_URL)
-        except Exception:
-            st.error("Neither database inputs nor the saved snapshot could be loaded.")
-            return
-
-        if source == "Saved CSV snapshot":
-            st.warning("Database unavailable — showing saved 2025 CSV snapshot supplied September 18, 2026.")
-        else:
-            st.caption(f"Source: PostgreSQL · Retrieved {loaded_at} · Cached up to 15 minutes")
-
-        if monthly_inputs.empty:
-            st.info("No monthly model inputs are available.")
-            return
-
-        exploratory_scores = get_published_monthly_scores()
-
+    with weekly_tab:
+        render_period_results(weekly, "Weekly")
+    with daily_tab:
+        render_period_results(daily, "Daily")
+    with methodology_tab:
+        st.write("Capacity averages available-room and occupancy scores. Fiscal averages revenue and net-profit scores. Air Quality averages PM2.5 and NO₂ scores. Weather uses precipitation; Energy uses power consumption.")
+        st.write("More available rooms, revenue and net profit score higher. Lower occupancy, PM2.5, NO₂, precipitation and power consumption score higher. Traffic and temperature are outside the weighted score.")
+        st.write("Occupancy rate = occupied rooms / (available rooms + occupied rooms) × 100, averaged per observation. Other inputs are also observation averages, not citywide totals.")
+        st.latex(r"S = 0.30C + 0.30F + 0.15A + 0.15W + 0.10E")
+        st.write("Min–max normalization uses 12 months, 51 full Monday–Sunday weeks, or 365 days separately. Partial weeks are excluded before normalization. Missing inputs or zero ranges leave scores unavailable.")
+        st.write("The original analysis document used four factors and different weights. These exports use the updated five-factor model, so the earlier April/February recommendation is not the current ranking.")
+        st.warning("Relative room availability does not establish lodging capacity for 15,000 attendees. Scores are not probabilities, and a single day's ranking does not establish the best multi-day event window.")
+    with monthly_tab:
+        exploratory_scores = monthly_explorer_scores(monthly)
         header_area, month_area = st.columns([3, 1])
         with header_area:
             st.subheader("12-Month Suitability Explorer")
             st.caption(
-                "Published category scores from the team analysis document "
-                "(Leigh's Day 4 notebook), using 2025 observations. "
+                "Verified 2025 monthly export with Energy included. "
                 "Adjust the slider below to explore alternate factor weightings."
             )
         with month_area:
             explorer_month = st.selectbox(
                 "Select a Month", exploratory_scores["Month"].tolist(),
-                index=min(3, len(exploratory_scores) - 1), key="explorer_month",
+                index=int(exploratory_scores["Baseline score"].idxmax()), key="explorer_month",
             )
 
         # MCC: three standalone cards — score, factor breakdown, and the
@@ -408,43 +104,19 @@ def render_convention_planner():
             with st.container(border=True, key="planner_comparison"):
                 st.markdown("#### Monthly Scores: Baseline vs Adjusted Weights")
                 comparison_chart_area = st.container()
-                adjusted_factor = "Capacity"
                 adjustment = st.select_slider(
                     "Capacity weight adjustment · percentage points",
                     options=[-15, -10, 0, 10, 15], value=0,
                     key="explorer_adjustment",
                 )
                 st.caption(
-                    "0 = original 35/35/15/15 weights. Capacity changes by the selected "
+                    "0 = baseline 30/30/15/15/10 weights. Capacity changes by the selected "
                     "amount; other weights rebalance to 100%. All monthly totals update."
                 )
 
-        # Zero adjustment means the original team weights.
-        baseline_weights = {
-            "Capacity": 0.35,
-            "Fiscal": 0.35,
-            "Air Quality": 0.15,
-            "Weather": 0.15,
-        }
-
-        original_weight = baseline_weights[adjusted_factor]
-        new_weight = original_weight + adjustment / 100
-
-        # Redistribute the remaining weight proportionally.
-        adjusted_weights = {
-            factor: (
-                new_weight
-                if factor == adjusted_factor
-                else weight * (1 - new_weight) / (1 - original_weight)
-            )
-            for factor, weight in baseline_weights.items()
-        }
-
+        baseline_weights = WEIGHTS
         results = exploratory_scores.copy()
-        results["Adjusted score"] = sum(
-            results[factor] * weight
-            for factor, weight in adjusted_weights.items()
-        )
+        results["Adjusted score"], adjusted_weights = adjusted_scores(results, adjustment)
 
         selected_result = results.loc[
             results["Month"] == explorer_month
@@ -506,7 +178,7 @@ def render_convention_planner():
 
                 # MCC: contributions expose how each factor builds the overall score.
                 factor_colors = {"Capacity": "#287dcc", "Fiscal": "#e5ad35",
-                                 "Air Quality": "#49ae83", "Weather": "#8b5cf6"}
+                                 "Air Quality": "#49ae83", "Weather": "#8b5cf6", "Energy": "#e87935"}
                 rows = []
                 for _, row in breakdown.iterrows():
                     factor = row["Factor"]
@@ -613,26 +285,10 @@ def render_convention_planner():
         # MCC: inline contribution explanation belongs to the monthly suitability tile.
         with calculation_caption_area:
             st.caption("Weighted calculation · factor score × weight = contribution")
-            st.caption("Baseline weights: Capacity 35%, Fiscal 35%, Air Quality 15%, Weather 15%. Calculations use unrounded values.")
+            st.caption("Baseline weights: Capacity 30%, Fiscal 30%, Air Quality 15%, Weather 15%, Energy 10%. Baselines preserve exported totals; adjusted scenarios use rounded category scores.")
 
-        with source_data_area:
-            st.caption(f"Source: {source} · {loaded_at} · Historical observations: 2025")
-            st.dataframe(
-                monthly_inputs.round(2),
-                hide_index=True,
-                use_container_width=True,
-            )
 
-            st.download_button(
-                "Download monthly model inputs",
-                data=monthly_inputs.to_csv(index=False),
-                file_name="sparkcity_monthly_inputs_2025.csv",
-                mime="text/csv",
-            )
-
-            st.caption(
-                "Values are averages per observation, not citywide totals. "
-                "Occupancy assumes total rooms = occupied + available rooms. "
-                "Day counts indicate dates with records, not complete "
-                "sensor coverage or complete metric values."
-            )
+        st.subheader("All monthly scores")
+        st.dataframe(monthly, hide_index=True, use_container_width=True)
+        st.download_button("Download monthly scores", monthly.to_csv(index=False),
+                           file_name="monthly_scores_2025.csv", mime="text/csv")
