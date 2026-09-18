@@ -18,14 +18,14 @@ destination = render_navigation()
 
 from pages.overview import render_overview, render_pending
 from pages.convention_planner import render_convention_planner #MCC added
+from pages.mobility_traffic import render_mobility_traffic
 
 if destination == "Overview":
     render_overview()
 
 elif destination == "Convention Planner": #MCC added
     render_convention_planner()
+elif destination == "Mobility & Traffic":
+    render_mobility_traffic()
 else:
-    # Teammates: import your domain renderer here and route its destination to
-    # that function. Mobility & Traffic is Leigh's; it stays on the neutral
-    # render_pending() placeholder below until her page is wired in.
     render_pending(destination)

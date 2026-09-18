@@ -1,5 +1,5 @@
 /* SparkCity dashboard stylesheet.
-   Sections are delimited by "/* >>> name */" markers and loaded independently
+    Sections are delimited by section markers and loaded independently
    by components/shared.py's load_css(), so a section that only makes sense on
    one page (e.g. overview) is never injected on another page (e.g. Traffic). */
 
@@ -19,6 +19,216 @@
 .st-key-sparkcity_navigation [role="radiogroup"] label:has(input:checked) {background:#246db4;border-color:#65a9ed;}
 .st-key-sparkcity_navigation [role="radiogroup"] label:focus-within {outline:2px solid #b9ddff;outline-offset:2px;}
 @media(max-width:800px) {.sparkcity-brand small {display:none;}}
+
+/*==========================================================================================
+  Leigh D - Mobility and Traffic dashboard styles
+==========================================================================================*/
+
+.mobility-kpi-card {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    background-color: #ffffff;
+    border: 1px solid #d8e2ee;
+    border-radius: 14px;
+    padding: 18px 22px;
+    min-height: 125px;
+    box-shadow: 0 3px 10px rgba(15, 42, 70, 0.06);
+}
+
+.mobility-kpi-label {
+    color: #53677f !important;
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+
+.mobility-kpi-value {
+    color: #142b4a !important;
+    font-size: 30px;
+    font-weight: 700;
+    line-height: 1.15;
+}
+
+.mobility-kpi-detail {
+    color: #6b7f95 !important;
+    font-size: 13px;
+    margin-top: 5px;
+}
+
+/* Mobility insight and recommendation cards */
+.mobility-insight-card,
+.mobility-recommendation-card {
+    border-radius: 14px;
+    padding: 14px 18px;
+    min-height: 0;
+    border: 1px solid #d8e2ee;
+    box-shadow: 0 3px 10px rgba(15, 42, 70, 0.06);
+}
+
+.mobility-insight-card {
+    background-color: #eaf3fb;
+    border-left: 5px solid #4da3d9;
+}
+
+.mobility-recommendation-card {
+    background-color: #fff4e5;
+    border-left: 5px solid #f2a23a;
+}
+
+.mobility-card-title {
+    color: #142b4a !important;
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+
+.mobility-card-item {
+    color: #334e68 !important;
+    font-size: 15px;
+    line-height: 1.6;
+    margin-bottom: 9px;
+}
+
+.mobility-insight-card p,
+.mobility-recommendation-card p {
+    margin: 5px 0;
+    line-height: 1.4;
+    font-size: 15px;
+}
+
+/* Convention mobility forecast */
+.convention-forecast-panel {
+    background: linear-gradient(135deg, #eaf6ef 0%, #f7fbf8 100%);
+    border: 1px solid #c8dfd0;
+    border-left: 6px solid #3f9d68;
+    border-radius: 16px;
+    padding: 22px 26px;
+    margin: 8px 0 26px;
+    box-shadow: 0 4px 14px rgba(15, 42, 70, 0.07);
+}
+
+.convention-forecast-eyebrow {
+    color: #3f7d59 !important;
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: 1.2px;
+    margin-bottom: 3px;
+}
+
+.convention-forecast-title {
+    color: #142b4a !important;
+    font-size: 32px;
+    font-weight: 750;
+    line-height: 1.2;
+}
+
+.convention-forecast-subtitle {
+    color: #53677f !important;
+    font-size: 17px;
+    margin-top: 3px;
+}
+
+.convention-forecast-metrics {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0;
+    margin: 20px 0;
+    padding: 16px 0;
+    border-top: 1px solid #cfe2d5;
+    border-bottom: 1px solid #cfe2d5;
+}
+
+.convention-forecast-metric {
+    display: flex;
+    flex-direction: column;
+    padding: 0 18px;
+    border-right: 1px solid #cfe2d5;
+}
+
+.convention-forecast-metric:first-child { padding-left: 0; }
+.convention-forecast-metric:last-child { border-right: none; }
+
+.convention-forecast-value {
+    color: #142b4a !important;
+    font-size: 34px;
+    font-weight: 750;
+    line-height: 1.15;
+}
+
+.convention-forecast-label {
+    color: #5d7184 !important;
+    font-size: 15px;
+    margin-top: 5px;
+}
+
+.convention-forecast-takeaway {
+    color: #294e3b !important;
+    background: rgba(255, 255, 255, 0.62);
+    border-radius: 9px;
+    padding: 12px 14px;
+    font-size: 17px;
+    line-height: 1.55;
+}
+
+.convention-forecast-note {
+    color: #6b7f75 !important;
+    font-size: 14px;
+    line-height: 1.5;
+    margin-top: 10px;
+}
+
+.mobility-analysis-heading {
+    color: #142b4a !important;
+    font-size: 22px;
+    font-weight: 700;
+    margin: 8px 0 2px;
+}
+
+@media(max-width:900px) {
+    .convention-forecast-metrics {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        row-gap: 18px;
+    }
+
+    .convention-forecast-metric:nth-child(2) {
+        border-right: none;
+    }
+}
+
+
+/* Fourier analysis and congestion planning cards */
+.mobility-fourier-card,
+.mobility-congestion-card {
+    background: #ffffff;
+    border: 1px solid #d8e2ee;
+    border-radius: 14px;
+    padding: 20px 22px;
+    box-shadow: 0 3px 10px rgba(15, 42, 70, 0.06);
+    min-height: 220px;
+}
+
+.mobility-fourier-card {
+    border-left: 5px solid #4d86b8;
+}
+
+.mobility-congestion-card {
+    border-left: 5px solid #e05252;
+}
+
+.mobility-fourier-card p,
+.mobility-congestion-card p {
+    color: #334e68 !important;
+    font-size: 16px;
+    line-height: 1.55;
+    margin: 8px 0;
+}
+
+.mobility-fourier-note {
+    color: #6b7f95 !important;
+    font-size: 13px !important;
+    margin-top: 14px !important;
+}
 
 /* >>> overview */
 html {scroll-behavior:smooth;}
