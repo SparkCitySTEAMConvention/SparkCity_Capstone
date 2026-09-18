@@ -114,10 +114,48 @@ def _render_environment_content() -> None:
         "Current modeled weather and historical observations from SparkCity S2"
     )
 
-    st.subheader("April 6–8, 2027 convention planning outlook")
-    st.caption(
-        "Historical planning context, not a forecast for April 2027. "
-        "Measurement units await team confirmation."
+    st.html(
+        """
+        <style>
+          .environment-date-banner {
+            padding: 20px 24px;
+            border: 1px solid #c9dfd2;
+            border-left: 6px solid #37966b;
+            border-radius: 14px;
+            background: #f0faf5;
+            color: #172b46;
+          }
+          .environment-date-banner .eyebrow {
+            margin: 0 0 6px;
+            color: #287452;
+            font-size: 0.85rem;
+            font-weight: 700;
+            letter-spacing: 0.09em;
+          }
+          .environment-date-banner h2 {
+            margin: 0 0 6px;
+            color: #172b46;
+            font-size: 1.7rem;
+            line-height: 1.2;
+          }
+          .environment-date-banner .context {
+            margin: 0;
+            color: #405c52;
+            font-size: 0.95rem;
+            line-height: 1.45;
+          }
+        </style>
+        <section class="environment-date-banner"
+                 aria-label="Confirmed convention dates">
+          <p class="eyebrow">CONFIRMED CONVENTION DATES</p>
+          <h2>April 6–8, 2027</h2>
+          <p class="context">
+            Environment planning outlook based on historical observations.
+            This is not an April 2027 forecast.
+            Measurement units await team confirmation.
+          </p>
+        </section>
+        """
     )
 
     try:
@@ -211,6 +249,24 @@ def _render_environment_content() -> None:
                         "on historical data percentiles, not a public "
                         "health classification."
                     )
+
+    why_column, action_column = st.columns(2, gap="medium")
+
+    with why_column:
+        st.markdown("**Why it matters**")
+        st.write(
+            "Historical April 6–8 weather readings included precipitation. "
+            "Matching air quality readings are available for 2025 only, "
+            "so the air data gives limited planning context."
+        )
+
+    with action_column:
+        st.markdown("**Planning action**")
+        st.write(
+            "Prepare covered routes and an indoor option. Check the current "
+            "forecast and air readings closer to the convention before "
+            "finalizing outdoor activities."
+        )
 
     current_points = []
     try:
