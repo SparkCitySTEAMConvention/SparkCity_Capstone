@@ -83,7 +83,43 @@ def render_environment_page() -> None:
         unsafe_allow_html=True,
     )
     st.title("Environment")
-    st.caption("Air quality and weather observations from SparkCity S2")
+    st.caption(
+        "Current modeled weather and historical observations from SparkCity S2"
+    )
+
+    try:
+        current_points = get_current_weather_points()
+    except Exception:
+        st.info("Current modeled weather is temporarily unavailable.")
+    else:
+        center_now = current_points[0]
+        st.subheader("Current modeled weather · Center")
+        current_columns = st.columns(3, gap="small")
+        current_columns[0].metric(
+            f"{center_now['icon']} Conditions",
+            f"{center_now['temperature_f']:.1f} °F",
+        )
+        current_columns[1].metric(
+            "💧 Humidity",
+            (
+                f"{center_now['humidity_percent']:.0f}%"
+                if center_now["humidity_percent"] is not None
+                else "N/A"
+            ),
+        )
+        current_columns[2].metric(
+            "💨 Wind",
+            (
+                f"{center_now['wind_speed_kmh']:.1f} km/h"
+                if center_now["wind_speed_kmh"] is not None
+                else "N/A"
+            ),
+        )
+        st.caption(
+            f"{center_now['description']} · Model time "
+            f"{center_now['reported_at']} America/New_York. "
+            "These are current model estimates, not S2 station readings."
+        )
 
     st.markdown(
         '<p style="color:#172B46;font-weight:600;">Year</p>',
@@ -114,6 +150,48 @@ def render_environment_page() -> None:
     )
     month_order = list(calendar.month_abbr)[1:]
 
+    # Headline metrics use reading-weighted averages of available months.
+    air_observed = monthly.dropna(subset=["average_pm25"]).copy()
+    weather_observed = monthly.dropna(
+        subset=["average_temperature"]
+    ).copy()
+
+    air_count = int(air_observed["air_readings"].sum())
+    weather_count = int(weather_observed["weather_readings"].sum())
+
+    if air_count:
+        air_average = (
+            pd.to_numeric(air_observed["average_pm25"])
+            * air_observed["air_readings"]
+        ).sum() / air_count
+    else:
+        air_average = None
+
+    if weather_count:
+        weather_average = (
+            pd.to_numeric(weather_observed["average_temperature"])
+            * weather_observed["weather_readings"]
+        ).sum() / weather_count
+    else:
+        weather_average = None
+
+    st.subheader(f"{year} at a glance")
+    metric_columns = st.columns(4, gap="small")
+    metric_columns[0].metric(
+        "Average PM2.5",
+        f"{air_average:.2f}" if air_average is not None else "N/A",
+    )
+    metric_columns[1].metric(
+        "Average temperature",
+        f"{weather_average:.1f}" if weather_average is not None else "N/A",
+    )
+    metric_columns[2].metric("Air readings", f"{air_count:,}")
+    metric_columns[3].metric("Weather readings", f"{weather_count:,}")
+    st.caption(
+        f"Summary of available {year} readings. "
+        "Measurement units await team confirmation."
+    )
+
     # Top row: air quality and weather charts
     air_column, weather_column = st.columns(2, gap="medium")
 
@@ -134,11 +212,12 @@ def render_environment_page() -> None:
                     ],
                 )
                 if len(air) == 1:
-                    air_chart = air_chart.mark_bar(color="#2563EB", size=32)
+                    air_chart = air_chart.mark_bar(color="#2563EB", size=20)
                 else:
                     air_chart = air_chart.mark_line(color="#2563EB", point=True)
                 air_chart = (
                     air_chart
+                    .properties(height=190)
                     .configure(background="#FFFFFF")
                     .configure_view(stroke=None)
                     .configure_axis(
@@ -172,7 +251,7 @@ def render_environment_page() -> None:
 
                 weather_chart = (
                     alt.Chart(weather)
-                    .mark_bar(color="#F59E0B", size=32)
+                    .mark_bar(color="#F59E0B", size=20)
                     .encode(
                         x=alt.X(
                             "month_name:N",
@@ -195,6 +274,7 @@ def render_environment_page() -> None:
                 )
                 weather_chart = (
                     weather_chart
+                    .properties(height=190)
                     .configure(background="#FFFFFF")
                     .configure_view(stroke=None)
                     .configure_axis(
@@ -371,21 +451,6 @@ def render_environment_page() -> None:
                 {**point, "marker_color": location_colors[point["location"]]}
                 for point in map_points
             ]
-            center = map_points[0]
-            condition_column, temperature_column, rain_column = st.columns(3)
-            condition_column.metric(
-                "Current conditions",
-                f"{center['icon']} {center['description']}",
-            )
-            temperature_column.metric(
-                "Center temperature",
-                f"{center['temperature_f']:.1f} °F",
-            )
-            rain_column.metric(
-                "Recent precipitation",
-                f"{center['precipitation_mm']:.1f} mm",
-            )
-
             map_layer = pdk.Layer(
                 "ScatterplotLayer",
                 data=map_points,
@@ -419,6 +484,7 @@ def render_environment_page() -> None:
                     },
                 ),
                 use_container_width=True,
+                height=300,
             )
             st.markdown(
                 "**Map locations:** 🔴 Center · 🟣 North · "

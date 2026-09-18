@@ -41,7 +41,7 @@ def load_current_weather_points() -> list[dict]:
             "longitude": ",".join(
                 str(longitude) for _, _, longitude in MAP_LOCATIONS
             ),
-            "current": "temperature_2m,precipitation,weather_code",
+            "current": "temperature_2m,relative_humidity_2m,wind_speed_10m,precipitation,weather_code",
             "timezone": "America/New_York",
             "temperature_unit": "fahrenheit",
         }
@@ -68,6 +68,8 @@ def load_current_weather_points() -> list[dict]:
                 "lat": latitude,
                 "lon": longitude,
                 "temperature_f": current["temperature_2m"],
+                "humidity_percent": current.get("relative_humidity_2m"),
+                "wind_speed_kmh": current.get("wind_speed_10m"),
                 "precipitation_mm": current["precipitation"],
                 "reported_at": current["time"],
                 "description": description,
