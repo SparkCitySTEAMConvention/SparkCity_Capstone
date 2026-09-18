@@ -475,3 +475,133 @@ h2#explore-sparkcity {font-size:34px;padding-top:4px;}
 .fiscal-takeaway-grid {grid-template-columns:1fr;}
 .fiscal-impact-breakdown {grid-template-columns:repeat(2,minmax(0,1fr));}.fiscal-impact-breakdown > div:nth-child(2) {border-right:none;}.fiscal-spend-bar {grid-column:1/-1;}
 }
+/* >>> convention_planner */
+/* BEGIN MCC / Convention Planner page styles
+   Team merge note: keep this section separate from shared and overview.
+   Loaded by render_convention_planner() via load_css(section="convention_planner").
+   These rules target only named planner_* explorer and candidate cards on this page.
+*/
+/* Planner-only cards. Shared shell and other destinations remain unchanged. */
+:is(.st-key-planner_score, .st-key-planner_breakdown,
+    .st-key-planner_comparison, .st-key-planner_recommendation,
+    .st-key-planner_alternative, .st-key-planner_takeaways, .st-key-planner_team_takeaways, .st-key-planner_candidate_score, .st-key-planner_candidate_factors,
+    .st-key-planner_candidate_comparison, .st-key-planner_candidate_why,
+    .st-key-planner_candidate_alternative, .st-key-planner_candidate_takeaways) {
+    background: #ffffff;
+    border: 1px solid #dce5ef;
+    border-radius: 10px;
+    padding: 16px;
+    box-shadow: 0 4px 14px #10294408;
+}
+:is(.st-key-planner_score, .st-key-planner_breakdown,
+    .st-key-planner_comparison, .st-key-planner_recommendation,
+    .st-key-planner_alternative, .st-key-planner_takeaways, .st-key-planner_team_takeaways, .st-key-planner_candidate_score, .st-key-planner_candidate_factors,
+    .st-key-planner_candidate_comparison, .st-key-planner_candidate_why,
+    .st-key-planner_candidate_alternative, .st-key-planner_candidate_takeaways) h4 {
+    color: #223b57;
+    font-size: 17px;
+    line-height: 1.3;
+    padding-top: 0;
+}
+:is(.st-key-planner_score, .st-key-planner_recommendation,
+    .st-key-planner_alternative, .st-key-planner_candidate_score,
+    .st-key-planner_candidate_alternative) [data-testid="stMetricValue"] {
+    color: #236db2;
+    font-weight: 700;
+}
+:is(.st-key-planner_score, .st-key-planner_candidate_score) [data-testid="stMetricValue"] {
+    font-size: clamp(32px, 3vw, 48px);
+}
+:is(.st-key-planner_score, .st-key-planner_breakdown,
+    .st-key-planner_comparison, .st-key-planner_recommendation,
+    .st-key-planner_alternative, .st-key-planner_takeaways, .st-key-planner_team_takeaways, .st-key-planner_candidate_score, .st-key-planner_candidate_factors,
+    .st-key-planner_candidate_comparison, .st-key-planner_candidate_why,
+    .st-key-planner_candidate_alternative, .st-key-planner_candidate_takeaways)
+    [data-testid="stCaptionContainer"] {
+    color: #62758a;
+}
+.st-key-planner_breakdown [role="progressbar"] {
+    accent-color: #287dcc;
+}
+
+/* MCC: compact mockup layout, scoped to the planner explorer only. */
+.st-key-planner_explorer h3 {font-size:22px;color:#223b57;}
+.st-key-planner_breakdown [data-testid="stVerticalBlock"] {gap:0.45rem;}
+.st-key-planner_explorer .st-key-planner_takeaways {padding:12px 16px;}
+.st-key-planner_explorer .st-key-planner_takeaways [data-testid="stVerticalBlock"] {gap:0.35rem;}
+@media(min-width:1100px) {
+    .st-key-planner_breakdown,
+    .st-key-planner_comparison {min-height:300px;}
+}
+/* MCC: Key Takeaways nested under Suitability Score as a compact stacked tile. */
+.st-key-planner_takeaways {margin-top:14px;padding:10px 14px;}
+.st-key-planner_takeaways h5 {font-size:14px;color:#223b57;margin:0 0 4px;padding-top:0;}
+/* MCC: compact factor rows and takeaways, matching the planner mockup. */
+.st-key-planner_breakdown .planner-factor-row {
+    display:grid;grid-template-columns:85px minmax(40px,1fr) 48px;
+    gap:12px;align-items:center;margin:10px 0;font-size:13px;color:#223b57;
+}
+.st-key-planner_breakdown .planner-factor-row strong {text-align:right;font-size:12px;}
+.st-key-planner_breakdown .planner-factor-track {height:12px;background:#edf2f8;border-radius:2px;overflow:hidden;}
+.st-key-planner_breakdown .planner-factor-track > div {height:100%;border-radius:2px;}
+.st-key-planner_takeaways p {font-size:14px;line-height:1.45;}
+.st-key-planner_explorer [data-testid="stCaptionContainer"] p {font-size:12px;}
+@media(max-width:700px) {
+    .st-key-planner_breakdown .planner-factor-row {grid-template-columns:75px minmax(30px,1fr) 42px;gap:8px;}
+}
+/* MCC: planner banner; intentionally independent of shared navigation. */
+.planner-banner {
+    display:flex;justify-content:space-between;align-items:center;gap:24px;
+    padding:22px 26px;margin:0 0 18px;border-radius:10px;
+    background:linear-gradient(115deg,#0b2847 0%,#124675 70%,#236db2 100%);
+    border-bottom:4px solid #55a6e8;color:#ffffff;
+}
+.planner-banner .planner-eyebrow {font-size:11px;font-weight:700;letter-spacing:1.7px;color:#bedcf6;}
+.planner-banner h1 {color:#ffffff;font-size:clamp(22px,2.1vw,32px);line-height:1.2;margin:7px 0;padding:0;}
+.planner-banner p {color:#dbeafa;font-size:14px;margin:0;}
+.planner-banner-meta {flex-shrink:0;text-align:right;font-size:13px;line-height:1.8;color:#ffffff;}
+.planner-banner-meta span {color:#bedcf6;font-size:12px;}
+@media(max-width:800px) {
+    .planner-banner {flex-direction:column;align-items:flex-start;padding:18px;gap:10px;}
+    .planner-banner-meta {text-align:left;}
+}
+/* MCC: standalone accent-colored cards, matching the three-card mockup layout. */
+.st-key-planner_score {border-top:4px solid #287dcc;}
+.st-key-planner_breakdown {border-top:4px solid #e5ad35;}
+.st-key-planner_comparison {border-top:4px solid #49ae83;}
+.st-key-planner_candidate_score {border-top:4px solid #287dcc;}
+.st-key-planner_candidate_alternative {border-top:4px solid #e5ad35;}
+.st-key-planner_takeaways {border-top:4px solid #8b5cf6;}
+.st-key-planner_team_takeaways {border-top:4px solid #8b5cf6;}
+/* MCC: quiet page heading complements the shared navy navigation. */
+.planner-banner {
+    background:#eaf1f8;color:#223b57;border:1px solid #d6e3f0;
+    border-left:4px solid #287dcc;border-bottom:1px solid #d6e3f0;
+    padding:16px 20px;box-shadow:none;
+}
+.planner-banner h1 {color:#223b57;font-size:clamp(20px,1.8vw,27px);}
+.planner-banner .planner-eyebrow {color:#526d88;}
+.planner-banner p,.planner-banner-meta {color:#405c78;}
+.planner-banner-meta span {color:#62758a;}
+/* MCC: Proposed Conference Window, styled to match the banner directly above it. */
+.st-key-planner_window {
+    background:#eaf1f8;color:#223b57;border:1px solid #d6e3f0;
+    border-left:4px solid #287dcc;border-bottom:1px solid #d6e3f0;
+    border-radius:10px;padding:16px 20px;margin-bottom:18px;box-shadow:none;
+}
+.st-key-planner_window h3 {color:#223b57;padding-top:0;}
+.st-key-planner_window [data-testid="stCaptionContainer"] {color:#526d88;}
+/* MCC: factor scores and weighted contributions, with colored in-row bars. */
+.st-key-planner_breakdown .planner-factor-table-wrap {overflow-x:auto;}
+.st-key-planner_breakdown .planner-factor-table {width:100%;table-layout:fixed;border-collapse:collapse;font-size:12px;}
+.st-key-planner_breakdown .planner-factor-table th,
+.st-key-planner_breakdown .planner-factor-table td {padding:9px 5px;border-bottom:1px solid #e8eef5;text-align:center;white-space:nowrap;vertical-align:middle;}
+.st-key-planner_breakdown .planner-factor-table th:first-child {text-align:left;width:58%;}
+.st-key-planner_breakdown .planner-factor-table th:nth-child(2),
+.st-key-planner_breakdown .planner-factor-table th:nth-child(3) {width:12%;}
+.st-key-planner_breakdown .planner-factor-table th:last-child {width:18%;}
+.st-key-planner_breakdown .planner-factor-table thead th {color:#62758a;font-size:11px;}
+.st-key-planner_breakdown .planner-factor-table tbody th {color:#223b57;font-weight:600;}
+.st-key-planner_breakdown .planner-factor-table td:last-child {color:#236db2;}
+.st-key-planner_breakdown .planner-factor-table .planner-factor-track {margin-top:6px;height:10px;min-width:70px;}
+/* END MCC / Convention Planner page styles */
