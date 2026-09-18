@@ -17,9 +17,12 @@ from components.shared import render_navigation
 destination = render_navigation()
 
 from pages.overview import render_overview, render_pending
+from pages.capacity_utilization import render_capacity_utilization
 
 if destination == "Overview":
     render_overview()
+elif destination == "Capacity & Utilization":
+    render_capacity_utilization()
 else:
     # Teammates: import your domain renderer here and route its destination to
     # that function. Mobility & Traffic is Leigh's; it stays on the neutral
