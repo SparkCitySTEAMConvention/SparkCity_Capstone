@@ -210,13 +210,38 @@ WHERE timestamp >= '2025-01-01' AND timestamp < '2026-01-01'
 GROUP BY 1, extract(dow FROM timestamp)
 ORDER BY extract(dow FROM timestamp);
 
--- April traffic and energy baselines, for context only (no capacity ceiling
--- exists in either dataset to compute headroom against, unlike rooms).
+-- Energy load, calendar 2025 (energy_meters now runs through Feb 2027; 2025
+-- is used so every month lines up with the occupancy year), plus every
+-- observed April for a cross-year check. Context only -- no capacity ceiling
+-- exists in the energy or traffic data to compute headroom against.
 SELECT
+    to_char(date_trunc('month', timestamp), 'Mon') AS month_name,
+    round(avg(power_consumption)::numeric, 2) AS avg_power_kw,
+    round(max(power_consumption)::numeric, 2) AS max_power_kw
+FROM sparkcity.energy_meters
+WHERE timestamp >= '2025-01-01' AND timestamp < '2026-01-01'
+GROUP BY date_trunc('month', timestamp)
+ORDER BY date_trunc('month', timestamp);
+
+SELECT
+    extract(year FROM timestamp)::int AS year,
+    round(avg(power_consumption)::numeric, 2) AS avg_power_kw,
+    round(max(power_consumption)::numeric, 2) AS max_power_kw
+FROM sparkcity.energy_meters
+WHERE extract(month FROM timestamp) = 4
+GROUP BY 1
+ORDER BY 1;
+
+-- Traffic congestion share by month, calendar 2025 (traffic_sensors now covers
+-- all of 2025 plus a partial Jan 2026).
+SELECT
+    to_char(date_trunc('month', timestamp), 'Mon') AS month_name,
     round(avg(vehicle_count)::numeric, 1) AS avg_vehicle_count,
-    round(100.0 * sum(CASE WHEN congestion_level = 'high' THEN 1 ELSE 0 END) / count(*), 2) AS pct_high_congestion
+    round(100.0 * sum(CASE WHEN congestion_level = 'high' THEN 1 ELSE 0 END) / count(*), 1) AS pct_high_congestion
 FROM sparkcity.traffic_sensors
-WHERE timestamp >= '2025-04-01' AND timestamp < '2025-05-01';
+WHERE timestamp >= '2025-01-01' AND timestamp < '2026-01-01'
+GROUP BY date_trunc('month', timestamp)
+ORDER BY date_trunc('month', timestamp);
 
 -- Findings (run against shared sparkcity schema, 2026-09-18):
 -- - Total city occupancy-sensor capacity in April 2025: ~425,626 rooms across
@@ -240,11 +265,14 @@ WHERE timestamp >= '2025-04-01' AND timestamp < '2025-05-01';
 --   Projected post-convention occupancy: ~76.6% (+1.4 points), still below
 --   the ordinary April weekend baseline (79.4%) and well below the tightest
 --   month of the year, June (82.6% avg occupancy, from the Day 5 analysis).
--- - Energy (43.84 kW avg, 128.39 kW max in April) and traffic (36.09% of
---   April readings already at "high" congestion) show no April-specific
---   anomaly relative to every other measured month (Jan-May: 35.1-36.1%
---   high-congestion share) -- consistent with the Day 5 finding that
---   infrastructure load doesn't respond much to occupancy swings. Traffic's
---   baseline congestion share is real and non-trivial, but it isn't unique
---   to April, so it's a standing city condition for the Mobility & Traffic
---   section to size mitigations against, not a reason to avoid this date.
+-- - Energy now covers all 12 months of 2025 (and beyond): monthly average
+--   load is flat at 43.67-44.64 kW, and April 2025 (43.99 kW avg, 133.19 kW
+--   max) sits below the year's highest peak (140.61 kW, January). A second
+--   observed April agrees (April 2026: 43.80 kW avg, 128.35 kW max), so the
+--   April baseline is repeatable, not a one-year fluke. This supersedes the
+--   Day 5 caveat that Oct-Dec had no infrastructure data.
+-- - Traffic: 35.0% of April 2025 readings are at "high" congestion vs.
+--   34.3-36.1% across all 12 months of 2025 -- no April-specific anomaly.
+--   The baseline share is real and non-trivial, but it's a standing city
+--   condition for the Mobility & Traffic section to size mitigations
+--   against, not a reason to avoid this date.

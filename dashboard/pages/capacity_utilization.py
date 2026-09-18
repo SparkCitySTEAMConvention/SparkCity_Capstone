@@ -71,8 +71,22 @@ def load_capacity_data():
                 round(avg(power_consumption)::numeric, 2) AS avg_power_kw,
                 round(max(power_consumption)::numeric, 2) AS max_power_kw
             FROM sparkcity.energy_meters
+            WHERE timestamp >= '2025-01-01' AND timestamp < '2026-01-01'
             GROUP BY 1, date_trunc('month', timestamp)
             ORDER BY date_trunc('month', timestamp)
+        """)
+
+        # energy_meters now runs past 2025, so a second observed April exists as a
+        # cross-year check on the April baseline.
+        april_energy_by_year = _run_query(conn, """
+            SELECT
+                extract(year FROM timestamp)::int AS year,
+                round(avg(power_consumption)::numeric, 2) AS avg_power_kw,
+                round(max(power_consumption)::numeric, 2) AS max_power_kw
+            FROM sparkcity.energy_meters
+            WHERE extract(month FROM timestamp) = 4
+            GROUP BY 1
+            ORDER BY 1
         """)
 
         traffic_monthly = _run_query(conn, """
@@ -82,6 +96,7 @@ def load_capacity_data():
                 round(100.0 * sum(CASE WHEN congestion_level = 'high' THEN 1 ELSE 0 END) / count(*), 1)
                     AS pct_high_congestion
             FROM sparkcity.traffic_sensors
+            WHERE timestamp >= '2025-01-01' AND timestamp < '2026-01-01'
             GROUP BY 1, date_trunc('month', timestamp)
             ORDER BY date_trunc('month', timestamp)
         """)
@@ -142,6 +157,7 @@ def load_capacity_data():
     return {
         "occupancy_monthly": occupancy_monthly,
         "energy_monthly": energy_monthly,
+        "april_energy_by_year": april_energy_by_year,
         "traffic_monthly": traffic_monthly,
         "day_of_week": day_of_week,
         "april_totals": april_totals.iloc[0],
@@ -219,6 +235,17 @@ def render_capacity_utilization():
     impact = _derive_convention_impact(data)
     occupancy_monthly = data["occupancy_monthly"]
     energy_monthly = data["energy_monthly"]
+    traffic_monthly = data["traffic_monthly"]
+
+    energy_lo, energy_hi = energy_monthly["avg_power_kw"].min(), energy_monthly["avg_power_kw"].max()
+    energy_axis_lo, energy_axis_hi = int(energy_lo) - 3, int(energy_hi) + 4  # padded so a ~2% spread reads as flat
+    apr_energy = energy_monthly[energy_monthly["month_name"] == "Apr"].iloc[0]
+    energy_peak = energy_monthly.loc[energy_monthly["max_power_kw"].idxmax()]
+    apr_by_year = ", ".join(
+        f"{int(r.year)}: {r.avg_power_kw:.1f} kW" for r in data["april_energy_by_year"].itertuples()
+    )
+    traffic_lo, traffic_hi = traffic_monthly["pct_high_congestion"].min(), traffic_monthly["pct_high_congestion"].max()
+    apr_congestion = traffic_monthly.loc[traffic_monthly["month_name"] == "Apr", "pct_high_congestion"].iloc[0]
 
     st.title("🏢 Capacity & Utilization")
     st.write("Can SparkCity support the convention? Occupancy, energy, and traffic data for the "
@@ -259,22 +286,24 @@ def render_capacity_utilization():
             st.markdown("**Avg Power Draw by Month**")
             energy_chart = alt.Chart(energy_monthly).mark_line(point=True, color="#e76f51").encode(
                 x=alt.X("month_name:N", sort=MONTH_ORDER, title="Month", axis=alt.Axis(labelAngle=0)),
-                y=alt.Y("avg_power_kw:Q", title="Avg power draw (kW)", scale=alt.Scale(zero=False)),
+                y=alt.Y("avg_power_kw:Q", title="Avg power draw (kW)", scale=alt.Scale(domain=[energy_axis_lo, energy_axis_hi])),
                 tooltip=["month_name", "avg_power_kw", "max_power_kw"],
             ).properties(height=280)
             st.altair_chart(energy_chart, width="stretch")
-            st.caption("Flat 43–45 kW across every measured month — the grid isn't the binding constraint "
-                       "(no data past Sep 2025 yet).")
+            st.caption(f"Flat {energy_lo:.1f}–{energy_hi:.1f} kW across all 12 months of 2025 — the grid isn't the binding "
+                       f"constraint. April's peak load ({apr_energy['max_power_kw']:.1f} kW) is below the year's high "
+                       f"({energy_peak['max_power_kw']:.1f} kW, {energy_peak['month_name']}), and April averages hold "
+                       f"across years (avg {apr_by_year}). Y-axis zoomed to {energy_axis_lo}–{energy_axis_hi} kW.")
         else:
             st.markdown("**Traffic Congestion by Month**")
-            traffic_chart = alt.Chart(data["traffic_monthly"]).mark_bar(color="#e9a13f").encode(
+            traffic_chart = alt.Chart(traffic_monthly).mark_bar(color="#e9a13f").encode(
                 x=alt.X("month_name:N", sort=MONTH_ORDER, title="Month", axis=alt.Axis(labelAngle=0)),
                 y=alt.Y("pct_high_congestion:Q", title="Readings at high congestion (%)"),
                 tooltip=["month_name", "avg_vehicle_count", "pct_high_congestion"],
             ).properties(height=280)
             st.altair_chart(traffic_chart, width="stretch")
-            st.caption("April (36.1% high-congestion) is in line with every other measured month "
-                       "(Jan–May: 35.1–36.1%) — no April-specific traffic red flag (no data past May 2025 yet).")
+            st.caption(f"April ({apr_congestion:.1f}% high-congestion) is in line with the rest of 2025 "
+                       f"({traffic_lo:.1f}–{traffic_hi:.1f}% across all 12 months) — no April-specific traffic red flag.")
 
     st.subheader("Why Tuesday–Thursday is the right baseline")
     left2, right2 = st.columns([1, 1.3], gap="large")
@@ -320,11 +349,11 @@ the more favorable one, leaving more headroom than a weekend date in the same mo
     st.subheader("What the data shows")
     col_insights, col_limits = st.columns(2, gap="large")
     with col_insights:
-        st.markdown('''<div class="cap-list-card">
+        st.markdown(f'''<div class="cap-list-card">
 <h4>✔ Key Insights</h4>
 <ul>
-<li>Room/venue occupancy has a real seasonal shape — headroom ranges from ~42% in December to ~17% in June — while energy load stays nearly flat (43–45 kW) all year. Occupancy, not the power grid, is the binding constraint on convention timing.</li>
-<li>April is a comfortable, mid-pack month: more headroom than peak summer, less than the winter off-season.</li>
+<li>Room/venue occupancy has a real seasonal shape — headroom ranges from ~42% in December to ~17% in June — while energy load stays nearly flat ({energy_lo:.1f}–{energy_hi:.1f} kW) in every month of the year. Occupancy, not the power grid, is the binding constraint on convention timing.</li>
+<li>April is a comfortable, mid-pack month: more headroom than peak summer, less than the winter off-season. Energy confirms it — April averages {apr_by_year} — with no load spike.</li>
 <li>Weekdays (Tue–Thu especially) run consistently lighter than weekends, all year, backed by a Fourier-confirmed weekly cycle — not a one-off pattern.</li>
 <li>A 15,000-attendee surge only consumes about 6% of the spare room capacity available on an April Tue–Thu.</li>
 </ul>
@@ -333,8 +362,8 @@ the more favorable one, leaving more headroom than a weekend date in the same mo
         st.markdown('''<div class="cap-list-card cap-list-card-muted">
 <h4>⚠ Data Limitations</h4>
 <ul>
-<li><code>energy_meters</code> only has readings through Sep 2025 — Oct–Dec can't be infrastructure-confirmed yet.</li>
-<li><code>traffic_sensors</code> only covers Jan–May 2025; April is fully covered, but there's no later-year comparison.</li>
+<li>Monthly charts use calendar 2025 so every month is comparable with occupancy (which ends Jan 2026); <code>energy_meters</code> runs later, but only April has a second-year check here.</li>
+<li><code>traffic_sensors</code> covers all of 2025 plus a partial Jan 2026 — no April-to-April comparison for traffic yet.</li>
 <li>Room/guest counts are city-wide totals, not broken out by venue type (hotel vs. convention center vs. event space) — that split isn't in the current dataset.</li>
 <li>The 15,000-attendee impact assumes the historical guests-per-room ratio holds for convention visitors specifically.</li>
 </ul>
