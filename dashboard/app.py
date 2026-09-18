@@ -17,6 +17,7 @@ from components.shared import render_navigation
 destination = render_navigation()
 
 from pages.overview import render_overview, render_pending
+from pages.capacity_utilization import render_capacity_utilization
 from pages.mobility_traffic import render_mobility_traffic
 
 if destination == "Overview":
@@ -25,6 +26,8 @@ elif destination == "Environment":
     from environment_app import render_environment_page
 
     render_environment_page()
+elif destination == "Capacity & Utilization":
+    render_capacity_utilization()
 elif destination == "Mobility & Traffic":
     render_mobility_traffic()
 else:
