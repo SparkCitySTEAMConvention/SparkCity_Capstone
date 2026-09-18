@@ -41,7 +41,12 @@ def load_current_weather_points() -> list[dict]:
             "longitude": ",".join(
                 str(longitude) for _, _, longitude in MAP_LOCATIONS
             ),
-            "current": "temperature_2m,relative_humidity_2m,wind_speed_10m,precipitation,weather_code",
+            "current": (
+                "temperature_2m,relative_humidity_2m,wind_speed_10m,"
+                "precipitation,weather_code,uv_index,visibility,pressure_msl"
+            ),
+            "daily": "sunset,moon_phase,moonrise",
+            "forecast_days": 1,
             "timezone": "America/New_York",
             "temperature_unit": "fahrenheit",
         }
@@ -59,6 +64,7 @@ def load_current_weather_points() -> list[dict]:
         MAP_LOCATIONS, results, strict=True
     ):
         current = result["current"]
+        daily = result.get("daily") or {}
         description, icon, color = weather_symbol(
             int(current["weather_code"])
         )
@@ -70,6 +76,12 @@ def load_current_weather_points() -> list[dict]:
                 "temperature_f": current["temperature_2m"],
                 "humidity_percent": current.get("relative_humidity_2m"),
                 "wind_speed_kmh": current.get("wind_speed_10m"),
+                "uv_index": current.get("uv_index"),
+                "visibility_m": current.get("visibility"),
+                "pressure_hpa": current.get("pressure_msl"),
+                "sunset": (daily.get("sunset") or [None])[0],
+                "moon_phase": (daily.get("moon_phase") or [None])[0],
+                "moonrise": (daily.get("moonrise") or [None])[0],
                 "precipitation_mm": current["precipitation"],
                 "reported_at": current["time"],
                 "description": description,

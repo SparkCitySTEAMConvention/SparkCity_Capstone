@@ -3,16 +3,20 @@
 from __future__ import annotations
 
 import calendar
+from datetime import datetime
 from pathlib import Path
+from urllib.parse import urlencode
 
 import altair as alt
 import pandas as pd
-import pydeck as pdk
 import streamlit as st
 from dotenv import load_dotenv
 
+from sparkcityx.current_air_quality import load_current_air_quality
+from components.weather_scene import render_weather_scene
 from sparkcityx.current_weather import load_current_weather_points
 from sparkcityx.database import connect_database
+from sparkcityx.lunar_data import NEW_YORK, load_lunar_details
 from sparkcityx.environment_data import (
     load_air_monitoring_status,
     load_convention_air_history,
@@ -69,6 +73,18 @@ def get_current_weather_points() -> list[dict]:
     return load_current_weather_points()
 
 
+@st.cache_data(ttl=900, show_spinner="Loading modeled air quality...")
+def get_current_air_quality() -> dict:
+    """Cache the current modeled US AQI for SparkCity Center."""
+    return load_current_air_quality()
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_lunar_details(local_date: str) -> dict[str, str]:
+    """Cache lunar data; the date also refreshes it after midnight."""
+    return load_lunar_details()
+
+
 def render_environment_page() -> None:
     """Render the Environment section for the team dashboard."""
     st.markdown(
@@ -87,6 +103,7 @@ def render_environment_page() -> None:
         "Current modeled weather and historical observations from SparkCity S2"
     )
 
+    current_points = []
     try:
         current_points = get_current_weather_points()
     except Exception:
@@ -94,32 +111,128 @@ def render_environment_page() -> None:
     else:
         center_now = current_points[0]
         st.subheader("Current modeled weather · Center")
-        current_columns = st.columns(3, gap="small")
-        current_columns[0].metric(
-            f"{center_now['icon']} Conditions",
+        render_weather_scene(center_now["description"])
+        readings = st.columns(7, gap="small")
+        readings[0].metric(
+            "Conditions",
             f"{center_now['temperature_f']:.1f} °F",
         )
-        current_columns[1].metric(
-            "💧 Humidity",
+        readings[1].metric(
+            "Humidity",
+            f"{center_now['humidity_percent']:.0f}%"
+            if center_now["humidity_percent"] is not None else "N/A",
+        )
+        readings[2].metric(
+            "Wind",
+            f"{center_now['wind_speed_kmh']:.1f} km/h"
+            if center_now["wind_speed_kmh"] is not None else "N/A",
+        )
+        readings[3].metric(
+            "UV index",
+            f"{center_now['uv_index']:.1f}"
+            if center_now["uv_index"] is not None else "N/A",
+        )
+        readings[4].metric(
+            "Sunset",
             (
-                f"{center_now['humidity_percent']:.0f}%"
-                if center_now["humidity_percent"] is not None
-                else "N/A"
+                datetime.fromisoformat(center_now["sunset"])
+                .strftime("%I:%M %p")
+                .lstrip("0")
+                if center_now["sunset"] else "N/A"
             ),
         )
-        current_columns[2].metric(
-            "💨 Wind",
-            (
-                f"{center_now['wind_speed_kmh']:.1f} km/h"
-                if center_now["wind_speed_kmh"] is not None
-                else "N/A"
-            ),
+        readings[5].metric(
+            "Visibility",
+            f"{center_now['visibility_m'] / 1000:.1f} km"
+            if center_now["visibility_m"] is not None else "N/A",
+        )
+        readings[6].metric(
+            "Pressure",
+            f"{center_now['pressure_hpa']:.0f} hPa"
+            if center_now["pressure_hpa"] is not None else "N/A",
         )
         st.caption(
             f"{center_now['description']} · Model time "
             f"{center_now['reported_at']} America/New_York. "
-            "These are current model estimates, not S2 station readings."
+            "Current model estimates, not S2 station readings."
         )
+
+    try:
+        current_air = get_current_air_quality()
+    except Exception:
+        st.info("Current modeled air quality is temporarily unavailable.")
+    else:
+        aqi = current_air["us_aqi"]
+        position = min(max(aqi, 0), 500) / 500 * 100
+        st.markdown(
+            f"**🌿 Current modeled US AQI · Center: {aqi} "
+            f"({current_air['category']})**"
+        )
+        st.markdown(
+            '<div style="position:relative;padding-top:9px;">'
+            '<div style="height:14px;border-radius:7px;'
+            'background:linear-gradient(to right,'
+            '#22C55E 0% 10%,#EAB308 10% 20%,'
+            '#F97316 20% 30%,#EF4444 30% 40%,'
+            '#A855F7 40% 60%,#7F1D1D 60% 100%);"></div>'
+            f'<div style="position:absolute;left:{position:.1f}%;top:3px;'
+            'width:4px;height:26px;background:#172B46;'
+            'border:1px solid white;border-radius:2px;"></div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        st.caption(
+            f"Open-Meteo air-quality model · {current_air['reported_at']} "
+            "America/New_York. Separate from the historical S2 "
+            "NORMAL/MONITOR indicator below."
+        )
+
+    with st.expander("Moon details"):
+        try:
+            lunar = get_lunar_details(
+                datetime.now(NEW_YORK).date().isoformat()
+            )
+        except Exception:
+            st.info("Moon details are temporarily unavailable.")
+        else:
+            phase_icons = {
+                "New Moon": "🌑",
+                "Waxing Crescent": "🌒",
+                "First Quarter": "🌓",
+                "Waxing Gibbous": "🌔",
+                "Full Moon": "🌕",
+                "Waning Gibbous": "🌖",
+                "Last Quarter": "🌗",
+                "Waning Crescent": "🌘",
+            }
+            moonrise = (
+                current_points[0].get("moonrise")
+                if current_points else None
+            )
+            moonrise_label = (
+                datetime.fromisoformat(moonrise)
+                .strftime("%I:%M %p")
+                .lstrip("0")
+                if moonrise else "N/A"
+            )
+            moon_columns = st.columns(4, gap="small")
+            moon_columns[0].metric(
+                "Phase",
+                f"{phase_icons.get(lunar['phase'], '🌙')} {lunar['phase']}",
+            )
+            moon_columns[1].metric(
+                "Illuminated", lunar["illumination"]
+            )
+            moon_columns[2].metric("Moonrise", moonrise_label)
+            moon_columns[3].metric(
+                "Next full moon", lunar["next_full_moon"]
+            )
+            st.caption(
+                "Phase, noon illumination, and next full moon: "
+                "U.S. Naval Observatory. Moonrise: Open-Meteo model. "
+                f"Next full moon at {lunar['next_full_moon_time']} "
+                "New York time."
+            )
 
     st.markdown(
         '<p style="color:#172B46;font-weight:600;">Year</p>',
@@ -428,73 +541,37 @@ def render_environment_page() -> None:
                     )
 
 
-    st.subheader("Current modeled weather map")
-    st.caption(
-        "Current model estimates across five SparkCity locations. "
-        "These are not live S2 station readings or an April 2027 forecast."
+    st.subheader("Interactive weather map")
+    map_layers = {
+        "🌡️ Temperature forecast": "temp",
+        "🌧️ Rain radar": "radar",
+        "💨 Wind forecast": "wind",
+        "☁️ Clouds": "clouds",
+    }
+    selected_layer = st.selectbox(
+        "Map layer",
+        list(map_layers),
+        key="environment_map_layer",
     )
-
-    try:
-        map_points = get_current_weather_points()
-    except Exception:
-        st.warning("Current weather is temporarily unavailable.")
-    else:
-        with st.container(border=True):
-            location_colors = {
-                "Center": [220, 38, 38, 220],
-                "North": [147, 51, 234, 220],
-                "South": [22, 163, 74, 220],
-                "West": [234, 88, 12, 220],
-                "East": [37, 99, 235, 220],
-            }
-            map_points = [
-                {**point, "marker_color": location_colors[point["location"]]}
-                for point in map_points
-            ]
-            map_layer = pdk.Layer(
-                "ScatterplotLayer",
-                data=map_points,
-                get_position="[lon, lat]",
-                get_fill_color="marker_color",
-                get_radius=1800,
-                pickable=True,
-                stroked=True,
-                get_line_color=[255, 255, 255],
-                line_width_min_pixels=2,
-            )
-            map_view = pdk.ViewState(
-                latitude=40.76,
-                longitude=-73.97,
-                zoom=10.5,
-                pitch=0,
-            )
-            st.pydeck_chart(
-                pdk.Deck(
-                    layers=[map_layer],
-                    initial_view_state=map_view,
-                    map_style="light",
-                    tooltip={
-                        "html": (
-                            "<b>{icon} {location}</b><br/>"
-                            "{description}<br/>"
-                            "{temperature_f} °F · "
-                            "Precipitation: {precipitation_mm} mm"
-                        ),
-                        "style": {"color": "white"},
-                    },
-                ),
-                use_container_width=True,
-                height=300,
-            )
-            st.markdown(
-                "**Map locations:** 🔴 Center · 🟣 North · "
-                "🟢 South · 🟠 West · 🔵 East"
-            )
-            st.caption(
-                f"Reported {map_points[0]['reported_at']} "
-                "America/New_York. Data: Open-Meteo current weather model. "
-                "Hover over a marker for conditions."
-            )
+    map_params = urlencode(
+        {
+            "lat": 40.76,
+            "lon": -73.97,
+            "zoom": 9,
+            "level": "surface",
+            "overlay": map_layers[selected_layer],
+        }
+    )
+    st.iframe(
+        f"https://embed.windy.com/embed2.html?{map_params}",
+        height=420,
+    )
+    st.caption(
+        "Interactive map and weather layers: Windy.com. "
+        "Temperature and wind are forecasts; rain radar shows recent "
+        "conditions. This map is separate from S2 historical data and "
+        "is not an April 2027 forecast."
+    )
 
     st.subheader("April 6–8, 2027 convention planning outlook")
     st.caption(
