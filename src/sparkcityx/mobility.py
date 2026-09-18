@@ -1,11 +1,25 @@
 """Mobility and traffic dashboard data queries."""
 
 from __future__ import annotations
-
 from typing import Any
-
 from sparkcityx.database import connect_database
 
+def has_month_data(month: int) -> bool:
+    """Return True when traffic sensor observations exist for a month."""
+    query = """
+        SELECT EXISTS (
+            SELECT 1
+            FROM sparkcity.traffic_sensors
+            WHERE EXTRACT(MONTH FROM timestamp) = %s
+        );
+    """
+
+    with connect_database() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(query, (month,))
+            row = cursor.fetchone()
+
+    return bool(row and row[0])
 
 def get_mobility_summary(month: int | None = None) -> dict[str, Any]:
     """Return summary metrics for the Mobility & Traffic dashboard."""
@@ -70,6 +84,7 @@ def get_mobility_summary(month: int | None = None) -> dict[str, Any]:
         "peak_hour_average_vehicle_count": float(peak_row[1]),
     }
 
+
 def get_hourly_traffic(
     month: int | None = None,
 ) -> list[dict[str, Any]]:
@@ -108,6 +123,7 @@ def get_hourly_traffic(
         }
         for row in rows
     ]
+
 
 def get_congestion_breakdown(
     month: int | None = None,
@@ -156,6 +172,7 @@ def get_congestion_breakdown(
         for row in rows
     ]
 
+
 def get_road_type_summary(
     month: int | None = None,
 ) -> list[dict[str, Any]]:
@@ -202,6 +219,7 @@ def get_road_type_summary(
         }
         for row in rows
     ]
+
 
 def get_sensor_summary(
     month: int | None = None,
@@ -253,3 +271,74 @@ def get_sensor_summary(
         }
         for row in rows
     ]
+
+
+def get_convention_mobility_outlook() -> dict[str, Any]:
+    """
+    Return historical mobility conditions for convention planning.
+
+    The recommended convention is April 6-8, 2027, which falls
+    Tuesday through Thursday. This query uses observed April
+    Tuesday-Thursday traffic as the historical planning baseline.
+    """
+
+    summary_query = """
+        SELECT
+            ROUND(AVG(vehicle_count)::numeric, 2),
+            ROUND(AVG(avg_speed)::numeric, 2),
+            ROUND(
+                COUNT(*) FILTER (WHERE congestion_level = 'high')::numeric
+                * 100 / NULLIF(COUNT(*), 0),
+                2
+            )
+        FROM sparkcity.traffic_sensors
+        WHERE EXTRACT(MONTH FROM timestamp) = 4
+          AND EXTRACT(ISODOW FROM timestamp) BETWEEN 2 AND 4;
+    """
+
+    peak_query = """
+        SELECT
+            EXTRACT(HOUR FROM timestamp)::integer AS hour,
+            ROUND(AVG(vehicle_count)::numeric, 2) AS average_vehicle_count
+        FROM sparkcity.traffic_sensors
+        WHERE EXTRACT(MONTH FROM timestamp) = 4
+          AND EXTRACT(ISODOW FROM timestamp) BETWEEN 2 AND 4
+        GROUP BY EXTRACT(HOUR FROM timestamp)
+        ORDER BY average_vehicle_count DESC
+        LIMIT 1;
+    """
+
+    with connect_database() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(summary_query)
+            summary_row = cursor.fetchone()
+
+            cursor.execute(peak_query)
+            peak_row = cursor.fetchone()
+
+    if (
+        summary_row is None
+        or summary_row[0] is None
+        or peak_row is None
+    ):
+        return {}
+
+    high_congestion_percent = float(summary_row[2])
+
+    if high_congestion_percent < 30:
+        outlook = "Lower"
+    elif high_congestion_percent < 40:
+        outlook = "Moderate"
+    else:
+        outlook = "Elevated"
+
+    return {
+        "convention_dates": "April 6–8, 2027",
+        "average_vehicle_count": float(summary_row[0]),
+        "average_speed_kmh": float(summary_row[1]),
+        "high_congestion_percent": high_congestion_percent,
+        "peak_hour": int(peak_row[0]),
+        "peak_hour_average_vehicle_count": float(peak_row[1]),
+        "mobility_outlook": outlook,
+        "basis": "Historical April Tuesday–Thursday traffic patterns",
+    }
