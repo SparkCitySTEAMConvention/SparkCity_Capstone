@@ -22,6 +22,7 @@ import json
 from datetime import date, datetime, timedelta
 from functools import lru_cache
 from html import escape
+from math import ceil
 from pathlib import Path
 
 import pandas as pd
@@ -41,6 +42,24 @@ TEAM_PROPOSED_DATES = ("2027-04-06", "2027-04-08")
 
 METRIC_LABELS = {"revenue": "Average revenue / record", "expense": "Average expense / record",
                   "net_per_observation": "Average net / record"}
+
+JAVITS_SCENARIOS = {
+    "Conservative": {
+        "visitor_fraction": .40, "people_per_room": 2.3, "hotel_adr": 301,
+        "nonhotel_spend": 40, "local_retention": .50, "facility_allowance": 300_000,
+        "service_cost": 20,
+    },
+    "Planning": {
+        "visitor_fraction": .65, "people_per_room": 1.8, "hotel_adr": 354,
+        "nonhotel_spend": 90, "local_retention": .75, "facility_allowance": 500_000,
+        "service_cost": 35,
+    },
+    "High activity": {
+        "visitor_fraction": .85, "people_per_room": 1.3, "hotel_adr": 425,
+        "nonhotel_spend": 160, "local_retention": .90, "facility_allowance": 800_000,
+        "service_cost": 70,
+    },
+}
 
 
 def _month_label(month):
@@ -106,7 +125,6 @@ def _load_run():
         "findings": (run_dir / "findings.md").read_text(),
         "monthly": pd.read_csv(run_dir / "monthly.csv"),
         "candidates": pd.read_csv(run_dir / "candidate_summary.csv"),
-        "scenarios": pd.read_csv(run_dir / "convention_financial_scenarios.csv"),
         "daily": pd.read_csv(run_dir / "daily.csv", parse_dates=["day"]).set_index("day"),
     }
 
@@ -205,24 +223,44 @@ def _section(icon_title, note=None):
         st.markdown(f'<div class="fiscal-section-note">{note}</div>', unsafe_allow_html=True)
 
 
-def _render_date_explorer(daily_indexed, pinned_net):
-    """Modular "try another date" tool for event planners.
+def _javits_impact(attendees, duration, scenario):
+    """Deterministic, transparent planning arithmetic for one named scenario."""
+    assumptions = JAVITS_SCENARIOS[scenario]
+    overnight_visitors = round(attendees * assumptions["visitor_fraction"])
+    rooms_per_night = ceil(overnight_visitors / assumptions["people_per_room"])
+    room_nights = rooms_per_night * duration
+    hotel_spending = room_nights * assumptions["hotel_adr"]
+    nonhotel_spending = overnight_visitors * duration * assumptions["nonhotel_spend"]
+    gross_spending = hotel_spending + nonhotel_spending
+    retained_spending = gross_spending * assumptions["local_retention"]
+    organizer_cost = assumptions["facility_allowance"] + attendees * duration * assumptions["service_cost"]
+    # Planning estimate: current combined NYC hotel taxes plus state unit fee;
+    # assumes all non-hotel visitor spending is subject to the combined sales tax.
+    hotel_taxes_fees = hotel_spending * .1475 + room_nights * 3.50
+    nonhotel_sales_tax = nonhotel_spending * .08875
+    return assumptions | {
+        "overnight_visitors": overnight_visitors, "rooms_per_night": rooms_per_night,
+        "room_nights": room_nights, "hotel_spending": hotel_spending,
+        "nonhotel_spending": nonhotel_spending, "gross_spending": gross_spending,
+        "retained_spending": retained_spending, "organizer_cost": organizer_cost,
+        "taxes_fees": hotel_taxes_fees + nonhotel_sales_tax,
+    }
 
-    Reuses `sparkcityx.fiscal_analysis.calendar_analogues` — the exact function
-    the pinned notebook uses — parameterized to an arbitrary planner-chosen start
-    date and length, so any candidate is scored by the identical, audited
-    methodology. It reads the same historical daily series already produced by
-    the pinned run; it does not touch the pinned dates, files or any chart above.
-    """
-    _section("🛠️ Test another date")
+
+def _render_date_explorer(daily_indexed, pinned_net, attendees):
+    """Interactive Javits planning scenario plus historical fiscal context."""
+    _section(
+        "🏙️ Javits fiscal scenario explorer",
+        "Test how event timing, duration, and planning assumptions change the estimated economic footprint.",
+    )
     with st.container(key="fiscal_explorer"):
         st.markdown(
-            '<div class="fiscal-explorer-intro"><strong>How would another 2027 date compare?</strong>'
-            '<span>Choose a date and event length. We will find matching weekday patterns in the same '
-            'month of 2025 and compare their average fiscal records.</span></div>',
+            '<div class="fiscal-explorer-intro"><strong>Jacob K. Javits Convention Center · New York City</strong>'
+            '<span>Choose a date, duration, and scenario. Dollar outputs are planning estimates—not quotes '
+            'or guaranteed economic impact.</span></div>',
             unsafe_allow_html=True,
         )
-        col1, col2 = st.columns([2, 1])
+        col1, col2, col3 = st.columns([1.5, 1, 1.2])
         with col1:
             start = st.date_input(
                 "Event start", value=date(2027, 4, 6),
@@ -231,13 +269,63 @@ def _render_date_explorer(daily_indexed, pinned_net):
             )
         with col2:
             duration = st.slider("Event length", 1, 7, 3, format="%d day(s)", key="fiscal_explorer_duration")
+        with col3:
+            scenario = st.selectbox(
+                "Scenario", list(JAVITS_SCENARIOS), index=1, key="fiscal_explorer_scenario",
+                help="Conservative, planning, and high-activity cases use explicit assumption sets.",
+            )
     end = start + timedelta(days=duration - 1)
     weekday_span = start.strftime("%A") if duration == 1 else f"{start.strftime('%A')}–{end.strftime('%A')}"
+    impact = _javits_impact(attendees, duration, scenario)
     st.markdown(
         f'<div class="fiscal-test-summary"><span>TESTING</span><strong>{_planner_range_label(start, end)}</strong>'
-        f'<p>{weekday_span} · compared with matching '
-        f'{start.strftime("%B")} 2025 sequences</p></div>',
+        f'<p>{weekday_span} · {scenario} scenario · {attendees:,} attendees</p></div>',
         unsafe_allow_html=True,
+    )
+
+    _kpi_row([
+        ("Visitor spending", _fmt_money(impact["gross_spending"]), "Hotel + non-hotel spending"),
+        ("Organizer budget", _fmt_money(impact["organizer_cost"]), "Facility + event-service allowance"),
+        ("Taxes & fees", _fmt_money(impact["taxes_fees"]), "Estimated hotel and sales taxes/fees"),
+        ("Hotel demand", f'{impact["rooms_per_night"]:,}', "Rooms per night"),
+    ])
+    hotel_share = 100 * impact["hotel_spending"] / impact["gross_spending"] if impact["gross_spending"] else 0
+    st.markdown(
+        '<div class="fiscal-impact-breakdown">'
+        f'<div><span>Hotel spending</span><strong>{_fmt_money(impact["hotel_spending"])}</strong></div>'
+        f'<div><span>Other visitor spending</span><strong>{_fmt_money(impact["nonhotel_spending"])}</strong></div>'
+        f'<div><span>Locally retained activity</span><strong>{_fmt_money(impact["retained_spending"])}</strong></div>'
+        f'<div><span>Room nights</span><strong>{impact["room_nights"]:,}</strong></div>'
+        f'<div class="fiscal-spend-bar"><i style="width:{hotel_share:.1f}%"></i></div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    with st.expander("Scenario assumptions"):
+        st.markdown(
+            f"- **Overnight visitor share:** {impact['visitor_fraction']:.0%}\n"
+            f"- **Guests per room:** {impact['people_per_room']:.1f}\n"
+            f"- **Hotel rate:** {_fmt_money(impact['hotel_adr'])} per night\n"
+            f"- **Other visitor spending:** {_fmt_money(impact['nonhotel_spend'])} per visitor/day\n"
+            f"- **Javits facility allowance:** {_fmt_money(impact['facility_allowance'])}\n"
+            f"- **Event services:** {_fmt_money(impact['service_cost'])} per attendee/day\n"
+            f"- **Local retention:** {impact['local_retention']:.0%}"
+        )
+        st.caption(
+            "The planning hotel rate updates NYC's $334 2025 average by approximately 3% annually to "
+            "2027. The facility amount is an authored allowance pending a Javits proposal; it is not a quote."
+        )
+        st.markdown(
+            "Sources: [NYC Tourism 2025 hotel performance]"
+            "(https://business.nyctourism.com/fr/press-media/press-releases/NYC-Tourism-Annual-Report-March-2026) "
+            "· [Javits event planning and facility details](https://www.javitscenter.com/plan) "
+            "· [NYC hotel occupancy tax](https://www.nyc.gov/site/finance/business/business-hotel-room-occupancy-tax.page)"
+        )
+
+    st.markdown('<div class="fiscal-subheading">Historical date context</div>', unsafe_allow_html=True)
+    st.caption(
+        f"For context only: matching {start.strftime('%B')} 2025 weekday sequences are summarized below. "
+        "This historical synthetic series does not drive the dollar estimates above."
     )
 
     try:
@@ -279,11 +367,14 @@ def _render_date_explorer(daily_indexed, pinned_net):
             f"⚠️ This window includes {weekend_days} weekend day(s) — the generator applies a 15% weekend "
             "revenue premium, so higher revenue here partly reflects that, not just the date choice."
         )
-    with st.expander("How to interpret this comparison"):
+    with st.expander("Method, tax treatment, and important limits"):
         st.write(
-            "This is a historical analogue from synthetic 2025 data, not a 2027 forecast or a claim "
-            "that a date is optimal. Matching weekdays help make alternatives comparable, but one "
-            "historical year cannot establish a repeatable seasonal pattern."
+            "The hotel estimate uses a 14.75% combined hotel tax rate plus $3.50 in room fees per "
+            "occupied room-night. Other visitor spending is provisionally treated as fully taxable at "
+            "8.875%, which likely overstates collections because not every purchase is taxable. Tax rules, "
+            "exemptions, and the 2027 rates must be reconfirmed. Historical matches use synthetic 2025 "
+            "records and are not a 2027 forecast. Gross spending, organizer cost, and taxes belong to "
+            "different accounting scopes and must not be netted into city profit."
         )
 
 
@@ -301,7 +392,7 @@ def render_fiscal_impact():
         return
 
     manifest, monthly = data["manifest"], data["monthly"]
-    candidates, scenarios, run_dir, daily_indexed = data["candidates"], data["scenarios"], data["run_dir"], data["daily"]
+    candidates, run_dir, daily_indexed = data["candidates"], data["run_dir"], data["daily"]
 
     event_start, event_end = manifest.get("event_start"), manifest.get("event_end")
     attendees = manifest.get("attendees")
@@ -413,42 +504,7 @@ def render_fiscal_impact():
         st.dataframe(table, hide_index=True, width="stretch")
 
     # --- Modular date explorer ---
-    _render_date_explorer(daily_indexed, pinned_net=pinned_row["mean"])
-
-    # --- Financial impact of the event ---
-    _section(
-        "💵 Illustrative event spending scenario",
-        "A planning scenario for a three-day, approximately 15,000-attendee event. These estimates come "
-        "from authored assumptions—not from the historical fiscal records above.",
-    )
-    mixed = scenarios[scenarios["venue_archetype"] == "Mixed-access"].set_index("metric")
-    impact_kpis = []
-    for metric, label in [
-        ("potential_gross_visitor_receipts", "Visitor receipts (P50)"),
-        ("potential_retained_gross_spending", "Retained local spending (P50)"),
-        ("organizer_cost", "Organizer cost (P50)"),
-    ]:
-        row = mixed.loc[metric]
-        impact_kpis.append((label, _fmt_money(row["p50"]), f"P10–P90: {_fmt_money(row['p10'])} – {_fmt_money(row['p90'])}"))
-    _kpi_row(impact_kpis)
-    st.caption(
-        "Headline values use the mixed-access venue scenario. P10–P90 shows the range produced by 5,000 "
-        "assumption draws, not a statistical confidence interval."
-    )
-    st.markdown(
-        '<div class="fiscal-evidence-note"><strong>Do not calculate city profit from these cards.</strong> '
-        'Visitor receipts, retained local spending, and organizer costs belong to different accounting scopes.</div>',
-        unsafe_allow_html=True,
-    )
-    with st.expander("Compare all venue scenarios"):
-        scenario_table = scenarios.drop(columns=["draws"]).rename(columns={
-            "venue_archetype": "Venue archetype", "metric": "Metric",
-            "p10": "P10", "p50": "P50 (median)", "p90": "P90", "interpretation": "Read as",
-        })
-        for col in ("P10", "P50 (median)", "P90"):
-            scenario_table[col] = scenario_table[col].map(_fmt_money)
-        scenario_table["Metric"] = scenario_table["Metric"].str.replace("_", " ").str.capitalize()
-        st.dataframe(scenario_table, hide_index=True, width="stretch")
+    _render_date_explorer(daily_indexed, pinned_net=pinned_row["mean"], attendees=attendees)
 
     # --- Decision takeaways ---
     _section("🔑 What planners should take away")
