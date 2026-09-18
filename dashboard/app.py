@@ -18,13 +18,15 @@ destination = render_navigation()
 
 from pages.overview import render_overview, render_pending
 from pages.convention_planner import render_convention_planner #MCC added
+from pages.capacity_utilization import render_capacity_utilization
 from pages.mobility_traffic import render_mobility_traffic
 
 if destination == "Overview":
     render_overview()
-
 elif destination == "Convention Planner": #MCC added
     render_convention_planner()
+elif destination == "Capacity & Utilization":
+    render_capacity_utilization()
 elif destination == "Mobility & Traffic":
     render_mobility_traffic()
 else:
