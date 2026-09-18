@@ -3,16 +3,20 @@
 from __future__ import annotations
 
 import calendar
+from datetime import datetime
 from pathlib import Path
+from urllib.parse import urlencode
 
 import altair as alt
 import pandas as pd
-import pydeck as pdk
 import streamlit as st
 from dotenv import load_dotenv
 
+from sparkcityx.current_air_quality import load_current_air_quality
+from components.weather_scene import render_weather_scene
 from sparkcityx.current_weather import load_current_weather_points
 from sparkcityx.database import connect_database
+from sparkcityx.lunar_data import NEW_YORK, load_lunar_details
 from sparkcityx.environment_data import (
     load_air_monitoring_status,
     load_convention_air_history,
@@ -69,21 +73,331 @@ def get_current_weather_points() -> list[dict]:
     return load_current_weather_points()
 
 
+@st.cache_data(ttl=900, show_spinner="Loading modeled air quality...")
+def get_current_air_quality() -> dict:
+    """Cache the current modeled US AQI for SparkCity Center."""
+    return load_current_air_quality()
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_lunar_details(local_date: str) -> dict[str, str]:
+    """Cache lunar data; the date also refreshes it after midnight."""
+    return load_lunar_details()
+
+
 def render_environment_page() -> None:
+    """Render Environment inside its own styling boundary."""
+    with st.container(key="environment-page"):
+        _render_environment_content()
+
+
+def _render_environment_content() -> None:
     """Render the Environment section for the team dashboard."""
     st.markdown(
         """
         <style>
-        .stApp [data-testid="stMetricLabel"],
-        .stApp [data-testid="stMetricValue"] {
+        .st-key-environment-page [data-testid="stMetricLabel"],
+        .st-key-environment-page [data-testid="stMetricValue"] {
             color: #172b46 !important;
+        }
+        .st-key-environment-page [data-testid="stMetricLabel"] p,
+        .st-key-environment-page [data-testid="stCaptionContainer"] p {
+            font-size: 0.95rem !important;
+            line-height: 1.45 !important;
         }
         </style>
         """,
         unsafe_allow_html=True,
     )
     st.title("Environment")
-    st.caption("Air quality and weather observations from SparkCity S2")
+    st.caption(
+        "Current modeled weather and historical observations from SparkCity S2"
+    )
+
+    st.html(
+        """
+        <style>
+          .environment-date-banner {
+            padding: 20px 24px;
+            border: 1px solid #c9dfd2;
+            border-left: 6px solid #37966b;
+            border-radius: 14px;
+            background: #f0faf5;
+            color: #172b46;
+          }
+          .environment-date-banner .eyebrow {
+            margin: 0 0 6px;
+            color: #287452;
+            font-size: 0.85rem;
+            font-weight: 700;
+            letter-spacing: 0.09em;
+          }
+          .environment-date-banner h2 {
+            margin: 0 0 6px;
+            color: #172b46;
+            font-size: 1.7rem;
+            line-height: 1.2;
+          }
+          .environment-date-banner .context {
+            margin: 0;
+            color: #405c52;
+            font-size: 0.95rem;
+            line-height: 1.45;
+          }
+        </style>
+        <section class="environment-date-banner"
+                 aria-label="Confirmed convention dates">
+          <p class="eyebrow">CONFIRMED CONVENTION DATES</p>
+          <h2>April 6–8, 2027</h2>
+          <p class="context">
+            Environment planning outlook based on historical observations.
+            This is not an April 2027 forecast.
+            Measurement units await team confirmation.
+          </p>
+        </section>
+        """
+    )
+
+    try:
+        weather_history, air_history = get_convention_history()
+    except Exception:
+        st.warning("Convention history could not be loaded from S2.")
+    else:
+        weather_plan_column, air_plan_column = st.columns(2, gap="medium")
+
+        with weather_plan_column:
+            with st.container(border=True):
+                st.subheader("Weather planning")
+                if weather_history.empty:
+                    st.info("No matching historical weather readings are available.")
+                else:
+                    weather_history = weather_history.copy()
+                    weather_history["average_temperature"] = pd.to_numeric(
+                        weather_history["average_temperature"]
+                    )
+                    daily_weather = (
+                        weather_history.groupby("day", as_index=False)
+                        ["average_temperature"].mean()
+                    )
+
+                    day_columns = st.columns(3)
+                    for column, row in zip(
+                        day_columns, daily_weather.itertuples(), strict=False
+                    ):
+                        column.metric(
+                            f"April {row.day}",
+                            f"{row.average_temperature:.1f}",
+                        )
+
+                    st.caption(
+                        f"Based on {len(weather_history)} matching days "
+                        f"from {weather_history['year'].nunique()} historical years."
+                    )
+                    st.markdown(
+                        "- **Bring a layer:** Historical daily averages vary "
+                        "across the three dates.\n"
+                        "- **Keep umbrellas and covered routes available:** "
+                        "Precipitation appeared in the historical readings.\n"
+                        "- **Offer shade and water:** Prepare comfortable "
+                        "outdoor waiting areas if conditions are sunny."
+                    )
+                    st.caption(
+                        "Historical precipitation readings do not give the "
+                        "probability of rain in 2027. Check a current forecast "
+                        "closer to the event."
+                    )
+
+
+        with air_plan_column:
+            with st.container(border=True):
+                st.subheader("Air quality planning")
+                if air_history.empty:
+                    st.info("No matching historical air readings are available.")
+                else:
+                    air_history = air_history.copy()
+                    air_history["average_pm25"] = pd.to_numeric(
+                        air_history["average_pm25"]
+                    )
+
+                    day_columns = st.columns(3)
+                    for column, row in zip(
+                        day_columns, air_history.itertuples(), strict=False
+                    ):
+                        column.metric(
+                            f"April {row.day} PM2.5",
+                            f"{row.average_pm25:.2f}",
+                        )
+
+                    years = ", ".join(
+                        str(year) for year in sorted(air_history["year"].unique())
+                    )
+                    st.caption(
+                        f"Based on {int(air_history['readings'].sum()):,} "
+                        f"readings from {years}. No April 6–8, 2026 air "
+                        "readings are available; these are not 2027 predictions."
+                    )
+                    st.markdown(
+                        "- **Check current air readings** shortly before "
+                        "and during each convention day.\n"
+                        "- **Keep an indoor option** for outdoor activities "
+                        "if current conditions warrant a change.\n"
+                        "- **Share updates with attendees** if the outdoor "
+                        "plan changes."
+                    )
+                    st.caption(
+                        "The dashboard's NORMAL/MONITOR indicator is based "
+                        "on historical data percentiles, not a public "
+                        "health classification."
+                    )
+
+    why_column, action_column = st.columns(2, gap="medium")
+
+    with why_column:
+        st.markdown("**Why it matters**")
+        st.write(
+            "Historical April 6–8 weather readings included precipitation. "
+            "Matching air quality readings are available for 2025 only, "
+            "so the air data gives limited planning context."
+        )
+
+    with action_column:
+        st.markdown("**Planning action**")
+        st.write(
+            "Prepare covered routes and an indoor option. Check the current "
+            "forecast and air readings closer to the convention before "
+            "finalizing outdoor activities."
+        )
+
+    current_points = []
+    try:
+        current_points = get_current_weather_points()
+    except Exception:
+        st.info("Current modeled weather is temporarily unavailable.")
+    else:
+        center_now = current_points[0]
+        st.subheader("Current modeled weather · Center")
+        render_weather_scene(center_now["description"])
+        readings = st.columns(7, gap="small")
+        readings[0].metric(
+            "Conditions",
+            f"{center_now['temperature_f']:.1f} °F",
+        )
+        readings[1].metric(
+            "Humidity",
+            f"{center_now['humidity_percent']:.0f}%"
+            if center_now["humidity_percent"] is not None else "N/A",
+        )
+        readings[2].metric(
+            "Wind",
+            f"{center_now['wind_speed_kmh']:.1f} km/h"
+            if center_now["wind_speed_kmh"] is not None else "N/A",
+        )
+        readings[3].metric(
+            "UV index",
+            f"{center_now['uv_index']:.1f}"
+            if center_now["uv_index"] is not None else "N/A",
+        )
+        readings[4].metric(
+            "Sunset",
+            (
+                datetime.fromisoformat(center_now["sunset"])
+                .strftime("%I:%M %p")
+                .lstrip("0")
+                if center_now["sunset"] else "N/A"
+            ),
+        )
+        readings[5].metric(
+            "Visibility",
+            f"{center_now['visibility_m'] / 1000:.1f} km"
+            if center_now["visibility_m"] is not None else "N/A",
+        )
+        readings[6].metric(
+            "Pressure",
+            f"{center_now['pressure_hpa']:.0f} hPa"
+            if center_now["pressure_hpa"] is not None else "N/A",
+        )
+        st.caption(
+            f"{center_now['description']} · Model time "
+            f"{center_now['reported_at']} America/New_York. "
+            "Current model estimates, not S2 station readings."
+        )
+
+    try:
+        current_air = get_current_air_quality()
+    except Exception:
+        st.info("Current modeled air quality is temporarily unavailable.")
+    else:
+        aqi = current_air["us_aqi"]
+        position = min(max(aqi, 0), 500) / 500 * 100
+        st.markdown(
+            f"**🌿 Current modeled US AQI · Center: {aqi} "
+            f"({current_air['category']})**"
+        )
+        st.markdown(
+            '<div style="position:relative;padding-top:9px;">'
+            '<div style="height:14px;border-radius:7px;'
+            'background:linear-gradient(to right,'
+            '#22C55E 0% 10%,#EAB308 10% 20%,'
+            '#F97316 20% 30%,#EF4444 30% 40%,'
+            '#A855F7 40% 60%,#7F1D1D 60% 100%);"></div>'
+            f'<div style="position:absolute;left:{position:.1f}%;top:3px;'
+            'width:4px;height:26px;background:#172B46;'
+            'border:1px solid white;border-radius:2px;"></div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        st.caption(
+            f"Open-Meteo air-quality model · {current_air['reported_at']} "
+            "America/New_York. Separate from the historical S2 "
+            "NORMAL/MONITOR indicator below."
+        )
+
+    with st.expander("Moon details"):
+        try:
+            lunar = get_lunar_details(
+                datetime.now(NEW_YORK).date().isoformat()
+            )
+        except Exception:
+            st.info("Moon details are temporarily unavailable.")
+        else:
+            phase_icons = {
+                "New Moon": "🌑",
+                "Waxing Crescent": "🌒",
+                "First Quarter": "🌓",
+                "Waxing Gibbous": "🌔",
+                "Full Moon": "🌕",
+                "Waning Gibbous": "🌖",
+                "Last Quarter": "🌗",
+                "Waning Crescent": "🌘",
+            }
+            moonrise = (
+                current_points[0].get("moonrise")
+                if current_points else None
+            )
+            moonrise_label = (
+                datetime.fromisoformat(moonrise)
+                .strftime("%I:%M %p")
+                .lstrip("0")
+                if moonrise else "N/A"
+            )
+            moon_columns = st.columns(4, gap="small")
+            moon_columns[0].metric(
+                "Phase",
+                f"{phase_icons.get(lunar['phase'], '🌙')} {lunar['phase']}",
+            )
+            moon_columns[1].metric(
+                "Illuminated", lunar["illumination"]
+            )
+            moon_columns[2].metric("Moonrise", moonrise_label)
+            moon_columns[3].metric(
+                "Next full moon", lunar["next_full_moon"]
+            )
+            st.caption(
+                "Phase, noon illumination, and next full moon: "
+                "U.S. Naval Observatory. Moonrise: Open-Meteo model. "
+                f"Next full moon at {lunar['next_full_moon_time']} "
+                "New York time."
+            )
 
     st.markdown(
         '<p style="color:#172B46;font-weight:600;">Year</p>',
@@ -114,6 +428,48 @@ def render_environment_page() -> None:
     )
     month_order = list(calendar.month_abbr)[1:]
 
+    # Headline metrics use reading-weighted averages of available months.
+    air_observed = monthly.dropna(subset=["average_pm25"]).copy()
+    weather_observed = monthly.dropna(
+        subset=["average_temperature"]
+    ).copy()
+
+    air_count = int(air_observed["air_readings"].sum())
+    weather_count = int(weather_observed["weather_readings"].sum())
+
+    if air_count:
+        air_average = (
+            pd.to_numeric(air_observed["average_pm25"])
+            * air_observed["air_readings"]
+        ).sum() / air_count
+    else:
+        air_average = None
+
+    if weather_count:
+        weather_average = (
+            pd.to_numeric(weather_observed["average_temperature"])
+            * weather_observed["weather_readings"]
+        ).sum() / weather_count
+    else:
+        weather_average = None
+
+    st.subheader(f"{year} at a glance")
+    metric_columns = st.columns(4, gap="small")
+    metric_columns[0].metric(
+        "Average PM2.5",
+        f"{air_average:.2f}" if air_average is not None else "N/A",
+    )
+    metric_columns[1].metric(
+        "Average temperature",
+        f"{weather_average:.1f}" if weather_average is not None else "N/A",
+    )
+    metric_columns[2].metric("Air readings", f"{air_count:,}")
+    metric_columns[3].metric("Weather readings", f"{weather_count:,}")
+    st.caption(
+        f"Summary of available {year} readings. "
+        "Measurement units await team confirmation."
+    )
+
     # Top row: air quality and weather charts
     air_column, weather_column = st.columns(2, gap="medium")
 
@@ -134,11 +490,12 @@ def render_environment_page() -> None:
                     ],
                 )
                 if len(air) == 1:
-                    air_chart = air_chart.mark_bar(color="#2563EB", size=32)
+                    air_chart = air_chart.mark_bar(color="#2563EB", size=20)
                 else:
                     air_chart = air_chart.mark_line(color="#2563EB", point=True)
                 air_chart = (
                     air_chart
+                    .properties(height=190)
                     .configure(background="#FFFFFF")
                     .configure_view(stroke=None)
                     .configure_axis(
@@ -172,7 +529,7 @@ def render_environment_page() -> None:
 
                 weather_chart = (
                     alt.Chart(weather)
-                    .mark_bar(color="#F59E0B", size=32)
+                    .mark_bar(color="#F59E0B", size=20)
                     .encode(
                         x=alt.X(
                             "month_name:N",
@@ -195,6 +552,7 @@ def render_environment_page() -> None:
                 )
                 weather_chart = (
                     weather_chart
+                    .properties(height=190)
                     .configure(background="#FFFFFF")
                     .configure_view(stroke=None)
                     .configure_axis(
@@ -348,185 +706,38 @@ def render_environment_page() -> None:
                     )
 
 
-    st.subheader("Current modeled weather map")
+    st.subheader("Interactive weather map")
+    map_layers = {
+        "🌡️ Temperature forecast": "temp",
+        "🌧️ Rain radar": "radar",
+        "💨 Wind forecast": "wind",
+        "☁️ Clouds": "clouds",
+    }
+    selected_layer = st.selectbox(
+        "Map layer",
+        list(map_layers),
+        key="environment_map_layer",
+    )
+    map_params = urlencode(
+        {
+            "lat": 40.76,
+            "lon": -73.97,
+            "zoom": 9,
+            "level": "surface",
+            "overlay": map_layers[selected_layer],
+        }
+    )
+    st.iframe(
+        f"https://embed.windy.com/embed2.html?{map_params}",
+        height=420,
+    )
     st.caption(
-        "Current model estimates across five SparkCity locations. "
-        "These are not live S2 station readings or an April 2027 forecast."
+        "Interactive map and weather layers: Windy.com. "
+        "Temperature and wind are forecasts; rain radar shows recent "
+        "conditions. This map is separate from S2 historical data and "
+        "is not an April 2027 forecast."
     )
 
-    try:
-        map_points = get_current_weather_points()
-    except Exception:
-        st.warning("Current weather is temporarily unavailable.")
-    else:
-        with st.container(border=True):
-            location_colors = {
-                "Center": [220, 38, 38, 220],
-                "North": [147, 51, 234, 220],
-                "South": [22, 163, 74, 220],
-                "West": [234, 88, 12, 220],
-                "East": [37, 99, 235, 220],
-            }
-            map_points = [
-                {**point, "marker_color": location_colors[point["location"]]}
-                for point in map_points
-            ]
-            center = map_points[0]
-            condition_column, temperature_column, rain_column = st.columns(3)
-            condition_column.metric(
-                "Current conditions",
-                f"{center['icon']} {center['description']}",
-            )
-            temperature_column.metric(
-                "Center temperature",
-                f"{center['temperature_f']:.1f} °F",
-            )
-            rain_column.metric(
-                "Recent precipitation",
-                f"{center['precipitation_mm']:.1f} mm",
-            )
-
-            map_layer = pdk.Layer(
-                "ScatterplotLayer",
-                data=map_points,
-                get_position="[lon, lat]",
-                get_fill_color="marker_color",
-                get_radius=1800,
-                pickable=True,
-                stroked=True,
-                get_line_color=[255, 255, 255],
-                line_width_min_pixels=2,
-            )
-            map_view = pdk.ViewState(
-                latitude=40.76,
-                longitude=-73.97,
-                zoom=10.5,
-                pitch=0,
-            )
-            st.pydeck_chart(
-                pdk.Deck(
-                    layers=[map_layer],
-                    initial_view_state=map_view,
-                    map_style="light",
-                    tooltip={
-                        "html": (
-                            "<b>{icon} {location}</b><br/>"
-                            "{description}<br/>"
-                            "{temperature_f} °F · "
-                            "Precipitation: {precipitation_mm} mm"
-                        ),
-                        "style": {"color": "white"},
-                    },
-                ),
-                use_container_width=True,
-            )
-            st.markdown(
-                "**Map locations:** 🔴 Center · 🟣 North · "
-                "🟢 South · 🟠 West · 🔵 East"
-            )
-            st.caption(
-                f"Reported {map_points[0]['reported_at']} "
-                "America/New_York. Data: Open-Meteo current weather model. "
-                "Hover over a marker for conditions."
-            )
-
-    st.subheader("April 6–8, 2027 convention planning outlook")
-    st.caption(
-        "Historical planning context, not a forecast for April 2027. "
-        "Measurement units await team confirmation."
-    )
-
-    try:
-        weather_history, air_history = get_convention_history()
-    except Exception:
-        st.warning("Convention history could not be loaded from S2.")
-    else:
-        weather_plan_column, air_plan_column = st.columns(2, gap="medium")
-
-        with weather_plan_column:
-            with st.container(border=True):
-                st.subheader("Weather planning")
-                if weather_history.empty:
-                    st.info("No matching historical weather readings are available.")
-                else:
-                    weather_history = weather_history.copy()
-                    weather_history["average_temperature"] = pd.to_numeric(
-                        weather_history["average_temperature"]
-                    )
-                    daily_weather = (
-                        weather_history.groupby("day", as_index=False)
-                        ["average_temperature"].mean()
-                    )
-
-                    day_columns = st.columns(3)
-                    for column, row in zip(
-                        day_columns, daily_weather.itertuples(), strict=False
-                    ):
-                        column.metric(
-                            f"April {row.day}",
-                            f"{row.average_temperature:.1f}",
-                        )
-
-                    st.caption(
-                        f"Based on {len(weather_history)} matching days "
-                        f"from {weather_history['year'].nunique()} historical years."
-                    )
-                    st.markdown(
-                        "- **Bring a layer:** Historical daily averages vary "
-                        "across the three dates.\n"
-                        "- **Keep umbrellas and covered routes available:** "
-                        "Precipitation appeared in the historical readings.\n"
-                        "- **Offer shade and water:** Prepare comfortable "
-                        "outdoor waiting areas if conditions are sunny."
-                    )
-                    st.caption(
-                        "Historical precipitation readings do not give the "
-                        "probability of rain in 2027. Check a current forecast "
-                        "closer to the event."
-                    )
-
-
-        with air_plan_column:
-            with st.container(border=True):
-                st.subheader("Air quality planning")
-                if air_history.empty:
-                    st.info("No matching historical air readings are available.")
-                else:
-                    air_history = air_history.copy()
-                    air_history["average_pm25"] = pd.to_numeric(
-                        air_history["average_pm25"]
-                    )
-
-                    day_columns = st.columns(3)
-                    for column, row in zip(
-                        day_columns, air_history.itertuples(), strict=False
-                    ):
-                        column.metric(
-                            f"April {row.day} PM2.5",
-                            f"{row.average_pm25:.2f}",
-                        )
-
-                    years = ", ".join(
-                        str(year) for year in sorted(air_history["year"].unique())
-                    )
-                    st.caption(
-                        f"Based on {int(air_history['readings'].sum()):,} "
-                        f"readings from {years}. No April 6–8, 2026 air "
-                        "readings are available; these are not 2027 predictions."
-                    )
-                    st.markdown(
-                        "- **Check current air readings** shortly before "
-                        "and during each convention day.\n"
-                        "- **Keep an indoor option** for outdoor activities "
-                        "if current conditions warrant a change.\n"
-                        "- **Share updates with attendees** if the outdoor "
-                        "plan changes."
-                    )
-                    st.caption(
-                        "The dashboard's NORMAL/MONITOR indicator is based "
-                        "on historical data percentiles, not a public "
-                        "health classification."
-                    )
 
 
 if __name__ == "__main__":
