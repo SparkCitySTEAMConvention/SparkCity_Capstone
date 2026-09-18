@@ -4,3 +4,15 @@
 # discovery of dashboard/pages/*.py (used here purely as a plain Python package for
 # code organization) adds an unwanted sidebar and reserves its width on every page.
 showSidebarNavigation = false
+
+# MCC: added this [theme] block app-wide (not page-specific) to fix red input/slider
+# borders and dark-mode-black tables/dropdowns caused by Streamlit's default theme,
+# which otherwise follows the viewer's OS/browser dark mode and uses red (#ff4b4b)
+# as its default accent color. Flagging with this comment for merge conflicts since
+# it's a new top-level config section, not a change to an existing one.
+[theme]
+base = "light"
+primaryColor = "#287dcc"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f4f7fb"
+textColor = "#172b46"

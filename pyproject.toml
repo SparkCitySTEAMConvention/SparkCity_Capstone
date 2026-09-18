@@ -17,6 +17,7 @@ dependencies = [
     "python-dotenv>=1.1,<2",
     "sqlalchemy>=2.0.54",
     "streamlit>=1.64.0",
+    "watchdog>=6.0.0",
 ]
 
 [dependency-groups]

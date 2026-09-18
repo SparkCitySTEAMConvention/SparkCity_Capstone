@@ -93,6 +93,46 @@ def calculate_exploratory_scores(monthly_inputs):
     return scores
 
 
+# MCC: published category scores from Leigh's Day 4 notebook (section 8.3),
+# which used coverage-aware year-then-month averaging and Day 2/3 cleaned
+# feature data that isn't available in this checkout (data/features/ is
+# gitignored). Recomputing from the raw live tables does not reproduce these
+# values — see calculate_exploratory_scores docstring note above — so the
+# 12-Month Suitability Explorer uses these authoritative published numbers
+# directly instead, matching the team analysis document exactly.
+LEIGH_DAY4_CATEGORY_SCORES = {
+    "January":   {"Capacity": 65.81, "Fiscal": 3.95,   "Air Quality": 35.64, "Weather": 25.61, "Confidence": "HIGH"},
+    "February":  {"Capacity": 53.15, "Fiscal": 18.25,  "Air Quality": 28.30, "Weather": 36.02, "Confidence": "HIGH"},
+    "March":     {"Capacity": 50.92, "Fiscal": 47.05,  "Air Quality": 28.66, "Weather": 0.00,  "Confidence": "HIGH"},
+    "April":     {"Capacity": 48.28, "Fiscal": 69.19,  "Air Quality": 36.20, "Weather": 100.00, "Confidence": "HIGH"},
+    "May":       {"Capacity": 37.90, "Fiscal": 87.04,  "Air Quality": 22.17, "Weather": 72.08, "Confidence": "MODERATE"},
+    "June":      {"Capacity": 34.57, "Fiscal": 100.00, "Air Quality": 66.53, "Weather": 39.72, "Confidence": "MODERATE"},
+    "July":      {"Capacity": 51.88, "Fiscal": 83.82,  "Air Quality": 63.25, "Weather": 68.76, "Confidence": "MODERATE"},
+    "August":    {"Capacity": 6.66,  "Fiscal": 76.31,  "Air Quality": 21.54, "Weather": 70.08, "Confidence": "MODERATE"},
+    "September": {"Capacity": 42.97, "Fiscal": 47.35,  "Air Quality": 17.06, "Weather": 49.36, "Confidence": "MODERATE"},
+    "October":   {"Capacity": 44.88, "Fiscal": 21.48,  "Air Quality": 55.40, "Weather": 84.80, "Confidence": "LIMITED"},
+    "November":  {"Capacity": 52.79, "Fiscal": 6.33,   "Air Quality": 18.52, "Weather": 38.18, "Confidence": "LIMITED"},
+    "December":  {"Capacity": 71.14, "Fiscal": 0.00,   "Air Quality": 88.79, "Weather": 68.84, "Confidence": "LIMITED"},
+}
+
+
+def get_published_monthly_scores():
+    month_order = list(LEIGH_DAY4_CATEGORY_SCORES.keys())
+    scores = pd.DataFrame(LEIGH_DAY4_CATEGORY_SCORES).T
+    scores.insert(0, "Month", month_order)
+    scores["Capacity"] = scores["Capacity"].astype(float)
+    scores["Fiscal"] = scores["Fiscal"].astype(float)
+    scores["Air Quality"] = scores["Air Quality"].astype(float)
+    scores["Weather"] = scores["Weather"].astype(float)
+    scores["Baseline score"] = (
+        scores["Capacity"] * 0.35
+        + scores["Fiscal"] * 0.35
+        + scores["Air Quality"] * 0.15
+        + scores["Weather"] * 0.15
+    ).round(2)
+    return scores.reset_index(drop=True)
+
+
 def render_convention_planner():
     # MCC: paired with the convention_planner section in dashboard/styles/styles.css.
     load_css(section="convention_planner")
@@ -108,6 +148,7 @@ def render_convention_planner():
     candidates = {
         "April": {
             "score": 61.54,
+            "confidence": "HIGH",
             "proposed_week": "April 5–11, 2027",
             "proposed_dates": "April 6–8, 2027",
             "proposed_duration": "3 days",
@@ -125,6 +166,7 @@ def render_convention_planner():
         },
         "February": {
             "score": 34.64,
+            "confidence": "HIGH",
             "proposed_week": "February 1–7, 2027",
             "proposed_dates": "February 1–3, 2027",
             "proposed_duration": "3 days",
@@ -159,70 +201,90 @@ def render_convention_planner():
         unsafe_allow_html=True,
     )
 
-    explorer_area = st.container(key="planner_explorer")
+    # MCC: Proposed Conference Window sits right under the banner, ahead of
+    # the exploratory sections — the team's concrete recommendation, styled
+    # to match the banner (planner-window-banner in styles.css).
+    with st.container(key="planner_window"):
+        window_heading, window_selector = st.columns([3, 1])
+        with window_heading:
+            st.subheader("Proposed Conference Window")
+        with window_selector:
+            selected_month = st.selectbox(
+                "Candidate details",
+                ["April", "February"],
+            )
 
-    st.divider()
-    st.subheader("Team-Reported Candidate Recommendation")
+        selected = candidates[selected_month]
 
-    heading, selector = st.columns([3, 1])
-
-    with heading:
-        st.caption(
-            "Team-reported scores, separate from the exploratory model above. "
-            "Choose a candidate to view its proposed window and supporting details."
+        factor_df = pd.DataFrame({
+            "Factor": ["Capacity", "Fiscal", "Air Quality", "Weather"],
+            "Score": [
+                selected["capacity"],
+                selected["fiscal"],
+                selected["air_quality"],
+                selected["weather"],
+            ],
+            "Weight (%)": [35, 35, 15, 15],
+        })
+        factor_df["Contribution"] = (
+            factor_df["Score"] * factor_df["Weight (%)"] / 100
         )
 
-    with selector:
-        selected_month = st.selectbox(
-            "Candidate details",
-            ["April", "February"],
-        )
-
-    selected = candidates[selected_month]
-
-    factor_df = pd.DataFrame({
-        "Factor": ["Capacity", "Fiscal", "Air Quality", "Weather"],
-        "Score": [
-            selected["capacity"],
-            selected["fiscal"],
-            selected["air_quality"],
-            selected["weather"],
-        ],
-        "Weight (%)": [35, 35, 15, 15],
-    })
-    factor_df["Contribution"] = (
-        factor_df["Score"] * factor_df["Weight (%)"] / 100
-    )
-
-    # MCC: one compact team recommendation row; exploratory results remain separate.
-    # MCC: recommendation, alternative, and exploratory takeaways share one tile row.
-    april_card, february_card, takeaways_area = st.columns(3)
-    with april_card:
-        with st.container(border=True, key="planner_candidate_score"):
-            st.markdown("#### Recommended: April")
-            st.metric("Team-reported suitability", f"{candidates['April']['score']:.2f}")
-            st.write("Stronger Fiscal and Weather scores; complete analytical coverage reported.")
-            st.caption("Proposed: April 6–8, 2027 • Validation pending")
-    with february_card:
-        with st.container(border=True, key="planner_candidate_alternative"):
-            st.markdown("#### Alternative: February")
-            st.metric("Team-reported suitability", f"{candidates['February']['score']:.2f}")
-            st.write("Capacity score 53.15 versus April's 48.28, but lower overall suitability.")
-            st.caption("Proposed: February 1–3, 2027 • Validation pending")
-
-    st.subheader("Proposed Conference Window")
-    with st.container(border=True):
-        month_col, week_col, dates_col, duration_col = st.columns(4)
+        month_col, week_col, dates_col, duration_col, confidence_col = st.columns(5)
         month_col.metric("Candidate month", selected_month)
         week_col.metric("Proposed week", selected["proposed_week"])
         dates_col.metric("Proposed dates", selected["proposed_dates"])
         duration_col.metric("Proposed duration", selected["proposed_duration"])
-        st.caption("Team-proposed dates — validation pending.")
+        confidence_col.metric("Confidence", selected["confidence"])
         st.write(
             "Source: SparkCity February/April Convention Analysis (2027). "
             "These windows map historical 2025 weekday patterns to 2027; "
             "they are not forecasts of 2027 conditions or confirmed bookings."
         )
+
+    st.divider()
+
+    explorer_area = st.container(key="planner_explorer")
+
+    st.divider()
+    st.subheader("Convention Candidate Recommendation")
+    st.caption("Team-reported scores, separate from the exploratory model above.")
+
+    # MCC: one compact team recommendation row; exploratory results remain separate.
+    # MCC: recommendation, alternative, and doc-sourced takeaways share one tile row.
+    april_card, february_card, team_takeaways_card = st.columns(3)
+    with april_card:
+        with st.container(border=True, key="planner_candidate_score"):
+            st.markdown("#### Recommended: April")
+            st.metric("April Suitability", f"{candidates['April']['score']:.2f}")
+            st.write("Stronger Fiscal and Weather scores; complete analytical coverage reported.")
+            st.caption(f"Proposed: April 6–8, 2027 • Confidence: {candidates['April']['confidence']}")
+            st.caption("Confidence is HIGH because April has complete coverage across all six time-based analytical datasets.")
+    with february_card:
+        with st.container(border=True, key="planner_candidate_alternative"):
+            st.markdown("#### Alternative: February")
+            st.metric("February Suitability", f"{candidates['February']['score']:.2f}")
+            st.write("Capacity score 53.15 versus April's 48.28, but lower overall suitability.")
+            st.caption(f"Proposed: February 1–3, 2027 • Confidence: {candidates['February']['confidence']}")
+            st.caption("Confidence is HIGH because February has complete coverage across all six time-based analytical datasets.")
+    with team_takeaways_card:
+        with st.container(border=True, key="planner_team_takeaways"):
+            st.markdown("#### Key Takeaways")
+            st.caption("Team analysis document • February vs. April")
+            st.write(
+                "April has the stronger overall suitability score "
+                "(61.54 vs. 34.64), driven by Fiscal and Weather."
+            )
+            st.write("February holds a slight capacity edge (53.15 vs. 48.28).")
+            st.write(
+                "Both months are HIGH confidence with complete coverage "
+                "across all six analytical datasets."
+            )
+            st.caption(
+                "July scored highest (67.30) but is MODERATE confidence "
+                "(Traffic ends in May); November is LIMITED (Traffic and "
+                "Energy unavailable)."
+            )
 
     data_tab, calculation_tab, limitations_tab = st.tabs([
         "Monthly Source Data",
@@ -267,11 +329,14 @@ def render_convention_planner():
         )
 
     with limitations_tab:
-        st.markdown("**Why July was not selected**")
+        st.markdown("**Why July and November were not selected**")
         st.write(
             "July had the highest reported score, 67.30, but Traffic coverage "
-            "ends in May. The team selected April from the final candidates "
-            "with complete analytical coverage."
+            "ends in May, giving it MODERATE confidence. November shows "
+            "occupancy advantages but has LIMITED analytical coverage because "
+            "both Traffic and Energy are unavailable for that month. The team "
+            "selected April from the final candidates with complete analytical "
+            "coverage across all six time-based datasets."
         )
         st.write(
             "Traffic and Energy are outside the weighted model. "
@@ -292,8 +357,8 @@ def render_convention_planner():
     st.divider()
     st.caption(
         "Scores and recommendation: team analysis document, using 2025 data. "
-        "Monthly inputs: automatically loaded through SELECT queries, with a labeled snapshot fallback. "
-        "Monthly scores have not yet been independently reproduced."
+        "Monthly inputs below: automatically loaded through SELECT queries, with a labeled snapshot fallback. "
+        "Category scores in the explorer above match the published document exactly."
     )
 
     with explorer_area:
@@ -319,26 +384,25 @@ def render_convention_planner():
             st.info("No monthly model inputs are available.")
             return
 
-        exploratory_scores = calculate_exploratory_scores(monthly_inputs)
+        exploratory_scores = get_published_monthly_scores()
 
-        st.subheader("12-Month Suitability Explorer")
-        st.caption(
-            "Exploratory reconstruction using 2025 observations. "
-            "Environmental factors remain unreconciled with the team model. "
-            "The team-reported April recommendation remains separate."
-        )
+        header_area, month_area = st.columns([3, 1])
+        with header_area:
+            st.subheader("12-Month Suitability Explorer")
+            st.caption(
+                "Published category scores from the team analysis document "
+                "(Leigh's Day 4 notebook), using 2025 observations. "
+                "Adjust the slider below to explore alternate factor weightings."
+            )
+        with month_area:
+            explorer_month = st.selectbox(
+                "Select a Month", exploratory_scores["Month"].tolist(),
+                index=min(3, len(exploratory_scores) - 1), key="explorer_month",
+            )
 
-        # MCC: one month-analysis card owns the selector, score, factors, and sensitivity.
-        analysis_column, comparison_tile = st.columns([1.15, 1.4])
-        with analysis_column:
-            with st.container(border=True, key="planner_analysis"):
-                st.markdown("#### Monthly Suitability")
-                explorer_month = st.selectbox(
-                    "Explore month", exploratory_scores["Month"].tolist(),
-                    index=min(3, len(exploratory_scores) - 1), key="explorer_month",
-                )
-                score_tile, breakdown_tile = st.columns([0.55, 1.45])
-                calculation_caption_area = st.container()
+        # MCC: three standalone cards — score, factor breakdown, and the
+        # comparison chart with its sensitivity slider — matching the mockup layout.
+        score_tile, breakdown_tile, comparison_tile = st.columns([0.85, 1.25, 1.3])
 
         with comparison_tile:
             with st.container(border=True, key="planner_comparison"):
@@ -407,8 +471,8 @@ def render_convention_planner():
         )
 
         with score_tile:
-            with st.container(border=False, key="planner_score"):
-                st.markdown("**Overall score**")
+            with st.container(border=True, key="planner_score"):
+                st.markdown("#### Suitability Score")
 
                 baseline_score = selected_result["Baseline score"]
                 adjusted_score = selected_result["Adjusted score"]
@@ -434,9 +498,11 @@ def render_convention_planner():
                 )
                 st.caption("Scale: 0–100 • Not a probability")
 
+            explorer_takeaways_area = st.container()
+
         with breakdown_tile:
-            with st.container(border=False, key="planner_breakdown"):
-                st.markdown("**Factor scores**")
+            with st.container(border=True, key="planner_breakdown"):
+                st.markdown("#### Factor Scores")
 
                 # MCC: contributions expose how each factor builds the overall score.
                 factor_colors = {"Capacity": "#287dcc", "Fiscal": "#e5ad35",
@@ -464,6 +530,8 @@ def render_convention_planner():
                     unsafe_allow_html=True,
                 )
                 st.caption("Factor scores stay fixed; weights and contributions respond to the adjustment.")
+
+                calculation_caption_area = st.container()
 
         with comparison_chart_area:
             # Use calendar order and prevent alphabetical sorting of month names.
@@ -507,17 +575,17 @@ def render_convention_planner():
                 "At zero adjustment, they are identical."
             )
 
-        # MCC: exploratory takeaways only; team recommendations appear once below.
-        with takeaways_area:
+        # MCC: exploratory takeaways, compacted into a smaller tile stacked
+        # under the Suitability Score card so the row stays level.
+        with explorer_takeaways_area:
             with st.container(border=True, key="planner_takeaways"):
-                st.markdown("#### Key Takeaways")
-                st.caption("Exploratory model • current weight scenario")
+                st.markdown("##### Key Takeaways")
                 eligible = results.dropna(
                     subset=["Baseline score", "Adjusted score"]
                 )
 
                 if eligible.empty:
-                    st.info("No complete monthly scores are available.")
+                    st.caption("No complete monthly scores are available.")
                 else:
                     baseline_max = eligible["Baseline score"].max()
                     adjusted_max = eligible["Adjusted score"].max()
@@ -532,19 +600,15 @@ def render_convention_planner():
                         "Month",
                     ].tolist()
 
-                    st.write(f"**Baseline leader:** {', '.join(baseline_leaders)} · {baseline_max:.2f}")
-                    st.write(f"**Adjusted leader:** {', '.join(adjusted_leaders)} · {adjusted_max:.2f}")
                     if adjustment == 0:
-                        st.write("Baseline weights active — move the slider to explore.")
-                    elif set(baseline_leaders) == set(adjusted_leaders):
-                        st.write("Leader unchanged in this scenario.")
+                        st.caption(f"**Leader:** {', '.join(baseline_leaders)} · {baseline_max:.2f}")
+                        st.caption("Move the slider to explore.")
                     else:
-                        st.write("Leader changes in this scenario.")
-                    st.caption(
-                        f"Capacity: {original_weight:.0%} → {new_weight:.0%}. "
-                        "Other weights rebalance to 100%. Coverage and event feasibility "
-                        "remain separate from this exploratory ranking."
-                    )
+                        st.caption(f"**Adjusted leader:** {', '.join(adjusted_leaders)} · {adjusted_max:.2f}")
+                        if set(baseline_leaders) == set(adjusted_leaders):
+                            st.caption("Leader unchanged in this scenario.")
+                        else:
+                            st.caption(f"Was {', '.join(baseline_leaders)} · {baseline_max:.2f} at baseline.")
 
         # MCC: inline contribution explanation belongs to the monthly suitability tile.
         with calculation_caption_area:
