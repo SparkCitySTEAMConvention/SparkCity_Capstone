@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.sparkcity.hakeem.day5</string>
+  <key>ProgramArguments</key><array>
+    <string>/Users/hakeem/Projects/SparkCity_Capstone/.venv/bin/python</string>
+    <string>/Users/hakeem/Projects/SparkCity_Capstone/scripts/run-day5.py</string>
+    <string>--day4-run</string><string>20260914T205935811311Z</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/hakeem/Projects/SparkCity_Capstone</string>
+  <key>StartInterval</key><integer>3600</integer>
+  <key>StandardOutPath</key><string>/Users/hakeem/Projects/SparkCity_Capstone/data/processed/day5/scheduler.stdout.log</string>
+  <key>StandardErrorPath</key><string>/Users/hakeem/Projects/SparkCity_Capstone/data/processed/day5/scheduler.stderr.log</string>
+</dict></plist>
