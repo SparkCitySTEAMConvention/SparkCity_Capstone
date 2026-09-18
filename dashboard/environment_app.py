@@ -360,6 +360,17 @@ def render_environment_page() -> None:
         st.warning("Current weather is temporarily unavailable.")
     else:
         with st.container(border=True):
+            location_colors = {
+                "Center": [220, 38, 38, 220],
+                "North": [147, 51, 234, 220],
+                "South": [22, 163, 74, 220],
+                "West": [234, 88, 12, 220],
+                "East": [37, 99, 235, 220],
+            }
+            map_points = [
+                {**point, "marker_color": location_colors[point["location"]]}
+                for point in map_points
+            ]
             center = map_points[0]
             condition_column, temperature_column, rain_column = st.columns(3)
             condition_column.metric(
@@ -379,7 +390,7 @@ def render_environment_page() -> None:
                 "ScatterplotLayer",
                 data=map_points,
                 get_position="[lon, lat]",
-                get_fill_color="color",
+                get_fill_color="marker_color",
                 get_radius=1800,
                 pickable=True,
                 stroked=True,
@@ -410,8 +421,8 @@ def render_environment_page() -> None:
                 use_container_width=True,
             )
             st.markdown(
-                "**Map key:** ☀️ Clear · ⛅ Cloudy · 🌧️ Rain · "
-                "❄️ Snow · ⛈️ Thunderstorm"
+                "**Map locations:** 🔴 Center · 🟣 North · "
+                "🟢 South · 🟠 West · 🔵 East"
             )
             st.caption(
                 f"Reported {map_points[0]['reported_at']} "
