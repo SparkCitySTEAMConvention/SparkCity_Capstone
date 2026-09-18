@@ -1466,6 +1466,7 @@ name = "sparkcityx"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "altair" },
     { name = "fastparquet" },
     { name = "matplotlib" },
     { name = "pandas" },
@@ -1490,6 +1491,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "altair", specifier = ">=5,<7" },
     { name = "fastparquet", specifier = ">=2026.5.0" },
     { name = "matplotlib", specifier = ">=3.11.2" },
     { name = "pandas", specifier = ">=2.2,<3" },
@@ -1500,7 +1502,7 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.1,<2" },
     { name = "seaborn", specifier = ">=0.13.2" },
     { name = "sqlalchemy", specifier = ">=2.0.54" },
-    { name = "streamlit", specifier = ">=1.64.0" },
+    { name = "streamlit", specifier = ">=1.64,<2" },
     { name = "watchdog", specifier = ">=6.0.0" },
 ]
 

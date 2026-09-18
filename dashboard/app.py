@@ -29,5 +29,9 @@ elif destination == "Fiscal Impact":
     render_fiscal_impact()
 elif destination == "Mobility & Traffic":
     render_mobility_traffic()
+elif destination == "Environment":
+    from environment_app import render_environment_page
+
+    render_environment_page()
 else:
     render_pending(destination)
