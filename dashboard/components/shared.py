@@ -16,7 +16,7 @@ DESTINATIONS = {
     "Environment": "🍃 Environment",
     "Capacity & Utilization": "🏢 Capacity & Utilization",
     "Fiscal Impact": "💰 Fiscal Impact",
-    "Sustainability": "♻ Sustainability",
+    # "Sustainability" intentionally removed (2026-09-17) — no page was ever routed to it.
 }
 
 
