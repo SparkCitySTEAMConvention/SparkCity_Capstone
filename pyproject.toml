@@ -10,10 +10,12 @@ requires-python = ">=3.13,<3.15"
 dependencies = [
     "fastparquet>=2026.5.0",
     "pandas>=2.2,<3",
+    "psycopg2-binary>=2.9.13",
     "psycopg[binary]>=3.2,<4",
     "pyarrow>=25.0.1",
     "pyspark>=4.2,<4.3",
     "python-dotenv>=1.1,<2",
+    "sqlalchemy>=2.0.54",
     "streamlit>=1.64.0",
 ]
 

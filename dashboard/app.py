@@ -17,9 +17,13 @@ from components.shared import render_navigation
 destination = render_navigation()
 
 from pages.overview import render_overview, render_pending
+from pages.convention_planner import render_convention_planner #MCC added
 
 if destination == "Overview":
     render_overview()
+
+elif destination == "Convention Planner": #MCC added
+    render_convention_planner()
 else:
     # Teammates: import your domain renderer here and route its destination to
     # that function. Mobility & Traffic is Leigh's; it stays on the neutral
