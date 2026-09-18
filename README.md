@@ -1,6 +1,8 @@
 # SparkCity
 an apache spark project.
 
+For local installation, database configuration, and instructions for running the application, see [SETUP.md](SETUP.md).
+
 ## Standard Python setup
 
 Install [uv](https://docs.astral.sh/uv/getting-started/installation/) and a Java
