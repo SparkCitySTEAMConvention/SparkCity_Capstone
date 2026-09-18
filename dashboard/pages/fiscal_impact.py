@@ -9,7 +9,7 @@ modeled financial impact looks like. Renders the pinned, hash-verified output of
 "try another date" explorer that runs the same audited methodology live.
 
 This module formats numbers that already exist in
-`data/processed/fiscal_analysis/<run>/`, or recomputes them via the same audited
+`dashboard/data/fiscal_analysis/<run>/`, or recomputes them via the same audited
 `sparkcityx.fiscal_analysis.calendar_analogues` function used by that notebook —
 it does not invent a separate calculation to make a different date look better or
 worse. Where the analysis's own findings.md hedges a claim (synthetic data, no
@@ -32,7 +32,10 @@ from components.shared import STYLES_PATH, load_css, read_css
 from sparkcityx.fiscal_analysis import MEASURES, calendar_analogues
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-FISCAL_RUNS_DIR = PROJECT_ROOT / "data" / "processed" / "fiscal_analysis"
+# The dashboard snapshot is deliberately tracked with the application. Notebook
+# output under data/processed/ is Git-ignored and therefore unavailable to other
+# developers and deployments.
+FISCAL_RUNS_DIR = PROJECT_ROOT / "dashboard" / "data" / "fiscal_analysis"
 FISCAL_HERO_IMAGE = PROJECT_ROOT / "dashboard" / "assets" / "domains" / "fiscal_impact.png"
 
 # Kept as a live safety check, not a display fact: if the pinned notebook run's
@@ -416,8 +419,8 @@ def render_fiscal_impact():
     if data is None:
         st.title("💰 Fiscal Impact")
         st.info(
-            "No completed fiscal analysis run found under data/processed/fiscal_analysis/. "
-            "Run notebooks/Hakeem_fiscal_analysis.ipynb first (see docs/fiscal_analysis.md)."
+            "No packaged fiscal analysis snapshot was found under "
+            "dashboard/data/fiscal_analysis/. See docs/fiscal_analysis.md."
         )
         return
 
