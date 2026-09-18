@@ -87,26 +87,31 @@ lon_max: double
 population: integer
 ```
 
-**6. Occupancy Data (`occupancy.csv`)**
+**6. Occupancy Data (`occupancy_data.csv`)**
 ```sql
-hotel_id: string
+sensor_id: string
 timestamp: timestamp
 location_lat: double
 location_lon: double
-rooms_available: integer
-rooms_occupied: integer
+available_rooms: integer
+occupied_rooms: integer
 guests: integer
 ```
 
-**7. Financial Data (`financial_data.csv`)**
+**7. Fiscal Data (`fiscal_data.csv`)**
 ```sql
-fiscal_id: string
+sensor_id: string
 timestamp: timestamp
 location_lat: double
 location_lon: double
 expense: double
 revenue: double
 ```
+
+> **Terminology note:** "Financial data" is called **fiscal** everywhere in
+> code — the dataset key, filename (`fiscal_data.csv`), and validation type
+> (`sparkcityx.data_quality`) are all `fiscal`. Both names refer to the same
+> dataset; this file uses "Fiscal Data" to match the generator and code.
 
 ### 🛠 Technical Requirements
 
