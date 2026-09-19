@@ -1,8 +1,10 @@
 """Historical fiscal profile and date explorer for the Spark City dashboard."""
-import json
+import base64
 import hashlib
+import json
 from calendar import monthrange
 from datetime import date, datetime, timedelta
+from functools import lru_cache
 from html import escape
 from math import ceil
 from pathlib import Path
@@ -20,6 +22,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 FISCAL_RUNS_DIR = PROJECT_ROOT / "dashboard" / "data" / "fiscal_analysis"
 OCCUPANCY_SNAPSHOT = PROJECT_ROOT / "dashboard" / "data" / "convention_monthly_inputs_2025.csv"
 FISCAL_HERO_IMAGE = PROJECT_ROOT / "dashboard" / "assets" / "domains" / "fiscal_impact.png"
+SOURCE_ICON_DIR = PROJECT_ROOT / "dashboard" / "assets" / "source_icons"
 NYC_2025_HOTEL_ADR = 333.71
 NYC_HOTEL_PERCENT_TAX = 0.1475
 NYC_HOTEL_FLAT_FEES = 3.50
@@ -125,6 +128,65 @@ def _fmt_units(value):
 
 def _fmt_money(value):
     return f"${value:,.0f}"
+
+
+@lru_cache(maxsize=8)
+def _source_icon_data_uri(filename):
+    """Embed a tracked source favicon so it renders consistently for every user."""
+    encoded = base64.b64encode((SOURCE_ICON_DIR / filename).read_bytes()).decode("ascii")
+    return f"data:image/png;base64,{encoded}"
+
+
+def _source_list_html():
+    """Build the cited source list with the originating organizations' marks."""
+    sources = (
+        (
+            "nys_comptroller.png",
+            "NYS Comptroller: 2025 NYC hotel ADR — 333.71 USD",
+            "https://www.osc.ny.gov/press/releases/2026/07/dinapoli-nyc-hotel-industry-among-nations-largest-strongest",
+            "",
+        ),
+        (
+            "nyc_finance.png",
+            "NYC Finance: hotel occupancy tax and 2 USD room fee",
+            "https://www.nyc.gov/site/finance/business/business-hotel-room-occupancy-tax.page",
+            " nyc-mark",
+        ),
+        (
+            "nyc_311.png",
+            "NYC 311: current 5.875% hotel occupancy tax",
+            "https://portal.311.nyc.gov/article/?kanumber=KA-02794",
+            "",
+        ),
+        (
+            "nys_tax.png",
+            "NYS Tax: current NYC combined sales-tax publications",
+            "https://www.tax.ny.gov/pubs_and_bulls/publications/sales/local_rates_current.htm",
+            "",
+        ),
+        (
+            "nys_tax.png",
+            "NYS Tax: 1.50 USD NYC hotel unit fee",
+            "https://www.tax.ny.gov/pubs_and_bulls/tg_bulletins/st/hotel_and_motel_occupancy.htm",
+            "",
+        ),
+        (
+            "javits.png",
+            "Javits: The Overview published package",
+            "https://javitscenter.com/media/121804/the-overview_holiday-2025_v4.pdf",
+            "",
+        ),
+    )
+    links = []
+    for filename, label, url, extra_class in sources:
+        icon = _source_icon_data_uri(filename)
+        links.append(
+            f'<a href="{escape(url)}" target="_blank" rel="noopener noreferrer">'
+            f'<span class="fiscal-source-icon-shell{extra_class}">'
+            f'<img class="fiscal-source-icon" src="{icon}" alt=""></span>'
+            f'<span>{escape(label)}</span></a>'
+        )
+    return '<div class="fiscal-source-list">' + "".join(links) + "</div>"
 
 
 @st.cache_data(ttl=900, show_spinner=False)
@@ -433,21 +495,8 @@ def _render_date_explorer(daily_indexed, monthly, occupancy):
             "a forecast, a vendor quote, city profit, or guaranteed tax revenue. Facility and service "
             "allowances are authored assumptions pending an event-specific Javits proposal."
         )
-        st.markdown(
-            "**🔗 Sources and scope**\n\n"
-            "- 🏨 [NYS Comptroller: 2025 NYC hotel ADR — 333.71 USD]"
-            "(https://www.osc.ny.gov/press/releases/2026/07/dinapoli-nyc-hotel-industry-among-nations-largest-strongest)\n"
-            "- 🏛️ [NYC Finance: hotel occupancy tax and 2 USD room fee]"
-            "(https://www.nyc.gov/site/finance/business/business-hotel-room-occupancy-tax.page)\n"
-            "- 🧾 [NYC 311: current 5.875% hotel occupancy tax]"
-            "(https://portal.311.nyc.gov/article/?kanumber=KA-02794)\n"
-            "- 📊 [NYS Tax: current NYC combined sales-tax publications]"
-            "(https://www.tax.ny.gov/pubs_and_bulls/publications/sales/local_rates_current.htm)\n"
-            "- 🛏️ [NYS Tax: 1.50 USD NYC hotel unit fee]"
-            "(https://www.tax.ny.gov/pubs_and_bulls/tg_bulletins/st/hotel_and_motel_occupancy.htm)\n"
-            "- 🏙️ [Javits: The Overview published package]"
-            "(https://javitscenter.com/media/121804/the-overview_holiday-2025_v4.pdf)"
-        )
+        st.markdown("**🔗 Sources and scope**")
+        st.markdown(_source_list_html(), unsafe_allow_html=True)
         st.caption(
             "Rates and tax rules must be rechecked when budgeting. Exemptions, negotiated group rates, "
             "seasonality, room type, and contract terms can materially change actual cost."
