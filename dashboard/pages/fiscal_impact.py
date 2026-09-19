@@ -1,25 +1,7 @@
-"""Fiscal Impact page.
-
-Tells the fiscal half of "why April 6-8, 2027": why Feb/April were even in
-contention, what the historical fiscal data actually shows favoring April over
-February, where fiscal data goes quiet (the specific week/day was mostly a
-capacity/operations call, not a fiscal-maximization one), and what the event's
-modeled financial impact looks like. Renders the pinned, hash-verified output of
-`notebooks/Hakeem_fiscal_analysis.ipynb` (see docs/fiscal_analysis.md) plus a
-"try another date" explorer that runs the same audited methodology live.
-
-This module formats numbers that already exist in
-`dashboard/data/fiscal_analysis/<run>/`, or recomputes them via the same audited
-`sparkcityx.fiscal_analysis.calendar_analogues` function used by that notebook —
-it does not invent a separate calculation to make a different date look better or
-worse. Where the analysis's own findings.md hedges a claim (synthetic data, no
-causal/optimality claim, one complete historical April), that hedge is carried
-onto the page rather than dropped for a cleaner story: the fiscal data does not
-prove April 6-8 is the single best date, and this page says so, alongside what
-it does show.
-"""
+"""Historical fiscal profile and date explorer for the Spark City dashboard."""
 import json
 import hashlib
+from calendar import monthrange
 from datetime import date, datetime, timedelta
 from html import escape
 from math import ceil
@@ -29,37 +11,41 @@ import pandas as pd
 import streamlit as st
 
 from components.shared import STYLES_PATH, load_css, read_css
-from sparkcityx.fiscal_analysis import MEASURES, calendar_analogues
+from sparkcityx.fiscal_analysis import calendar_analogues
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 # The dashboard snapshot is deliberately tracked with the application. Notebook
 # output under data/processed/ is Git-ignored and therefore unavailable to other
 # developers and deployments.
 FISCAL_RUNS_DIR = PROJECT_ROOT / "dashboard" / "data" / "fiscal_analysis"
+OCCUPANCY_SNAPSHOT = PROJECT_ROOT / "dashboard" / "data" / "convention_monthly_inputs_2025.csv"
 FISCAL_HERO_IMAGE = PROJECT_ROOT / "dashboard" / "assets" / "domains" / "fiscal_impact.png"
-
-# Kept as a live safety check, not a display fact: if the pinned notebook run's
-# dates ever drift from the team's agreed dates again, the page should say so
-# instead of silently presenting stale numbers as current.
-TEAM_PROPOSED_DATES = ("2027-04-06", "2027-04-08")
-
-METRIC_LABELS = {"revenue": "Average revenue / record", "expense": "Average expense / record",
-                  "net_per_observation": "Average net / record"}
-
-JAVITS_SCENARIOS = {
+NYC_2025_HOTEL_ADR = 333.71
+NYC_HOTEL_PERCENT_TAX = 0.1475
+NYC_HOTEL_FLAT_FEES = 3.50
+EVENT_SCENARIOS = {
     "Conservative": {
-        "visitor_fraction": .40, "people_per_room": 2.3, "hotel_adr": 301,
-        "nonhotel_spend": 40, "local_retention": .50, "facility_allowance": 300_000,
+        "visitor_fraction": .40,
+        "people_per_room": 2.3,
+        "nonhotel_spend": 40,
+        "local_retention": .50,
+        "facility_allowance": 300_000,
         "service_cost": 20,
     },
     "Planning": {
-        "visitor_fraction": .65, "people_per_room": 1.8, "hotel_adr": 354,
-        "nonhotel_spend": 90, "local_retention": .75, "facility_allowance": 500_000,
+        "visitor_fraction": .65,
+        "people_per_room": 1.8,
+        "nonhotel_spend": 90,
+        "local_retention": .75,
+        "facility_allowance": 500_000,
         "service_cost": 35,
     },
     "High activity": {
-        "visitor_fraction": .85, "people_per_room": 1.3, "hotel_adr": 425,
-        "nonhotel_spend": 160, "local_retention": .90, "facility_allowance": 800_000,
+        "visitor_fraction": .85,
+        "people_per_room": 1.3,
+        "nonhotel_spend": 160,
+        "local_retention": .90,
+        "facility_allowance": 800_000,
         "service_cost": 70,
     },
 }
@@ -73,32 +59,16 @@ def _month_label(month):
         return month
 
 
-def _date_label(value):
-    """Format an ISO date for planner-facing copy; preserve unknown values."""
-    try:
-        parsed = datetime.strptime(value, "%Y-%m-%d")
-        return f"{parsed.strftime('%B')} {parsed.day}, {parsed.year}"
-    except (TypeError, ValueError):
-        return str(value)
-
-
-def _date_range_label(start, end):
-    """Compact same-month ranges, with a readable fallback for other ranges."""
-    try:
-        start_date = datetime.strptime(start, "%Y-%m-%d")
-        end_date = datetime.strptime(end, "%Y-%m-%d")
-    except (TypeError, ValueError):
-        return f"{_date_label(start)} – {_date_label(end)}"
-    if (start_date.year, start_date.month) == (end_date.year, end_date.month):
-        return f"{start_date.strftime('%B')} {start_date.day}–{end_date.day}, {start_date.year}"
-    return f"{_date_label(start)} – {_date_label(end)}"
-
-
 def _planner_range_label(start, end):
     """Format date objects compactly, including ranges that cross a month."""
     if (start.year, start.month) == (end.year, end.month):
         return f"{start.strftime('%B')} {start.day}–{end.day}, {start.year}"
     return f"{start.strftime('%B')} {start.day} – {end.strftime('%B')} {end.day}, {end.year}"
+
+
+def _max_same_month_duration(start, limit=7):
+    """Limit analogue windows to the month used for their fiscal index."""
+    return min(limit, monthrange(start.year, start.month)[1] - start.day + 1)
 
 
 def _latest_complete_run_in(runs_dir):
@@ -138,14 +108,13 @@ def _load_run():
     if run_dir is None:
         return None
     manifest = json.loads((run_dir / "manifest.json").read_text())
-    filenames = ("findings.md", "monthly.csv", "candidate_summary.csv", "daily.csv")
+    filenames = ("findings.md", "monthly.csv", "daily.csv")
     _verify_run_artifacts(run_dir, manifest, filenames)
     return {
         "run_dir": run_dir,
         "manifest": manifest,
         "findings": (run_dir / "findings.md").read_text(),
         "monthly": pd.read_csv(run_dir / "monthly.csv"),
-        "candidates": pd.read_csv(run_dir / "candidate_summary.csv"),
         "daily": pd.read_csv(run_dir / "daily.csv", parse_dates=["day"]).set_index("day"),
     }
 
@@ -156,6 +125,89 @@ def _fmt_units(value):
 
 def _fmt_money(value):
     return f"${value:,.0f}"
+
+
+@st.cache_data(ttl=900, show_spinner=False)
+def _load_occupancy_snapshot():
+    """Load the team's tracked monthly occupancy handoff used by the planner."""
+    frame = pd.read_csv(OCCUPANCY_SNAPSHOT, parse_dates=["month_start"])
+    required = {"month_start", "available_rooms", "occupancy_rate", "capacity_days"}
+    if frame.empty or not required.issubset(frame.columns):
+        raise ValueError("Monthly occupancy snapshot is missing required fields")
+    complete = frame[
+        frame["month_start"].dt.year.eq(2025)
+        & frame["capacity_days"].ge(frame["month_start"].dt.days_in_month)
+    ].copy()
+    if len(complete) != 12 or complete[list(required - {"month_start"})].isna().any().any():
+        raise ValueError("Monthly occupancy snapshot does not contain 12 complete 2025 months")
+    return complete.sort_values("month_start").reset_index(drop=True)
+
+
+def _monthly_occupancy_context(occupancy, month_number):
+    """Return relative demand pressure without treating sensor averages as inventory."""
+    selected = occupancy[occupancy["month_start"].dt.month.eq(month_number)]
+    if selected.empty:
+        raise ValueError("Selected month has no complete 2025 occupancy baseline")
+    annual_rate = float(
+        (occupancy["occupancy_rate"] * occupancy["capacity_days"]).sum()
+        / occupancy["capacity_days"].sum()
+    )
+    selected_rate = float(selected.iloc[0]["occupancy_rate"])
+    return {
+        "occupancy_rate": selected_rate,
+        "annual_rate": annual_rate,
+        "pressure_index": selected_rate / annual_rate,
+        "available_rooms_observation": float(selected.iloc[0]["available_rooms"]),
+    }
+
+
+def _monthly_fiscal_index(monthly, month_number):
+    """Revenue index for a complete 2025 month, weighted to the source records."""
+    complete = _complete_2025_months(monthly)
+    annual_revenue = float(
+        (complete["revenue"] * complete["observations"]).sum()
+        / complete["observations"].sum()
+    )
+    selected = complete[complete["month"] == f"2025-{month_number:02d}"]
+    if selected.empty:
+        raise ValueError("Selected month has no complete 2025 fiscal baseline")
+    return float(selected.iloc[0]["revenue"] / annual_revenue)
+
+
+def _combined_event_impact(attendees, duration, scenario, fiscal_index, facility_allowance=None):
+    """Combine a fiscal seasonality proxy with separately scoped event assumptions."""
+    assumptions = EVENT_SCENARIOS[scenario]
+    overnight_visitors = round(attendees * assumptions["visitor_fraction"])
+    rooms_per_night = ceil(overnight_visitors / assumptions["people_per_room"])
+    room_nights = rooms_per_night * duration
+    hotel_spending = room_nights * NYC_2025_HOTEL_ADR
+    baseline_nonhotel = overnight_visitors * duration * assumptions["nonhotel_spend"]
+    indexed_nonhotel = baseline_nonhotel * fiscal_index
+    visitor_activity = hotel_spending + indexed_nonhotel
+    hotel_taxes_fees = hotel_spending * NYC_HOTEL_PERCENT_TAX + room_nights * NYC_HOTEL_FLAT_FEES
+    nonhotel_sales_tax = indexed_nonhotel * .08875
+    venue_cost = assumptions["facility_allowance"] if facility_allowance is None else facility_allowance
+    service_cost = attendees * duration * assumptions["service_cost"]
+    lodging_total = hotel_spending + hotel_taxes_fees
+    organizer_cost = venue_cost + service_cost
+    return assumptions | {
+        "overnight_visitors": overnight_visitors,
+        "rooms_per_night": rooms_per_night,
+        "room_nights": room_nights,
+        "hotel_spending": hotel_spending,
+        "lodging_total": lodging_total,
+        "baseline_nonhotel": baseline_nonhotel,
+        "indexed_nonhotel": indexed_nonhotel,
+        "visitor_activity": visitor_activity,
+        "locally_retained_activity": visitor_activity * assumptions["local_retention"],
+        "taxes_fees": hotel_taxes_fees + nonhotel_sales_tax,
+        "hotel_taxes_fees": hotel_taxes_fees,
+        "venue_cost": venue_cost,
+        "event_service_total": service_cost,
+        "organizer_cost": organizer_cost,
+        "organizer_cost_per_attendee": organizer_cost / attendees,
+        "fiscal_index": fiscal_index,
+    }
 
 
 def _kpi_html(label, value, sub):
@@ -176,17 +228,6 @@ def _kpi_row(kpis):
     st.markdown("</div>", unsafe_allow_html=True)
 
 
-def _bar_row(tag, value, max_value, fill_color):
-    pct = max(6, round(100 * value / max_value)) if max_value else 0
-    return (
-        '<div class="fiscal-bar-row">'
-        f'<span class="fiscal-bar-tag">{escape(tag)}</span>'
-        '<div class="fiscal-bar-track">'
-        f'<div class="fiscal-bar-fill" style="width:{pct}%;background:{fill_color};">{_fmt_units(value)}</div>'
-        "</div></div>"
-    )
-
-
 def _complete_2025_months(monthly):
     """Return the comparable full calendar-year rows used for ranks and charts."""
     return monthly[
@@ -194,55 +235,27 @@ def _complete_2025_months(monthly):
     ].copy()
 
 
-def _monthly_net_chart(monthly):
-    """Compact dashboard-native comparison; source PNG remains in the run artifacts."""
+def _monthly_revenue_chart(monthly):
+    """Show the complete 2025 revenue cycle without privileging a planning month."""
     complete = _complete_2025_months(monthly)
-    max_value = complete["net_per_observation"].max()
+    max_value = complete["revenue"].max()
+    peak_month = complete.loc[complete["revenue"].idxmax(), "month"]
+    low_month = complete.loc[complete["revenue"].idxmin(), "month"]
     rows = []
     for row in complete.itertuples():
         month_name = datetime.strptime(row.month, "%Y-%m").strftime("%b")
-        selected = row.month == "2025-04"
-        width = 100 * row.net_per_observation / max_value if max_value else 0
+        marker = "peak" if row.month == peak_month else "low" if row.month == low_month else ""
+        width = 100 * row.revenue / max_value if max_value else 0
+        note = "Annual peak" if marker == "peak" else "Annual low" if marker == "low" else ""
         rows.append(
-            f'<div class="fiscal-month-row{" selected" if selected else ""}">'
+            f'<div class="fiscal-month-row {marker}">'
             f'<span class="fiscal-month-label">{month_name}</span>'
             '<div class="fiscal-month-track">'
             f'<div class="fiscal-month-fill" style="width:{width:.1f}%"></div></div>'
-            f'<strong>{_fmt_units(row.net_per_observation)}</strong>'
-            f'{"<em>Selected month</em>" if selected else ""}</div>'
+            f'<strong>{_fmt_units(row.revenue)}</strong>'
+            f'<em>{note}</em></div>'
         )
     st.markdown('<div class="fiscal-month-chart">' + "".join(rows) + "</div>", unsafe_allow_html=True)
-
-
-def _candidate_range_chart(net_rows):
-    """Show candidate means and historical min–max ranges without a dense static plot."""
-    chart_min = float(net_rows["minimum"].min())
-    chart_max = float(net_rows["maximum"].max())
-    span = chart_max - chart_min or 1
-    rows = []
-    for row in net_rows.itertuples():
-        start = datetime.strptime(row.candidate_start, "%Y-%m-%d")
-        end = datetime.strptime(row.candidate_end, "%Y-%m-%d")
-        left = 100 * (row.minimum - chart_min) / span
-        width = 100 * (row.maximum - row.minimum) / span
-        mean = 100 * (row.mean - chart_min) / span
-        label = f"{start.strftime('%b')} {start.day}–{end.day}"
-        rows.append(
-            f'<div class="fiscal-range-row{" selected" if row.selected else ""}">'
-            f'<div class="fiscal-range-label"><strong>{label}</strong>'
-            f'<span>{"Recommended" if row.selected else start.strftime("%a") + " start"}</span></div>'
-            '<div class="fiscal-range-track">'
-            f'<div class="fiscal-range-line" style="left:{left:.1f}%;width:{width:.1f}%"></div>'
-            f'<div class="fiscal-range-dot" style="left:{mean:.1f}%"></div></div>'
-            f'<div class="fiscal-range-value"><strong>{_fmt_units(row.mean)}</strong><span>mean net/record</span></div>'
-            '</div>'
-        )
-    st.markdown(
-        '<div class="fiscal-range-chart">' + "".join(rows) +
-        f'<div class="fiscal-range-axis"><span>{_fmt_units(chart_min)}</span>'
-        f'<span>Historical range</span><span>{_fmt_units(chart_max)}</span></div></div>',
-        unsafe_allow_html=True,
-    )
 
 
 def _section(icon_title, note=None):
@@ -251,143 +264,136 @@ def _section(icon_title, note=None):
         st.markdown(f'<div class="fiscal-section-note">{note}</div>', unsafe_allow_html=True)
 
 
-def _javits_impact(attendees, duration, scenario):
-    """Deterministic, transparent planning arithmetic for one named scenario."""
-    assumptions = JAVITS_SCENARIOS[scenario]
-    overnight_visitors = round(attendees * assumptions["visitor_fraction"])
-    rooms_per_night = ceil(overnight_visitors / assumptions["people_per_room"])
-    room_nights = rooms_per_night * duration
-    hotel_spending = room_nights * assumptions["hotel_adr"]
-    nonhotel_spending = overnight_visitors * duration * assumptions["nonhotel_spend"]
-    gross_spending = hotel_spending + nonhotel_spending
-    retained_spending = gross_spending * assumptions["local_retention"]
-    organizer_cost = assumptions["facility_allowance"] + attendees * duration * assumptions["service_cost"]
-    # Planning estimate: current combined NYC hotel taxes plus state unit fee;
-    # assumes all non-hotel visitor spending is subject to the combined sales tax.
-    hotel_taxes_fees = hotel_spending * .1475 + room_nights * 3.50
-    nonhotel_sales_tax = nonhotel_spending * .08875
-    return assumptions | {
-        "overnight_visitors": overnight_visitors, "rooms_per_night": rooms_per_night,
-        "room_nights": room_nights, "hotel_spending": hotel_spending,
-        "nonhotel_spending": nonhotel_spending, "gross_spending": gross_spending,
-        "retained_spending": retained_spending, "organizer_cost": organizer_cost,
-        "taxes_fees": hotel_taxes_fees + nonhotel_sales_tax,
-    }
+def _explorer_summary(daily_indexed, start, duration):
+    """Return like-for-like historical fiscal analogues for a proposed window."""
+    end = start + timedelta(days=duration - 1)
+    _, summary = calendar_analogues(
+        daily_indexed,
+        event_start=start,
+        event_end=end,
+        candidate_start=start,
+        candidate_end=end,
+    )
+    return summary.set_index("metric")
 
 
-def _render_date_explorer(daily_indexed, pinned_net, attendees):
-    """Interactive Javits planning scenario plus historical fiscal context."""
+def _render_date_explorer(daily_indexed, monthly, occupancy):
+    """Combine instructor-data seasonality with transparent event assumptions."""
     _section(
-        "🏙️ Javits fiscal scenario explorer",
-        "Test how event timing, duration, and planning assumptions change the estimated economic footprint.",
+        "📅 Seasonally indexed event explorer",
+        "Combine the instructor-provided monthly revenue pattern with sourced NYC rates and explicit event assumptions.",
     )
     with st.container(key="fiscal_explorer"):
         st.markdown(
             '<div class="fiscal-explorer-intro"><strong>Jacob K. Javits Convention Center · New York City</strong>'
-            '<span>Choose a date, duration, and scenario. Dollar outputs are planning estimates—not quotes '
-            'or guaranteed economic impact.</span></div>',
+            '<span>The selected month changes the fiscal index and variable visitor activity. Hotel and '
+            'organizer costs remain separate planning assumptions.</span></div>',
             unsafe_allow_html=True,
         )
-        col1, col2, col3 = st.columns([1.5, 1, 1.2])
+        col1, col2, col3, col4 = st.columns([1.4, 1, 1.2, 1])
         with col1:
             start = st.date_input(
-                "Event start", value=date(2027, 4, 6),
+                "Event start", value=date(2027, 1, 5),
                 min_value=date(2027, 1, 1), max_value=date(2027, 12, 31),
                 key="fiscal_explorer_start",
             )
         with col2:
-            duration = st.slider("Event length", 1, 7, 3, format="%d day(s)", key="fiscal_explorer_duration")
+            max_duration = _max_same_month_duration(start)
+            if st.session_state.get("fiscal_explorer_duration", 3) > max_duration:
+                st.session_state["fiscal_explorer_duration"] = max_duration
+            duration = st.slider(
+                "Event length", 1, max_duration, min(3, max_duration),
+                format="%d day(s)", key="fiscal_explorer_duration",
+            )
         with col3:
             scenario = st.selectbox(
-                "Scenario", list(JAVITS_SCENARIOS), index=1, key="fiscal_explorer_scenario",
-                help="Conservative, planning, and high-activity cases use explicit assumption sets.",
+                "Scenario", list(EVENT_SCENARIOS), index=1, key="fiscal_explorer_scenario",
+            )
+        with col4:
+            attendees = st.number_input(
+                "Attendees", min_value=1_000, max_value=50_000, value=15_000,
+                step=500, key="fiscal_explorer_attendees",
+            )
+        scenario_allowance = EVENT_SCENARIOS[scenario]["facility_allowance"]
+        if st.session_state.get("fiscal_last_scenario") != scenario:
+            st.session_state["fiscal_venue_allowance"] = scenario_allowance
+            st.session_state["fiscal_last_scenario"] = scenario
+        facility_allowance = st.number_input(
+            "Javits proposal / planning allowance",
+            min_value=0,
+            max_value=5_000_000,
+            step=25_000,
+            key="fiscal_venue_allowance",
+            help="Starts at the selected scenario allowance. Replace it with a custom Javits proposal when available.",
+        )
+        if max_duration < 7:
+            st.caption(
+                f"Duration is limited to {max_duration} day(s) so the historical analogue and monthly "
+                "fiscal index remain within {start.strftime('%B')}."
             )
     end = start + timedelta(days=duration - 1)
     weekday_span = start.strftime("%A") if duration == 1 else f"{start.strftime('%A')}–{end.strftime('%A')}"
-    impact = _javits_impact(attendees, duration, scenario)
-    st.markdown(
-        f'<div class="fiscal-test-summary"><span>TESTING</span><strong>{_planner_range_label(start, end)}</strong>'
-        f'<p>{weekday_span} · {scenario} scenario · {attendees:,} attendees</p></div>',
-        unsafe_allow_html=True,
-    )
-
-    _kpi_row([
-        ("Visitor spending", _fmt_money(impact["gross_spending"]), "Hotel + non-hotel spending"),
-        ("Organizer budget", _fmt_money(impact["organizer_cost"]), "Facility + event-service allowance"),
-        ("Taxes & fees", _fmt_money(impact["taxes_fees"]), "Estimated hotel and sales taxes/fees"),
-        ("Hotel demand", f'{impact["rooms_per_night"]:,}', "Rooms per night"),
-    ])
-    hotel_share = 100 * impact["hotel_spending"] / impact["gross_spending"] if impact["gross_spending"] else 0
-    st.markdown(
-        '<div class="fiscal-impact-breakdown">'
-        f'<div><span>Hotel spending</span><strong>{_fmt_money(impact["hotel_spending"])}</strong></div>'
-        f'<div><span>Other visitor spending</span><strong>{_fmt_money(impact["nonhotel_spending"])}</strong></div>'
-        f'<div><span>Locally retained activity</span><strong>{_fmt_money(impact["retained_spending"])}</strong></div>'
-        f'<div><span>Room nights</span><strong>{impact["room_nights"]:,}</strong></div>'
-        f'<div class="fiscal-spend-bar"><i style="width:{hotel_share:.1f}%"></i></div>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-
-    with st.expander("Scenario assumptions"):
-        st.markdown(
-            f"- **Overnight visitor share:** {impact['visitor_fraction']:.0%}\n"
-            f"- **Guests per room:** {impact['people_per_room']:.1f}\n"
-            f"- **Hotel rate:** {_fmt_money(impact['hotel_adr'])} per night\n"
-            f"- **Other visitor spending:** {_fmt_money(impact['nonhotel_spend'])} per visitor/day\n"
-            f"- **Javits facility allowance:** {_fmt_money(impact['facility_allowance'])}\n"
-            f"- **Event services:** {_fmt_money(impact['service_cost'])} per attendee/day\n"
-            f"- **Local retention:** {impact['local_retention']:.0%}"
-        )
-        st.caption(
-            "The planning hotel rate updates NYC's $334 2025 average by approximately 3% annually to "
-            "2027. The facility amount is an authored allowance pending a Javits proposal; it is not a quote."
-        )
-        st.markdown(
-            "Sources: [NYC Tourism 2025 hotel performance]"
-            "(https://business.nyctourism.com/fr/press-media/press-releases/NYC-Tourism-Annual-Report-March-2026) "
-            "· [Javits event planning and facility details](https://www.javitscenter.com/plan) "
-            "· [NYC hotel occupancy tax](https://www.nyc.gov/site/finance/business/business-hotel-room-occupancy-tax.page)"
-        )
-
-    st.markdown('<div class="fiscal-subheading">Historical date context</div>', unsafe_allow_html=True)
-    st.caption(
-        f"For context only: matching {start.strftime('%B')} 2025 weekday sequences are summarized below. "
-        "This historical synthetic series does not drive the dollar estimates above."
-    )
 
     try:
-        _, summary = calendar_analogues(
-            daily_indexed, event_start=start, event_end=end, candidate_start=start, candidate_end=end,
-        )
+        summary = _explorer_summary(daily_indexed, start, duration)
+        fiscal_index = _monthly_fiscal_index(monthly, start.month)
+        occupancy_context = _monthly_occupancy_context(occupancy, start.month)
     except ValueError as exc:
         st.warning(f"⚠️ {exc} — try a different date.")
         return
 
-    cols = st.columns(3)
-    net_mean = None
-    for col, metric in zip(cols, MEASURES):
-        row = summary[summary["metric"] == metric].iloc[0]
-        if metric == "net_per_observation":
-            net_mean = row["mean"]
-        with col:
-            st.markdown(
-                _kpi_html(
-                    METRIC_LABELS[metric], _fmt_units(row["mean"]),
-                    f"Range {_fmt_units(row['minimum'])}–{_fmt_units(row['maximum'])} across "
-                    f"{int(row['analogue_windows'])} historical matches",
-                ),
-                unsafe_allow_html=True,
-            )
+    revenue = summary.loc["revenue"]
+    expense = summary.loc["expense"]
+    net = summary.loc["net_per_observation"]
+    impact = _combined_event_impact(
+        attendees, duration, scenario, fiscal_index, facility_allowance=facility_allowance,
+    )
+    st.markdown(
+        f'<div class="fiscal-test-summary"><span>TESTING</span><strong>{_planner_range_label(start, end)}</strong>'
+        f'<p>{weekday_span} · {scenario} scenario · {attendees:,} attendees · '
+        f'{start.strftime("%B")} fiscal index {fiscal_index:.2f} · '
+        f'occupancy pressure {occupancy_context["pressure_index"]:.2f}</p></div>',
+        unsafe_allow_html=True,
+    )
 
-    if net_mean is not None and pinned_net:
-        delta = 100 * (net_mean - pinned_net) / pinned_net
-        direction = "higher than" if delta >= 0 else "lower than"
-        st.markdown(
-            f'<div class="fiscal-comparison-result"><strong>{abs(delta):.0f}% {direction}</strong> '
-            f'the recommended window’s historical net/record benchmark ({_fmt_units(pinned_net)}).</div>',
-            unsafe_allow_html=True,
-        )
+    _kpi_row([
+        ("Potential visitor activity", _fmt_money(impact["visitor_activity"]), "Lodging + indexed non-hotel spending"),
+        ("Attendee lodging bill", _fmt_money(impact["lodging_total"]), "Room charges + hotel taxes and fees"),
+        ("Organizer planning cost", _fmt_money(impact["organizer_cost"]), f'{_fmt_money(impact["organizer_cost_per_attendee"])} per attendee'),
+        ("Estimated taxes & fees", _fmt_money(impact["taxes_fees"]), "Hotel taxes/fees + provisional sales tax"),
+    ])
+    st.markdown(
+        '<div class="fiscal-impact-breakdown">'
+        f'<div><span>Hotel spending</span><strong>{_fmt_money(impact["hotel_spending"])}</strong></div>'
+        f'<div><span>Indexed non-hotel spending</span><strong>{_fmt_money(impact["indexed_nonhotel"])}</strong></div>'
+        f'<div><span>Venue + event services</span><strong>{_fmt_money(impact["organizer_cost"])}</strong></div>'
+        f'<div><span>Hotel demand</span><strong>{impact["rooms_per_night"]:,} rooms/night</strong></div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+    index_delta = 100 * (fiscal_index - 1)
+    direction = "above" if index_delta >= 0 else "below"
+    st.markdown(
+        f'<div class="fiscal-comparison-result"><strong>{abs(index_delta):.0f}% {direction} the annual revenue '
+        f'baseline:</strong> {_fmt_money(impact["baseline_nonhotel"])} in unadjusted non-hotel spending becomes '
+        f'{_fmt_money(impact["indexed_nonhotel"])} after applying the {start.strftime("%B")} fiscal index.</div>',
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        f"Underlying historical analogue: revenue {_fmt_units(revenue['mean'])}, expense "
+        f"{_fmt_units(expense['mean'])}, and net {_fmt_units(net['mean'])} per record across "
+        f"{int(net['analogue_windows'])} matching {start.strftime('%B')} 2025 sequences."
+    )
+    pressure_delta = 100 * (occupancy_context["pressure_index"] - 1)
+    pressure_direction = "above" if pressure_delta >= 0 else "below"
+    st.markdown(
+        f'<div class="fiscal-evidence-note"><strong>Occupancy context:</strong> '
+        f'{start.strftime("%B")} historical occupancy is {occupancy_context["occupancy_rate"]:.1f}%, '
+        f'{abs(pressure_delta):.0f}% {pressure_direction} the 2025 average of '
+        f'{occupancy_context["annual_rate"]:.1f}%. This signals relative demand pressure; it does not '
+        'change the published ADR or prove citywide room availability.</div>',
+        unsafe_allow_html=True,
+    )
 
     weekend_days = sum(1 for i in range(duration) if (start + timedelta(days=i)).weekday() >= 5)
     if weekend_days:
@@ -395,14 +401,56 @@ def _render_date_explorer(daily_indexed, pinned_net, attendees):
             f"⚠️ This window includes {weekend_days} weekend day(s) — the generator applies a 15% weekend "
             "revenue premium, so higher revenue here partly reflects that, not just the date choice."
         )
-    with st.expander("Method, tax treatment, and important limits"):
-        st.write(
-            "The hotel estimate uses a 14.75% combined hotel tax rate plus $3.50 in room fees per "
-            "occupied room-night. Other visitor spending is provisionally treated as fully taxable at "
-            "8.875%, which likely overstates collections because not every purchase is taxable. Tax rules, "
-            "exemptions, and the 2027 rates must be reconfirmed. Historical matches use synthetic 2025 "
-            "records and are not a 2027 forecast. Gross spending, organizer cost, and taxes belong to "
-            "different accounting scopes and must not be netted into city profit."
+    with st.expander("Full assumptions, rates, and calculation method"):
+        st.markdown(
+            f"**Selected scenario**\n\n"
+            f"- Attendees: **{attendees:,}**\n"
+            f"- Event duration: **{duration} day(s)**\n"
+            f"- Overnight visitor share: **{impact['visitor_fraction']:.0%}**\n"
+            f"- Guests per room: **{impact['people_per_room']:.1f}**\n"
+            f"- Non-hotel spending: **{_fmt_money(impact['nonhotel_spend'])} per overnight visitor/day**\n"
+            f"- Local retention assumption: **{impact['local_retention']:.0%}**\n"
+            f"- Javits proposal / allowance: **{_fmt_money(impact['venue_cost'])}**\n"
+            f"- Event services: **{_fmt_money(impact['service_cost'])} per attendee/day**\n\n"
+            f"**Occupancy context**\n\n"
+            f"- Selected-month occupancy: **{occupancy_context['occupancy_rate']:.1f}%**\n"
+            f"- 2025 average occupancy: **{occupancy_context['annual_rate']:.1f}%**\n"
+            f"- Relative occupancy-pressure index: **{occupancy_context['pressure_index']:.2f}**\n"
+            "- The dataset's available-room value is an average synthetic observation, not citywide inventory.\n\n"
+            f"**Published rates and provisional tax treatment**\n\n"
+            f"- NYC 2025 hotel ADR: **${NYC_2025_HOTEL_ADR:,.2f} per room-night**\n"
+            f"- Hotel percentage taxes: **{NYC_HOTEL_PERCENT_TAX:.2%}**\n"
+            f"- Hotel flat fees: **${NYC_HOTEL_FLAT_FEES:.2f} per room-night**\n"
+            "- Provisional non-hotel sales tax: **8.875%**\n\n"
+            "**Method**\n\n"
+            "The monthly fiscal index equals that month's average instructor-data revenue divided by the "
+            "observation-weighted 2025 average. It adjusts only non-hotel visitor spending. Hotel spending, "
+            "facility allowances, and service costs are not multiplied by the index. Occupancy is shown as "
+            "context rather than converted into an unsupported room-price formula."
+        )
+        st.warning(
+            "Potential visitor activity is a transparent proxy scenario, not measured convention impact, "
+            "a forecast, a vendor quote, city profit, or guaranteed tax revenue. Facility and service "
+            "allowances are authored assumptions pending an event-specific Javits proposal."
+        )
+        st.markdown(
+            "**Sources and scope:** "
+        "[NYS Comptroller — 2025 NYC hotel ADR of $333.71]"
+        "(https://www.osc.ny.gov/press/releases/2026/07/dinapoli-nyc-hotel-industry-among-nations-largest-strongest) · "
+        "[NYC Finance — hotel occupancy tax and $2 room fee]"
+        "(https://www.nyc.gov/site/finance/business/business-hotel-room-occupancy-tax.page) · "
+        "[NYC 311 — current 5.875% hotel occupancy tax]"
+        "(https://portal.311.nyc.gov/article/?kanumber=KA-02794) · "
+        "[NYS Tax — current NYC combined sales-tax publications]"
+        "(https://www.tax.ny.gov/pubs_and_bulls/publications/sales/local_rates_current.htm) · "
+        "[NYS Tax — $1.50 NYC hotel unit fee]"
+        "(https://www.tax.ny.gov/pubs_and_bulls/tg_bulletins/st/hotel_and_motel_occupancy.htm) · "
+        "[Javits — The Overview published package]"
+        "(https://javitscenter.com/media/121804/the-overview_holiday-2025_v4.pdf)"
+        )
+        st.caption(
+            "Rates and tax rules must be rechecked when budgeting. Exemptions, negotiated group rates, "
+            "seasonality, room type, and contract terms can materially change actual cost."
         )
 
 
@@ -424,139 +472,91 @@ def render_fiscal_impact():
         )
         return
 
-    manifest, monthly = data["manifest"], data["monthly"]
-    candidates, run_dir, daily_indexed = data["candidates"], data["run_dir"], data["daily"]
+    try:
+        occupancy = _load_occupancy_snapshot()
+    except (OSError, ValueError) as exc:
+        st.title("💰 Fiscal Impact")
+        st.error(f"The shared occupancy snapshot could not be loaded: {exc}")
+        return
 
-    event_start, event_end = manifest.get("event_start"), manifest.get("event_end")
-    attendees = manifest.get("attendees")
-    pinned_window_label = f"{event_start} – {event_end}"
-    display_window_label = _date_range_label(event_start, event_end)
+    manifest, monthly = data["manifest"], data["monthly"]
+    run_dir, daily_indexed = data["run_dir"], data["daily"]
+    complete = _complete_2025_months(monthly)
+    complete_month_count = len(complete)
+    complete_record_count = int(complete["observations"].sum())
+    peak = complete.loc[complete["revenue"].idxmax()]
+    revenue_rise = 100 * (peak["revenue"] - complete.iloc[0]["revenue"]) / complete.iloc[0]["revenue"]
+    revenue_cooling = 100 * (peak["revenue"] - complete.iloc[-1]["revenue"]) / peak["revenue"]
 
     # --- Hero ---
     with st.container(key="fiscal_hero"):
-        st.markdown('<span class="fiscal-eyebrow">FISCAL IMPACT · THE DECISION, IN THE DATA</span>', unsafe_allow_html=True)
-        st.markdown("<h1>April is the stronger fiscal choice—but fiscal data does not pick the exact week</h1>", unsafe_allow_html=True)
-        st.markdown(
-            f'<div class="fiscal-hero-summary">Recommended window: <strong>{escape(display_window_label)}</strong> '
-            f'· approximately <strong>{attendees:,} attendees</strong></div>',
-            unsafe_allow_html=True,
-        )
         if FISCAL_HERO_IMAGE.exists():
             st.image(str(FISCAL_HERO_IMAGE), width="stretch")
+        st.markdown('<span class="fiscal-eyebrow">FISCAL IMPACT · HISTORICAL PROFILE</span>', unsafe_allow_html=True)
+        st.markdown("<h1>Fiscal activity builds toward summer, then cools through year-end</h1>", unsafe_allow_html=True)
         st.markdown(
-            '<div class="fiscal-hero-takeaways">'
-            '<div><span>WHAT THE DATA SUPPORTS</span><strong>April outperforms February</strong>'
-            '<p>April is the stronger fiscal option among the two months with complete cross-domain coverage.</p></div>'
-            '<div><span>WHAT IT DOES NOT PROVE</span><strong>April 6–8 is uniquely optimal</strong>'
-            '<p>The exact week was selected mainly through capacity and operating conditions.</p></div>'
-            '</div>',
+            f'<div class="fiscal-hero-summary">A neutral view of <strong>{complete_month_count} complete '
+            f'months</strong> and <strong>{complete_record_count:,} fiscal records</strong> from the shared '
+            'instructor dataset.</div>',
             unsafe_allow_html=True,
         )
+        st.markdown('<div class="fiscal-chart-title">2025 monthly revenue pattern</div>', unsafe_allow_html=True)
+        _monthly_revenue_chart(monthly)
         st.markdown(
-            '<div class="fiscal-data-note">Historical figures are synthetic source units per observation—'
-            'not verified city revenue or a 2027 forecast.</div>',
+            '<div class="fiscal-data-note">Monthly average revenue per record · instructor-provided '
+            'synthetic fiscal data · source currency and accounting grain unconfirmed.</div>',
             unsafe_allow_html=True,
         )
-
-    team_start, team_end = TEAM_PROPOSED_DATES
-    if (event_start, event_end) != (team_start, team_end):
-        st.markdown(
-            '<div class="fiscal-callout warn">⚠️ <strong>Date mismatch:</strong> '
-            f"the team's agreed dates are <strong>{team_start} – {team_end}</strong>, "
-            f"but this pinned fiscal run analyzes <strong>{pinned_window_label}</strong>. "
-            "Re-run notebooks/Hakeem_fiscal_analysis.ipynb against the team's current dates "
-            "before treating this page as current.</div>",
-            unsafe_allow_html=True,
-        )
-
-    # --- April's historical baseline ---
-    feb = monthly[monthly["month"] == "2025-02"].iloc[0]
-    apr = monthly[monthly["month"] == "2025-04"].iloc[0]
-    delta_pct = 100 * (apr["net_per_observation"] - feb["net_per_observation"]) / feb["net_per_observation"]
-    comparable_months = _complete_2025_months(monthly)
-    best_month = comparable_months.loc[comparable_months["net_per_observation"].idxmax()]
-    apr_rank = int(
-        (comparable_months["net_per_observation"] > apr["net_per_observation"]).sum()
-    ) + 1
 
     _section(
-        "📊 April 2025 fiscal baseline",
-        "Complete-month averages across 2,880 synthetic 15-minute records. These figures describe the "
-        "historical month, not the proposed event dates or a citywide total.",
+        "📈 Trend and fiscal periodicity",
+        "The year forms a clear single-cycle arc in revenue and net values. Expenses remain comparatively stable.",
     )
-    _kpi_row([
-        ("Average revenue / record", _fmt_units(apr["revenue"]), "Synthetic source units"),
-        ("Average expense / record", _fmt_units(apr["expense"]), "Synthetic source units"),
-        ("Average net / record", _fmt_units(apr["net_per_observation"]), "Revenue minus expense"),
-        ("2025 net ranking", f"#{apr_rank} of 12", f"{_month_label(best_month['month'])} ranks first"),
-    ])
-    st.markdown(
-        f'<div class="fiscal-comparison-result"><strong>April’s average net is {delta_pct:.0f}% higher '
-        f'than February’s</strong> ({_fmt_units(apr["net_per_observation"])} vs. '
-        f'{_fmt_units(feb["net_per_observation"])} per record).</div>',
-        unsafe_allow_html=True,
-    )
-
-    with st.expander("See all 12 months of 2025"):
-        st.write(
-            f"April is stronger than February, but it is not the annual peak. "
-            f"**{_month_label(best_month['month'])}** ranks first at "
-            f"{_fmt_units(best_month['net_per_observation'])} average net per record."
-        )
-        _monthly_net_chart(monthly)
-        st.caption("Bars show average net per synthetic record. April is highlighted.")
-
-    # --- Why this specific week within April ---
-    net_rows = candidates[candidates["metric"] == "net_per_observation"].copy()
-    net_rows["window"] = net_rows["candidate_start"] + " to " + net_rows["candidate_end"]
-    highest = net_rows.loc[net_rows["mean"].idxmax()]
-    pinned_row = net_rows[net_rows["selected"]].iloc[0]
-
-    _section(
-        "🗓️ Does fiscal data favor April 6–8?",
-        "Not clearly. The five candidate windows have overlapping historical ranges, so their small "
-        "differences should not be treated as a ranking of future performance.",
-    )
-    st.markdown(
-        f'<div class="fiscal-verdict"><span>FISCAL VERDICT</span><strong>A sound option, not a unique winner</strong>'
-        f'<p>The recommended window averages {_fmt_units(pinned_row["mean"])} net units per record. '
-        f'The highest historical mean belongs to {escape(highest["candidate_start"])}–'
-        f'{escape(highest["candidate_end"])} at {_fmt_units(highest["mean"])}; capacity and operations '
-        'provide the stronger reason for choosing April 6–8.</p></div>',
-        unsafe_allow_html=True,
-    )
-    _candidate_range_chart(net_rows)
-    st.caption(
-        "Dots are historical means; lines show the minimum-to-maximum range across four matching "
-        "April 2025 sequences. They are not forecast intervals."
-    )
-    with st.expander("See the exact candidate values"):
-        table = net_rows[["window", "selected", "analogue_windows", "mean", "minimum", "maximum"]].rename(columns={
-            "window": "Window", "selected": "Recommended", "analogue_windows": "Historical matches",
-            "mean": "Mean net/record", "minimum": "Minimum", "maximum": "Maximum",
-        })
-        for col in ("Mean net/record", "Minimum", "Maximum"):
-            table[col] = table[col].map(_fmt_units)
-        st.dataframe(table, hide_index=True, width="stretch")
-
-    # --- Modular date explorer ---
-    _render_date_explorer(daily_indexed, pinned_net=pinned_row["mean"], attendees=attendees)
-
-    # --- Decision takeaways ---
-    _section("🔑 What planners should take away")
     st.markdown(
         '<div class="fiscal-takeaway-grid">'
-        f'<div><span>01</span><strong>April clears the fiscal comparison</strong><p>Average net per record is '
-        f'{delta_pct:.0f}% higher than February.</p></div>'
-        '<div><span>02</span><strong>Operations choose the week</strong><p>Fiscal differences among the five '
-        'April windows are not decisive.</p></div>'
-        '<div><span>03</span><strong>Validate before budgeting</strong><p>Currency, accounting meaning, and '
-        'real venue costs still need confirmation.</p></div></div>',
+        f'<div><span>01 · EXPANSION</span><strong>January to June: +{revenue_rise:.0f}%</strong>'
+        '<p>Average revenue climbs steadily through the first half of the year.</p></div>'
+        f'<div><span>02 · PEAK</span><strong>{_month_label(peak["month"])} leads the year</strong>'
+        f'<p>Revenue reaches {_fmt_units(peak["revenue"])} and net reaches '
+        f'{_fmt_units(peak["net_per_observation"])} per record.</p></div>'
+        f'<div><span>03 · COOLING</span><strong>June to December: −{revenue_cooling:.0f}%</strong>'
+        '<p>Revenue retreats through the second half and returns near winter levels.</p></div></div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div class="fiscal-callout info"><strong>Periodicity signal, not a proven annual cycle:</strong> '
+        'the rise-and-fall pattern is strong within 2025, but the dataset contains only one complete year. '
+        'Multiple complete years are required to establish that this seasonality reliably repeats.</div>',
+        unsafe_allow_html=True,
+    )
+    with st.expander("See the complete monthly fiscal table"):
+        table = complete[["month", "revenue", "expense", "net_per_observation"]].copy()
+        table["month"] = table["month"].map(_month_label)
+        table = table.rename(columns={
+            "month": "Month", "revenue": "Revenue / record", "expense": "Expense / record",
+            "net_per_observation": "Net / record",
+        })
+        st.dataframe(table, hide_index=True, width="stretch", column_config={
+            column: st.column_config.NumberColumn(format="%.2f")
+            for column in ("Revenue / record", "Expense / record", "Net / record")
+        })
+
+    _render_date_explorer(daily_indexed, monthly, occupancy)
+
+    _section("🔎 What the fiscal data establishes")
+    st.markdown(
+        '<div class="fiscal-takeaway-grid">'
+        '<div><span>01</span><strong>Revenue drives the annual movement</strong><p>Monthly expenses vary much '
+        'less than revenue, so net values largely follow the revenue curve.</p></div>'
+        '<div><span>02</span><strong>Summer is historically stronger</strong><p>June records the highest '
+        'average revenue and net in the complete 2025 data.</p></div>'
+        '<div><span>03</span><strong>Impact remains descriptive</strong><p>The data does not identify currency, '
+        'citywide totals, event causality, or future convention impact.</p></div></div>',
         unsafe_allow_html=True,
     )
     with st.expander("Technical findings and interpretation notes"):
         st.markdown(
-            "- Only one complete historical April exists, so repeatable April seasonality is unconfirmed.\n"
+            "- One complete year supports within-year comparison but cannot confirm repeating annual seasonality.\n"
             "- Revenue and expense correlate at 0.61 across records but approximately 0.00 across daily means.\n"
             "- Expense exceeds revenue in 13% of individual synthetic records.\n"
             "- The source does not establish currency, accounting period, or whether values are flows or snapshots."
@@ -565,7 +565,7 @@ def render_fiscal_impact():
     # --- Limitations ---
     st.markdown(
         '<div class="fiscal-callout warn">⚠️ <strong>Planning context, not budget approval:</strong> '
-        'these synthetic historical comparisons and authored scenarios do not establish causal impact, '
+        'these synthetic historical comparisons do not establish causal impact, '
         'future performance, tax revenue, or city profit.</div>',
         unsafe_allow_html=True,
     )
