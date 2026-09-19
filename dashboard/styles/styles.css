@@ -390,13 +390,16 @@ h2#explore-sparkcity {font-size:34px;padding-top:4px;}
 .fiscal-section-note {font-size:15px;color:#526a82;margin-bottom:16px;line-height:1.55;}
 .fiscal-evidence-note {margin-top:10px;padding:10px 14px;background:#eaf1f8;border-left:3px solid #428778;border-radius:6px;color:#526a82;font-size:12.5px;line-height:1.5;}
 .fiscal-comparison-result {margin:14px 0;padding:12px 16px;background:#eaf5f1;border:1px solid #cbe4dc;border-radius:9px;color:#385f57;font-size:14px;line-height:1.5;}
-.fiscal-month-chart {display:flex;flex-direction:column;gap:7px;margin:18px 0 8px;}
+.fiscal-chart-title {font-size:18px;font-weight:750;color:#223b57;margin:18px 0 0;}
+.fiscal-month-chart {display:flex;flex-direction:column;gap:7px;margin:10px 0 8px;background:white;border:1px solid #dce5ef;border-radius:14px;padding:18px 20px;box-shadow:0 4px 14px #10294408;}
 .fiscal-month-row {display:grid;grid-template-columns:42px minmax(160px,1fr) 64px 110px;align-items:center;gap:10px;min-height:24px;padding:2px 8px;border-radius:6px;}
-.fiscal-month-row.selected {background:#eaf5f1;}
+.fiscal-month-row.peak {background:#eaf5f1;}
+.fiscal-month-row.low {background:#fdf3e2;}
 .fiscal-month-label {font-size:13px;color:#526a82;font-weight:600;}
 .fiscal-month-track {height:12px;background:#e5ebf1;border-radius:999px;overflow:hidden;}
 .fiscal-month-fill {height:100%;background:#7d92a8;border-radius:999px;}
-.fiscal-month-row.selected .fiscal-month-fill {background:#428778;}
+.fiscal-month-row.peak .fiscal-month-fill {background:#428778;}
+.fiscal-month-row.low .fiscal-month-fill {background:#d49a2f;}
 .fiscal-month-row strong {font-size:13px;color:#2c425c;text-align:right;}
 .fiscal-month-row em {font-size:11px;color:#428778;font-style:normal;font-weight:700;text-transform:uppercase;letter-spacing:.4px;}
 .fiscal-verdict {background:#eaf5f1;border-left:4px solid #428778;border-radius:10px;padding:15px 18px;margin:12px 0 18px;}

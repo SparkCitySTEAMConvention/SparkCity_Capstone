@@ -2,6 +2,7 @@
 
 import hashlib
 import sys
+from datetime import date
 from pathlib import Path
 
 import pandas as pd
@@ -10,11 +11,17 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "dashboard"))
 
-from pages.convention_planner import get_planner_engine
+from pages.convention_planner import MONTHLY_INPUT_QUERY, get_planner_engine
 from pages.fiscal_impact import (
     FISCAL_RUNS_DIR,
+    _combined_event_impact,
     _complete_2025_months,
+    _explorer_summary,
     _load_run,
+    _load_occupancy_snapshot,
+    _max_same_month_duration,
+    _monthly_fiscal_index,
+    _monthly_occupancy_context,
     _verify_run_artifacts,
 )
 
@@ -28,8 +35,70 @@ def test_fiscal_dashboard_snapshot_is_packaged_and_loadable():
     assert data is not None
     assert data["manifest"]["status"] == "complete"
     assert not data["monthly"].empty
-    assert not data["candidates"].empty
     assert not data["daily"].empty
+
+
+def test_fiscal_explorer_responds_to_season_in_shared_data():
+    """The primary explorer outputs must change when its selected month changes."""
+    _load_run.clear()
+    daily = _load_run()["daily"]
+
+    winter = _explorer_summary(daily, date(2027, 1, 5), 3)
+    summer = _explorer_summary(daily, date(2027, 6, 8), 3)
+
+    assert summer.loc["revenue", "mean"] > winter.loc["revenue", "mean"]
+    assert summer.loc["net_per_observation", "mean"] > winter.loc[
+        "net_per_observation", "mean"
+    ]
+
+
+def test_occupancy_context_uses_shared_monthly_snapshot_without_inventory_claim():
+    _load_occupancy_snapshot.clear()
+    occupancy = _load_occupancy_snapshot()
+    january = _monthly_occupancy_context(occupancy, 1)
+    june = _monthly_occupancy_context(occupancy, 6)
+
+    assert len(occupancy) == 12
+    assert june["occupancy_rate"] > january["occupancy_rate"]
+    assert june["pressure_index"] > january["pressure_index"]
+    assert "available_rooms_observation" in june
+
+
+def test_planner_query_uses_canonical_occupancy_rate():
+    assert "occupied_rooms::numeric + available_rooms" not in MONTHLY_INPUT_QUERY
+    assert "available_rooms::numeric" in MONTHLY_INPUT_QUERY
+
+
+def test_combined_event_impact_uses_fiscal_index_only_for_variable_spending():
+    _load_run.clear()
+    monthly = _load_run()["monthly"]
+    january_index = _monthly_fiscal_index(monthly, 1)
+    june_index = _monthly_fiscal_index(monthly, 6)
+
+    january = _combined_event_impact(15_000, 3, "Planning", january_index)
+    june = _combined_event_impact(15_000, 3, "Planning", june_index)
+
+    assert june_index > january_index
+    assert june["indexed_nonhotel"] > january["indexed_nonhotel"]
+    assert june["visitor_activity"] > january["visitor_activity"]
+    assert june["hotel_spending"] == january["hotel_spending"]
+    assert june["organizer_cost"] == january["organizer_cost"]
+
+
+def test_custom_javits_proposal_replaces_scenario_allowance():
+    impact = _combined_event_impact(
+        15_000, 3, "Planning", fiscal_index=1.0, facility_allowance=625_000,
+    )
+
+    assert impact["venue_cost"] == 625_000
+    assert impact["organizer_cost"] == 625_000 + 15_000 * 3 * 35
+    assert impact["organizer_cost_per_attendee"] == pytest.approx(146.6666667)
+
+
+def test_explorer_duration_stays_inside_selected_month():
+    assert _max_same_month_duration(date(2027, 12, 20)) == 7
+    assert _max_same_month_duration(date(2027, 12, 29)) == 3
+    assert _max_same_month_duration(date(2027, 12, 31)) == 1
 
 
 def test_fiscal_dashboard_verifies_signed_artifacts(tmp_path):
