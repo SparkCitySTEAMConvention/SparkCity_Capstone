@@ -40,7 +40,7 @@ class PlannerScoresTests(unittest.TestCase):
         self.assertTrue(pd.isna(adjusted_scores(scores, 10)[0].iloc[0]))
 
     def test_page_renders_and_updates(self):
-        script = "from pages.convention_planner import render_convention_planner\nrender_convention_planner()"
+        script = "from pages.convention_planner_exports import render_convention_planner_exports\nrender_convention_planner_exports()"
         app = AppTest.from_string(script).run(timeout=30)
         self.assertEqual(len(app.exception), 0)
         self.assertEqual([tab.label for tab in app.tabs], ["Monthly", "Weekly", "Daily", "Scoring method"])
