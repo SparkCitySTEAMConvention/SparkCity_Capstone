@@ -15,6 +15,7 @@ dependencies = [
     "psycopg2-binary>=2.9.13",
     "psycopg[binary]>=3.2,<4",
     "pyarrow>=25.0.1",
+    "pydeck>=0.9,<1",
     "pyspark>=4.2,<4.3",
     "python-dotenv>=1.1,<2",
     "seaborn>=0.13.2",
