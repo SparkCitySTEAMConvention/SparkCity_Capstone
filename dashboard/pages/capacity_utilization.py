@@ -48,8 +48,8 @@ def load_capacity_data():
             WITH monthly AS (
                 SELECT
                     date_trunc('month', timestamp) AS month,
-                    avg(occupied_rooms::numeric / NULLIF(available_rooms, 0)) AS avg_occupancy_rate,
-                    avg(available_rooms) AS avg_available_rooms
+                    avg(occupied_rooms::numeric / NULLIF(available_rooms::numeric + occupied_rooms, 0)) AS avg_occupancy_rate,
+                    avg(available_rooms::numeric + occupied_rooms) AS avg_total_rooms
                 FROM sparkcity.occupancy_data
                 WHERE timestamp >= '2025-01-01' AND timestamp < '2026-01-01'
                 GROUP BY 1
@@ -58,7 +58,7 @@ def load_capacity_data():
                 to_char(month, 'Mon') AS month_name,
                 round(avg_occupancy_rate::numeric, 4) AS avg_occupancy_rate,
                 round((100 * (1 - avg_occupancy_rate))::numeric, 1) AS headroom_pct,
-                round((avg_available_rooms - avg_available_rooms * avg_occupancy_rate)::numeric, 1)
+                round((avg_total_rooms * (1 - avg_occupancy_rate))::numeric, 1)
                     AS avg_available_capacity_rooms
             FROM monthly
             ORDER BY month
@@ -105,7 +105,7 @@ def load_capacity_data():
             SELECT
                 to_char(timestamp, 'Dy') AS day_name,
                 extract(dow FROM timestamp) AS dow,
-                round(avg(occupied_rooms::numeric / NULLIF(available_rooms, 0))::numeric, 4) AS avg_occupancy_rate
+                round(avg(occupied_rooms::numeric / NULLIF(available_rooms::numeric + occupied_rooms, 0))::numeric, 4) AS avg_occupancy_rate
             FROM sparkcity.occupancy_data
             WHERE timestamp >= '2025-01-01' AND timestamp < '2026-01-01'
             GROUP BY 1, 2
@@ -116,7 +116,7 @@ def load_capacity_data():
             WITH per_sensor_april AS (
                 SELECT
                     sensor_id,
-                    avg(available_rooms) AS avg_capacity,
+                    avg(available_rooms::numeric + occupied_rooms) AS avg_capacity,
                     avg(occupied_rooms) AS avg_occupied,
                     avg(guests) AS avg_guests
                 FROM sparkcity.occupancy_data
@@ -133,7 +133,7 @@ def load_capacity_data():
         april_tue_thu = _run_query(conn, """
             SELECT
                 CASE WHEN extract(dow FROM timestamp) IN (2, 3, 4) THEN 'Tue-Thu' ELSE 'Other' END AS day_group,
-                avg(occupied_rooms::numeric / NULLIF(available_rooms, 0)) AS avg_occupancy_rate,
+                avg(occupied_rooms::numeric / NULLIF(available_rooms::numeric + occupied_rooms, 0)) AS avg_occupancy_rate,
                 count(*) AS readings
             FROM sparkcity.occupancy_data
             WHERE timestamp >= '2025-04-01' AND timestamp < '2025-05-01'
@@ -143,7 +143,7 @@ def load_capacity_data():
         daily_series = _run_query(conn, """
             SELECT
                 date_trunc('day', timestamp) AS day,
-                avg(occupied_rooms::numeric / NULLIF(available_rooms, 0)) AS avg_occupancy_rate
+                avg(occupied_rooms::numeric / NULLIF(available_rooms::numeric + occupied_rooms, 0)) AS avg_occupancy_rate
             FROM sparkcity.occupancy_data
             WHERE timestamp >= '2025-01-01' AND timestamp < '2026-01-01'
             GROUP BY 1
@@ -245,6 +245,8 @@ def render_capacity_utilization():
         f"{int(r.year)}: {r.avg_power_kw:.1f} kW" for r in data["april_energy_by_year"].itertuples()
     )
     traffic_lo, traffic_hi = traffic_monthly["pct_high_congestion"].min(), traffic_monthly["pct_high_congestion"].max()
+    headroom_lo, headroom_hi = occupancy_monthly["headroom_pct"].min(), occupancy_monthly["headroom_pct"].max()
+    june_occupancy = occupancy_monthly.loc[occupancy_monthly["month_name"] == "Jun", "avg_occupancy_rate"].iloc[0]
     apr_congestion = traffic_monthly.loc[traffic_monthly["month_name"] == "Apr", "pct_high_congestion"].iloc[0]
 
     st.title("🏢 Capacity & Utilization")
@@ -335,7 +337,7 @@ the more favorable one, leaving more headroom than a weekend date in the same mo
         ("1", "Convert attendees to rooms", f"{ATTENDEES:,} attendees ÷ {impact['guests_per_room']:.2f} observed guests per occupied room", f"≈ {impact['rooms_needed']:,.0f} rooms needed"),
         ("2", "Compare to Tue–Thu headroom", f"{impact['rooms_needed']:,.0f} rooms needed ÷ {impact['tue_thu_headroom_rooms']:,.0f} rooms of spare capacity", f"{impact['pct_headroom_used']:.1%} of headroom used"),
         ("3", "Project post-convention occupancy", f"({impact['tue_thu_rate']:.1%} baseline × {impact['total_capacity']:,.0f} rooms + {impact['rooms_needed']:,.0f} rooms) ÷ {impact['total_capacity']:,.0f} rooms", f"{impact['post_event_rate']:.1%} projected occupancy"),
-        ("4", "Check against known peaks", f"Projected {impact['post_event_rate']:.1%} vs. April weekend baseline {impact['other_rate']:.1%} and June's 82.6% (the tightest month of the year)", "Still below both — within normal range"),
+        ("4", "Check against known peaks", f"Projected {impact['post_event_rate']:.1%} vs. April weekend baseline {impact['other_rate']:.1%} and June's {june_occupancy:.1%} (the tightest month of the year)", "Still below both — within normal range"),
     ]
     step_html = "".join(
         f'''<div class="cap-step-card"><span class="cap-step-num">{n}</span>
@@ -352,10 +354,10 @@ the more favorable one, leaving more headroom than a weekend date in the same mo
         st.markdown(f'''<div class="cap-list-card">
 <h4>✔ Key Insights</h4>
 <ul>
-<li>Room/venue occupancy has a real seasonal shape — headroom ranges from ~42% in December to ~17% in June — while energy load stays nearly flat ({energy_lo:.1f}–{energy_hi:.1f} kW) in every month of the year. Occupancy, not the power grid, is the binding constraint on convention timing.</li>
+<li>Room/venue occupancy has a real seasonal shape — headroom ranges from {headroom_lo:.1f}% to {headroom_hi:.1f}% across 2025 — while energy load stays nearly flat ({energy_lo:.1f}–{energy_hi:.1f} kW) in every month of the year. Occupancy, not the power grid, is the binding constraint on convention timing.</li>
 <li>April is a comfortable, mid-pack month: more headroom than peak summer, less than the winter off-season. Energy confirms it — April averages {apr_by_year} — with no load spike.</li>
 <li>Weekdays (Tue–Thu especially) run consistently lighter than weekends, all year, backed by a Fourier-confirmed weekly cycle — not a one-off pattern.</li>
-<li>A 15,000-attendee surge only consumes about 6% of the spare room capacity available on an April Tue–Thu.</li>
+<li>A 15,000-attendee surge uses about {impact["pct_headroom_used"]:.1%} of the spare room capacity available on an April Tue–Thu under this model.</li>
 </ul>
 </div>''', unsafe_allow_html=True)
     with col_limits:

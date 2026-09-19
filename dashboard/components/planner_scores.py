@@ -3,8 +3,8 @@ from pathlib import Path
 import pandas as pd
 
 DATA_DIR = Path(__file__).resolve().parents[1] / "data"
-WEIGHTS = {"Capacity": 0.30, "Fiscal": 0.30, "Air Quality": 0.15,
-           "Weather": 0.15, "Energy": 0.10}
+WEIGHTS = {"Capacity": 0.30, "Fiscal": 0.30, "Air Quality": 0.10,
+           "Weather": 0.10, "Energy": 0.20}
 FACTOR_COLUMNS = {"capacity": "Capacity", "fiscal": "Fiscal",
                   "air_quality": "Air Quality", "weather": "Weather", "energy": "Energy"}
 FILES = {"Monthly": "monthly_scores_2025.csv", "Weekly": "weekly_scores_2025.csv",

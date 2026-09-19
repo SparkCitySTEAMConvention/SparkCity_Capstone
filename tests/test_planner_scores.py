@@ -23,8 +23,8 @@ class PlannerScoresTests(unittest.TestCase):
                 expected = pd.date_range(start, periods=count, freq=frequency)
                 self.assertEqual(frame[column].tolist(), expected.tolist())
                 recalculated = (frame.capacity * .30 + frame.fiscal * .30
-                                + frame.air_quality * .15 + frame.weather * .15
-                                + frame.energy * .10)
+                                + frame.air_quality * .10 + frame.weather * .10
+                                + frame.energy * .20)
                 self.assertTrue((recalculated - frame.suitability).abs().le(.011).all())
 
     def test_zero_adjustment_preserves_exported_totals(self):
@@ -44,16 +44,13 @@ class PlannerScoresTests(unittest.TestCase):
         app = AppTest.from_string(script).run(timeout=30)
         self.assertEqual(len(app.exception), 0)
         self.assertEqual([tab.label for tab in app.tabs], ["Monthly", "Weekly", "Daily", "Scoring method"])
-        self.assertIn("65.08", [metric.value for metric in app.metric])
-        self.assertIn("59.80", [metric.value for metric in app.metric])
-        app.select_slider(key="explorer_adjustment").set_value(10).run()
-        self.assertEqual(len(app.exception), 0)
+        self.assertIn("67.15", [metric.value for metric in app.metric])
+        self.assertIn("61.73", [metric.value for metric in app.metric])
+        self.assertEqual(len(app.select_slider), 0)
         app.selectbox(key="explorer_month").select("February").run()
         self.assertEqual(len(app.exception), 0)
-        app.select_slider(key="explorer_adjustment").set_value(0).run()
-        self.assertEqual(len(app.exception), 0)
-        adjusted = next(metric for metric in app.metric if metric.label == "Adjusted score")
-        self.assertEqual(adjusted.value, "25.24")
+        suitability = next(metric for metric in app.metric if metric.label == "Suitability")
+        self.assertEqual(suitability.value, "23.96")
 
 
 if __name__ == "__main__":

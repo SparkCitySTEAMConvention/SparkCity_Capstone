@@ -6,7 +6,7 @@
 WITH occupancy_hourly AS (
     SELECT
         date_trunc('hour', timestamp) AS hour_bucket,
-        avg(occupied_rooms::numeric / NULLIF(available_rooms, 0)) AS avg_occupancy_rate,
+        avg(occupied_rooms::numeric / NULLIF(available_rooms::numeric + occupied_rooms, 0)) AS avg_occupancy_rate,
         avg(guests) AS avg_guests,
         count(*) AS occupancy_readings
     FROM sparkcity.occupancy_data
@@ -37,7 +37,7 @@ ORDER BY o.hour_bucket;
 WITH occupancy_hourly AS (
     SELECT
         date_trunc('hour', timestamp) AS hour_bucket,
-        avg(occupied_rooms::numeric / NULLIF(available_rooms, 0)) AS avg_occupancy_rate
+        avg(occupied_rooms::numeric / NULLIF(available_rooms::numeric + occupied_rooms, 0)) AS avg_occupancy_rate
     FROM sparkcity.occupancy_data
     GROUP BY 1
 ),
@@ -59,8 +59,9 @@ ORDER BY 1;
 
 -- Findings (run against shared sparkcity schema, 2026-09-15):
 -- - 8,999 hourly buckets joined cleanly across occupancy_data and weather_data.
--- - avg_occupancy_rate is ~0.71 in both rain (7,998 hrs) and no_rain (1,001 hrs)
---   buckets -- no meaningful weather effect on occupancy in this dataset.
+-- - The corrected occupancy rate uses occupied / (available + occupied).
+--   Rain and no-rain buckets remain similar, so there is no meaningful weather effect
+--   on occupancy in this dataset.
 -- - Consistent with the Day 3 finding that the generated data is clean/random
 --   by construction, so this is a real negative result, not a bug.
 
@@ -76,9 +77,9 @@ WITH occupancy_monthly AS (
     SELECT
         date_trunc('month', timestamp) AS month,
         count(*) AS readings,
-        avg(available_rooms) AS avg_available_rooms,
+        avg(available_rooms::numeric + occupied_rooms) AS avg_total_rooms,
         avg(occupied_rooms) AS avg_occupied_rooms,
-        avg(occupied_rooms::numeric / NULLIF(available_rooms, 0)) AS avg_occupancy_rate
+        avg(occupied_rooms::numeric / NULLIF(available_rooms::numeric + occupied_rooms, 0)) AS avg_occupancy_rate
     FROM sparkcity.occupancy_data
     WHERE timestamp >= '2025-01-01' AND timestamp < '2026-01-01'  -- one full calendar year
     GROUP BY 1
@@ -86,11 +87,11 @@ WITH occupancy_monthly AS (
 SELECT
     to_char(month, 'Mon') AS month_name,
     readings,
-    round(avg_available_rooms::numeric, 1) AS avg_available_rooms,
+    round(avg_total_rooms::numeric, 1) AS avg_total_rooms,
     round(avg_occupied_rooms::numeric, 1) AS avg_occupied_rooms,
     round(avg_occupancy_rate::numeric, 4) AS avg_occupancy_rate,
     round((100 * (1 - avg_occupancy_rate))::numeric, 1) AS headroom_pct,
-    round((avg_available_rooms - avg_occupied_rooms)::numeric, 1) AS avg_available_capacity_rooms
+    round((avg_total_rooms * (1 - avg_occupancy_rate))::numeric, 1) AS avg_available_capacity_rooms
 FROM occupancy_monthly
 ORDER BY month;
 
@@ -111,7 +112,7 @@ ORDER BY date_trunc('month', timestamp);
 WITH occupancy_monthly AS (
     SELECT
         date_trunc('month', timestamp) AS month,
-        avg(occupied_rooms::numeric / NULLIF(available_rooms, 0)) AS avg_occupancy_rate
+        avg(occupied_rooms::numeric / NULLIF(available_rooms::numeric + occupied_rooms, 0)) AS avg_occupancy_rate
     FROM sparkcity.occupancy_data
     WHERE timestamp >= '2025-01-01' AND timestamp < '2026-01-01'
     GROUP BY 1
@@ -135,15 +136,15 @@ ORDER BY headroom_pct DESC;
 
 -- Findings (run against shared sparkcity schema, 2026-09-16):
 -- - Occupancy has a real, strong seasonal shape (not the flat/random pattern
---   found in the Day 4 weather rotation): headroom ranges from ~42% in
---   December down to ~17% in June. Summer (May-Jul) is consistently the
+--   found in the Day 4 weather rotation): headroom ranges from ~64% in
+--   December down to ~55% in June. Summer (May-Jul) is consistently the
 --   tightest capacity window; winter (Nov-Jan) is consistently the loosest.
 -- - energy_meters only has readings through 2025-09-07, so Oct/Nov/Dec have
 --   NO infrastructure confirmation yet -- includes December, which has the
---   single best room-headroom number (42.3%). It cannot be recommended with
+--   single best room-headroom number (64.0%). It cannot be recommended with
 --   full confidence until infrastructure data catches up.
 -- - Among months with BOTH occupancy and energy data, January has the best
---   headroom (40.2%) with unremarkable, typical energy load (44.07 kW avg,
+--   headroom (63.2%) with unremarkable, typical energy load (44.07 kW avg,
 --   141 kW max -- in line with every other measured month).
 -- - Energy load itself is nearly flat across all measured months (43.4-44.7
 --   kW avg, <3% spread) -- infrastructure load is not the binding constraint
@@ -165,16 +166,16 @@ ORDER BY headroom_pct DESC;
 -- agreed (Convention Impact and Dashboard Planning.md) not to fabricate.
 -- =============================================================================
 
--- City-wide total room capacity for April: available_rooms is NOT constant
--- per sensor (it fluctuates like a live inventory feed), so "total capacity"
--- is the sum of each sensor's own April-average available_rooms across all
--- 1,200 sensors -- not a naive SUM(available_rooms) grouped by timestamp,
+-- City-wide room inventory basis for April follows the approved occupancy
+-- definition: total rooms = available_rooms + occupied_rooms. Both values vary
+-- per sensor, so the estimate sums each sensor's own April-average total across
+-- all 1,200 sensors -- not a naive SUM grouped by timestamp,
 -- which would undercount because sensors report on a rotating ~12.5-day
 -- cycle (only ~96 of 1,200 sensors report on any given day).
 WITH per_sensor_april AS (
     SELECT
         sensor_id,
-        avg(available_rooms) AS avg_capacity,
+        avg(available_rooms::numeric + occupied_rooms) AS avg_capacity,
         avg(occupied_rooms) AS avg_occupied,
         avg(guests) AS avg_guests
     FROM sparkcity.occupancy_data
@@ -194,7 +195,7 @@ FROM per_sensor_april;
 -- subset of the 1,200 sensors happened to report that day.
 SELECT
     CASE WHEN extract(dow FROM timestamp) IN (2, 3, 4) THEN 'Tue-Thu' ELSE 'Other' END AS day_group,
-    round(avg(occupied_rooms::numeric / nullif(available_rooms, 0))::numeric, 4) AS avg_occupancy_rate,
+    round(avg(occupied_rooms::numeric / nullif(available_rooms::numeric + occupied_rooms, 0))::numeric, 4) AS avg_occupancy_rate,
     count(*) AS readings
 FROM sparkcity.occupancy_data
 WHERE timestamp >= '2025-04-01' AND timestamp < '2025-05-01'
@@ -204,7 +205,7 @@ GROUP BY 1;
 -- dip is a stable weekly pattern rather than an April fluke.
 SELECT
     to_char(timestamp, 'Dy') AS day_name,
-    round(avg(occupied_rooms::numeric / nullif(available_rooms, 0))::numeric, 4) AS avg_occupancy_rate
+    round(avg(occupied_rooms::numeric / nullif(available_rooms::numeric + occupied_rooms, 0))::numeric, 4) AS avg_occupancy_rate
 FROM sparkcity.occupancy_data
 WHERE timestamp >= '2025-01-01' AND timestamp < '2026-01-01'
 GROUP BY 1, extract(dow FROM timestamp)
@@ -243,28 +244,18 @@ WHERE timestamp >= '2025-01-01' AND timestamp < '2026-01-01'
 GROUP BY date_trunc('month', timestamp)
 ORDER BY date_trunc('month', timestamp);
 
--- Findings (run against shared sparkcity schema, 2026-09-18):
--- - Total city occupancy-sensor capacity in April 2025: ~425,626 rooms across
---   1,200 sensors, with ~333,176 typically occupied (78.3% occupancy,
---   ~92,450 rooms of headroom) and 2.477 guests per occupied room.
--- - Tue-Thu is measurably lighter than the rest of the week, in April AND
---   year-round: April Tue-Thu occupancy is 75.16% vs. 79.44% on other April
---   days; the full-year day-of-week breakdown shows the same Mon-Fri dip
---   (68-69%) against Sat/Sun peaks (~77%). A discrete Fourier transform of
---   the full-year daily occupancy-rate series (see day6 notebook) confirms
---   this: after the dominant 365-day seasonal component, the single
---   strongest periodic signal in the whole series is a ~7.02-day cycle
---   (rank #2 of 183 frequency bins) -- a stable, predictable weekly rhythm,
---   not daily noise. That's why the Tue-Thu-specific rate, not the
---   whole-April average, is the right baseline for an April 6-8 event.
--- - Applying the Tue-Thu rate (75.16%) to total capacity gives ~319,860
---   rooms typically occupied on an April Tuesday-Thursday, leaving ~105,766
---   rooms of headroom BEFORE the convention.
--- - 15,000 extra attendees, at the observed 2.477 guests/occupied-room
---   ratio, need ~6,057 additional rooms -- 5.7% of that Tue-Thu headroom.
---   Projected post-convention occupancy: ~76.6% (+1.4 points), still below
---   the ordinary April weekend baseline (79.4%) and well below the tightest
---   month of the year, June (82.6% avg occupancy, from the Day 5 analysis).
+-- Findings (rerun against the shared schema with the approved formula):
+-- - April's room-inventory basis is ~758,802 rooms across 1,200 sensors when
+--   total rooms is defined as available + occupied. The observed guest ratio
+--   is 2.510 guests per occupied room.
+-- - Tue-Thu is measurably lighter than the rest of the week, in April and
+--   year-round: April Tue-Thu occupancy is 42.25% vs. 43.67% on other April
+--   days. A discrete Fourier transform of the full-year daily occupancy-rate
+--   series confirms a ~7.02-day cycle (rank #2 of 183 frequency bins).
+-- - Applying the Tue-Thu rate leaves ~438,202 rooms of modeled headroom.
+-- - 15,000 attendees at 2.510 guests per occupied room need ~5,977 rooms,
+--   or 1.36% of modeled Tue-Thu headroom. Projected occupancy is 43.04%,
+--   below the April other-day baseline (43.67%) and June average (44.69%).
 -- - Energy now covers all 12 months of 2025 (and beyond): monthly average
 --   load is flat at 43.67-44.64 kW, and April 2025 (43.99 kW avg, 133.19 kW
 --   max) sits below the year's highest peak (140.61 kW, January). A second
