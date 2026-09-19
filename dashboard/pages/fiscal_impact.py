@@ -1,6 +1,7 @@
 """Historical fiscal profile and date explorer for the Spark City dashboard."""
 import json
 import hashlib
+from calendar import monthrange
 from datetime import date, datetime, timedelta
 from html import escape
 from math import ceil
@@ -63,6 +64,11 @@ def _planner_range_label(start, end):
     if (start.year, start.month) == (end.year, end.month):
         return f"{start.strftime('%B')} {start.day}–{end.day}, {start.year}"
     return f"{start.strftime('%B')} {start.day} – {end.strftime('%B')} {end.day}, {end.year}"
+
+
+def _max_same_month_duration(start, limit=7):
+    """Limit analogue windows to the month used for their fiscal index."""
+    return min(limit, monthrange(start.year, start.month)[1] - start.day + 1)
 
 
 def _latest_complete_run_in(runs_dir):
@@ -292,7 +298,13 @@ def _render_date_explorer(daily_indexed, monthly, occupancy):
                 key="fiscal_explorer_start",
             )
         with col2:
-            duration = st.slider("Event length", 1, 7, 3, format="%d day(s)", key="fiscal_explorer_duration")
+            max_duration = _max_same_month_duration(start)
+            if st.session_state.get("fiscal_explorer_duration", 3) > max_duration:
+                st.session_state["fiscal_explorer_duration"] = max_duration
+            duration = st.slider(
+                "Event length", 1, max_duration, min(3, max_duration),
+                format="%d day(s)", key="fiscal_explorer_duration",
+            )
         with col3:
             scenario = st.selectbox(
                 "Scenario", list(EVENT_SCENARIOS), index=1, key="fiscal_explorer_scenario",
@@ -314,6 +326,11 @@ def _render_date_explorer(daily_indexed, monthly, occupancy):
             key="fiscal_venue_allowance",
             help="Starts at the selected scenario allowance. Replace it with a custom Javits proposal when available.",
         )
+        if max_duration < 7:
+            st.caption(
+                f"Duration is limited to {max_duration} day(s) so the historical analogue and monthly "
+                "fiscal index remain within {start.strftime('%B')}."
+            )
     end = start + timedelta(days=duration - 1)
     weekday_span = start.strftime("%A") if duration == 1 else f"{start.strftime('%A')}–{end.strftime('%A')}"
 
@@ -465,6 +482,8 @@ def render_fiscal_impact():
     manifest, monthly = data["manifest"], data["monthly"]
     run_dir, daily_indexed = data["run_dir"], data["daily"]
     complete = _complete_2025_months(monthly)
+    complete_month_count = len(complete)
+    complete_record_count = int(complete["observations"].sum())
     peak = complete.loc[complete["revenue"].idxmax()]
     revenue_rise = 100 * (peak["revenue"] - complete.iloc[0]["revenue"]) / complete.iloc[0]["revenue"]
     revenue_cooling = 100 * (peak["revenue"] - complete.iloc[-1]["revenue"]) / peak["revenue"]
@@ -476,8 +495,9 @@ def render_fiscal_impact():
         st.markdown('<span class="fiscal-eyebrow">FISCAL IMPACT · HISTORICAL PROFILE</span>', unsafe_allow_html=True)
         st.markdown("<h1>Fiscal activity builds toward summer, then cools through year-end</h1>", unsafe_allow_html=True)
         st.markdown(
-            '<div class="fiscal-hero-summary">A neutral view of <strong>12 complete months</strong> and '
-            '<strong>36,000 fiscal records</strong> from the shared instructor dataset.</div>',
+            f'<div class="fiscal-hero-summary">A neutral view of <strong>{complete_month_count} complete '
+            f'months</strong> and <strong>{complete_record_count:,} fiscal records</strong> from the shared '
+            'instructor dataset.</div>',
             unsafe_allow_html=True,
         )
         st.markdown('<div class="fiscal-chart-title">2025 monthly revenue pattern</div>', unsafe_allow_html=True)

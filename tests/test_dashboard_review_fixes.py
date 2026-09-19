@@ -11,7 +11,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "dashboard"))
 
-from pages.convention_planner import get_planner_engine
+from pages.convention_planner import MONTHLY_INPUT_QUERY, get_planner_engine
 from pages.fiscal_impact import (
     FISCAL_RUNS_DIR,
     _combined_event_impact,
@@ -19,6 +19,7 @@ from pages.fiscal_impact import (
     _explorer_summary,
     _load_run,
     _load_occupancy_snapshot,
+    _max_same_month_duration,
     _monthly_fiscal_index,
     _monthly_occupancy_context,
     _verify_run_artifacts,
@@ -63,6 +64,11 @@ def test_occupancy_context_uses_shared_monthly_snapshot_without_inventory_claim(
     assert "available_rooms_observation" in june
 
 
+def test_planner_query_uses_canonical_occupancy_rate():
+    assert "occupied_rooms::numeric + available_rooms" not in MONTHLY_INPUT_QUERY
+    assert "available_rooms::numeric" in MONTHLY_INPUT_QUERY
+
+
 def test_combined_event_impact_uses_fiscal_index_only_for_variable_spending():
     _load_run.clear()
     monthly = _load_run()["monthly"]
@@ -87,6 +93,12 @@ def test_custom_javits_proposal_replaces_scenario_allowance():
     assert impact["venue_cost"] == 625_000
     assert impact["organizer_cost"] == 625_000 + 15_000 * 3 * 35
     assert impact["organizer_cost_per_attendee"] == pytest.approx(146.6666667)
+
+
+def test_explorer_duration_stays_inside_selected_month():
+    assert _max_same_month_duration(date(2027, 12, 20)) == 7
+    assert _max_same_month_duration(date(2027, 12, 29)) == 3
+    assert _max_same_month_duration(date(2027, 12, 31)) == 1
 
 
 def test_fiscal_dashboard_verifies_signed_artifacts(tmp_path):
