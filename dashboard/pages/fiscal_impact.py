@@ -434,18 +434,18 @@ def _render_date_explorer(daily_indexed, monthly, occupancy):
             "allowances are authored assumptions pending an event-specific Javits proposal."
         )
         st.markdown(
-            "**Sources and scope**\n\n"
-            "- [NYS Comptroller: 2025 NYC hotel ADR — 333.71 USD]"
+            "**🔗 Sources and scope**\n\n"
+            "- 🏨 [NYS Comptroller: 2025 NYC hotel ADR — 333.71 USD]"
             "(https://www.osc.ny.gov/press/releases/2026/07/dinapoli-nyc-hotel-industry-among-nations-largest-strongest)\n"
-            "- [NYC Finance: hotel occupancy tax and 2 USD room fee]"
+            "- 🏛️ [NYC Finance: hotel occupancy tax and 2 USD room fee]"
             "(https://www.nyc.gov/site/finance/business/business-hotel-room-occupancy-tax.page)\n"
-            "- [NYC 311: current 5.875% hotel occupancy tax]"
+            "- 🧾 [NYC 311: current 5.875% hotel occupancy tax]"
             "(https://portal.311.nyc.gov/article/?kanumber=KA-02794)\n"
-            "- [NYS Tax: current NYC combined sales-tax publications]"
+            "- 📊 [NYS Tax: current NYC combined sales-tax publications]"
             "(https://www.tax.ny.gov/pubs_and_bulls/publications/sales/local_rates_current.htm)\n"
-            "- [NYS Tax: 1.50 USD NYC hotel unit fee]"
+            "- 🛏️ [NYS Tax: 1.50 USD NYC hotel unit fee]"
             "(https://www.tax.ny.gov/pubs_and_bulls/tg_bulletins/st/hotel_and_motel_occupancy.htm)\n"
-            "- [Javits: The Overview published package]"
+            "- 🏙️ [Javits: The Overview published package]"
             "(https://javitscenter.com/media/121804/the-overview_holiday-2025_v4.pdf)"
         )
         st.caption(
