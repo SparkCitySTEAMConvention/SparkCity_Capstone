@@ -12,6 +12,7 @@ STYLES_PATH = Path(__file__).resolve().parents[1] / "styles" / "styles.css"
 DESTINATIONS = {
     "Overview": "🏠 Overview",
     "Convention Planner": "📅 Convention Planner",
+    "Planner Exports": "📊 Planner Exports",
     "Mobility & Traffic": "🚗 Mobility & Traffic",
     "Environment": "🍃 Environment",
     "Capacity & Utilization": "🏢 Capacity & Utilization",
