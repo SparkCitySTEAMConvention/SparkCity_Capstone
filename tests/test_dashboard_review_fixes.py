@@ -14,6 +14,7 @@ sys.path.insert(0, str(ROOT / "dashboard"))
 from pages.convention_planner import MONTHLY_INPUT_QUERY, get_planner_engine
 from pages.fiscal_impact import (
     FISCAL_RUNS_DIR,
+    SOURCE_ICON_DIR,
     _combined_event_impact,
     _complete_2025_months,
     _explorer_summary,
@@ -22,6 +23,7 @@ from pages.fiscal_impact import (
     _max_same_month_duration,
     _monthly_fiscal_index,
     _monthly_occupancy_context,
+    _source_list_html,
     _verify_run_artifacts,
 )
 
@@ -36,6 +38,22 @@ def test_fiscal_dashboard_snapshot_is_packaged_and_loadable():
     assert data["manifest"]["status"] == "complete"
     assert not data["monthly"].empty
     assert not data["daily"].empty
+
+
+def test_fiscal_source_marks_are_packaged_and_embedded():
+    """Source identities must render without depending on external favicon requests."""
+    expected = {
+        "javits.png",
+        "nyc_311.png",
+        "nyc_finance.png",
+        "nys_comptroller.png",
+        "nys_tax.png",
+    }
+
+    assert expected == {path.name for path in SOURCE_ICON_DIR.glob("*.png")}
+    source_html = _source_list_html()
+    assert source_html.count("data:image/png;base64,") == 6
+    assert source_html.count("NYS Tax icon") == 2
 
 
 def test_fiscal_explorer_responds_to_season_in_shared_data():
