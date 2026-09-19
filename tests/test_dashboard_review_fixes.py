@@ -53,7 +53,8 @@ def test_fiscal_source_marks_are_packaged_and_embedded():
     assert expected == {path.name for path in SOURCE_ICON_DIR.glob("*.png")}
     source_html = _source_list_html()
     assert source_html.count("data:image/png;base64,") == 6
-    assert source_html.count("NYS Tax icon") == 2
+    assert source_html.count('<img class="fiscal-source-icon"') == 6
+    assert source_html.count('alt=""') == 6
 
 
 def test_fiscal_explorer_responds_to_season_in_shared_data():

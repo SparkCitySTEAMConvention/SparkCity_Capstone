@@ -4,6 +4,7 @@ import hashlib
 import json
 from calendar import monthrange
 from datetime import date, datetime, timedelta
+from functools import lru_cache
 from html import escape
 from math import ceil
 from pathlib import Path
@@ -129,6 +130,7 @@ def _fmt_money(value):
     return f"${value:,.0f}"
 
 
+@lru_cache(maxsize=8)
 def _source_icon_data_uri(filename):
     """Embed a tracked source favicon so it renders consistently for every user."""
     encoded = base64.b64encode((SOURCE_ICON_DIR / filename).read_bytes()).decode("ascii")
@@ -140,54 +142,48 @@ def _source_list_html():
     sources = (
         (
             "nys_comptroller.png",
-            "NYS Comptroller",
             "NYS Comptroller: 2025 NYC hotel ADR — 333.71 USD",
             "https://www.osc.ny.gov/press/releases/2026/07/dinapoli-nyc-hotel-industry-among-nations-largest-strongest",
             "",
         ),
         (
             "nyc_finance.png",
-            "NYC Finance",
             "NYC Finance: hotel occupancy tax and 2 USD room fee",
             "https://www.nyc.gov/site/finance/business/business-hotel-room-occupancy-tax.page",
             " nyc-mark",
         ),
         (
             "nyc_311.png",
-            "NYC 311",
             "NYC 311: current 5.875% hotel occupancy tax",
             "https://portal.311.nyc.gov/article/?kanumber=KA-02794",
             "",
         ),
         (
             "nys_tax.png",
-            "NYS Tax",
             "NYS Tax: current NYC combined sales-tax publications",
             "https://www.tax.ny.gov/pubs_and_bulls/publications/sales/local_rates_current.htm",
             "",
         ),
         (
             "nys_tax.png",
-            "NYS Tax",
             "NYS Tax: 1.50 USD NYC hotel unit fee",
             "https://www.tax.ny.gov/pubs_and_bulls/tg_bulletins/st/hotel_and_motel_occupancy.htm",
             "",
         ),
         (
             "javits.png",
-            "Javits Center",
             "Javits: The Overview published package",
             "https://javitscenter.com/media/121804/the-overview_holiday-2025_v4.pdf",
             "",
         ),
     )
     links = []
-    for filename, alt, label, url, extra_class in sources:
+    for filename, label, url, extra_class in sources:
         icon = _source_icon_data_uri(filename)
         links.append(
             f'<a href="{escape(url)}" target="_blank" rel="noopener noreferrer">'
             f'<span class="fiscal-source-icon-shell{extra_class}">'
-            f'<img class="fiscal-source-icon" src="{icon}" alt="{escape(alt)} icon"></span>'
+            f'<img class="fiscal-source-icon" src="{icon}" alt=""></span>'
             f'<span>{escape(label)}</span></a>'
         )
     return '<div class="fiscal-source-list">' + "".join(links) + "</div>"
