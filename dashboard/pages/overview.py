@@ -10,6 +10,12 @@ from PIL import Image
 
 from components.shared import STYLES_PATH, open_page, read_css
 from components.planner_scores import load_scores
+from components.convention_config import (
+    RECOMMENDED_MONTH,
+    ALTERNATIVE_MONTH,
+    EVENT_MONTH_NUM,
+    EVENT_MONTH_ABBR,
+)
 
 ASSETS_DIR = Path(__file__).resolve().parents[1] / "assets"
 HERO_IMAGE_PATH = ASSETS_DIR / "updated_hero.png"  # hero background swapped from city.png (2026-09-19); city.png itself is untouched
@@ -172,21 +178,13 @@ def render_suitability():
     try:
         monthly = load_scores("Monthly")
 
-        november = monthly.loc[
-            monthly["start_date"].dt.month == 11
+        recommended = monthly.loc[
+            monthly["start_date"].dt.month == EVENT_MONTH_NUM
         ].iloc[0]
 
-        alternative_months = monthly.loc[
-            monthly["start_date"].dt.month != 11
-        ]
-
-        alternative = alternative_months.loc[
-            alternative_months["suitability"].idxmax()
-        ]
-
-        recommended_month = "November"
-        alternative_month = alternative["start_date"].strftime("%B")
-        recommended_score = float(november["suitability"])
+        recommended_month = RECOMMENDED_MONTH
+        alternative_month = ALTERNATIVE_MONTH
+        recommended_score = float(recommended["suitability"])
 
     except (OSError, ValueError, KeyError, IndexError):
         recommended_month = "Unavailable"

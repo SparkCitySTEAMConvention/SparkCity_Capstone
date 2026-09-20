@@ -15,6 +15,15 @@ from sparkcityx.mobility import (
     get_sensor_summary as _get_sensor_summary,
     has_month_data as _has_month_data,
 )
+from components.convention_config import (
+    EVENT_DATE_LABEL,
+    EVENT_ATTENDEES,
+    EVENT_START_DATE,
+    EVENT_END_DATE,
+    EVENT_MONTH_NAME,
+    EVENT_DAYS_LABEL,
+    EVENT_DURATION_DAYS,
+)
 
 
 # Thin cached wrappers around sparkcityx.mobility's query functions (2026-09-18).
@@ -99,29 +108,40 @@ def render_mobility_traffic():
         )
 
         st.markdown(
-            f"""
+    f"""
 <div class="convention-forecast-panel">
 <div class="convention-forecast-eyebrow">CONVENTION MOBILITY FORECAST</div>
-<div class="convention-forecast-title">November 3-5, 2027</div>
-<div class="convention-forecast-subtitle">Scenario forecast for 15,000 anticipated attendees</div>
+
+<div class="convention-forecast-title">{EVENT_DATE_LABEL}</div>
+
+<div class="convention-forecast-subtitle">
+Scenario forecast for {EVENT_ATTENDEES:,} anticipated attendees
+</div>
+
 <div class="convention-forecast-metrics">
+
 <div class="convention-forecast-metric">
 <span class="convention-forecast-value">{estimated_attendees_per_day:,.0f}</span>
 <span class="convention-forecast-label">Estimated Attendees / Day</span>
 </div>
+
 <div class="convention-forecast-metric">
 <span class="convention-forecast-value">+{estimated_added_vehicles_per_day:,.0f}</span>
 <span class="convention-forecast-label">Estimated Added Vehicles / Day</span>
 </div>
+
 <div class="convention-forecast-metric">
 <span class="convention-forecast-value">{convention_peak_display}</span>
 <span class="convention-forecast-label">Historical Peak Travel Period</span>
 </div>
+
 <div class="convention-forecast-metric">
 <span class="convention-forecast-value">{convention_outlook['high_congestion_percent']:.1f}%</span>
 <span class="convention-forecast-label">Historical High Congestion</span>
 </div>
+
 </div>
+
 <div class="convention-forecast-takeaway">
 <strong>Forecast:</strong> Convention travel is expected to add approximately
 {estimated_added_vehicles_per_day:,.0f} vehicle trips per day to normal city traffic,
@@ -129,16 +149,19 @@ with the greatest mobility risk around the historical {convention_peak_display} 
 Staggered arrivals/departures, shuttle service, rideshare coordination, and transit
 options can reduce pressure during peak periods.
 </div>
+
 <div class="convention-forecast-note">
-<strong>Scenario assumptions:</strong> 15,000 total attendees distributed evenly across
-three days and 2 attendees per convention-generated vehicle. Historical November Wednesday–Friday 
-sensor patterns provide the traffic baseline. This is a planning
-scenario, not a measured 2027 traffic observation.
+<strong>Scenario assumptions:</strong> {EVENT_ATTENDEES:,} total attendees distributed evenly across
+{EVENT_DURATION_DAYS} days and 2 attendees per convention-generated vehicle. Historical {EVENT_MONTH_NAME}
+{EVENT_DAYS_LABEL} sensor patterns provide the traffic baseline. This is a planning
+scenario, not a measured {EVENT_START_DATE.year} traffic observation.
 </div>
+
 </div>
 """,
-            unsafe_allow_html=True,
-        )
+    unsafe_allow_html=True,
+)  
+        
 
     st.markdown(
         '<div class="mobility-analysis-heading">Historical Traffic Analysis</div>',
