@@ -89,7 +89,7 @@ def render_period_results(frame, period):
             display[column] = pd.to_datetime(
                 display[column], errors="coerce"
             ).dt.strftime("%Y-%m-%d")
-    st.dataframe(display, hide_index=True, use_container_width=True)
+    st.dataframe(display, hide_index=True, width="stretch")
     st.download_button(
         f"Download {period.lower()} scores", display.to_csv(index=False),
         file_name=f"{period.lower()}_scores_2025.csv", mime="text/csv",
@@ -148,7 +148,7 @@ def render_convention_planner():
                 '<article><span>Calendar check</span><strong>Clear of major November holidays</strong>'
                 '<p>The window follows Election Day on November 2 and precedes Veterans Day and '
                 'Thanksgiving. Confirm election-adjacent staffing and November 2 travel.</p></article>'
-                '<article><span>Fallback window</span><strong>October 19–21, 2027</strong>'
+                '<article><span>Alternative Window</span><strong>October 19–21, 2027</strong>'
                 f'<p>Use October if the Election Day check fails. Its best observed week scores '
                 f'{best_october_week["suitability"]:.2f}, with lodging availability as the main constraint.</p></article>'
             '</div>'

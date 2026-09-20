@@ -11,6 +11,8 @@ from concurrent.futures import ThreadPoolExecutor
 from statistics import mean
 from urllib.parse import urlencode
 from urllib.request import urlopen
+from urllib.error import HTTPError
+
 
 # Roughly 7 km spacing; the source reanalysis has approximately 9 km resolution.
 MAP_POINTS = tuple(
@@ -22,7 +24,7 @@ MAP_POINTS = tuple(
     )
     for name, longitude in zip(row, (-74.03, -73.97, -73.91), strict=True)
 )
-HISTORY_YEARS = tuple(range(2021, 2027))
+HISTORY_YEARS = tuple(range(2021, 2026))
 EVENT_DAYS = (3, 4, 5)
 
 
@@ -35,16 +37,21 @@ def _archive_year(year: int) -> list[dict]:
             "start_date": f"{year}-11-03",
             "end_date": f"{year}-11-05",
             "daily": "temperature_2m_mean,precipitation_sum",
-            "timezone": "America/New_York",
+            "timezone": ",".join("America/New_York" for _ in MAP_POINTS),  
             "temperature_unit": "fahrenheit",
             "precipitation_unit": "mm",
         }
     )
-    with urlopen(
-        f"https://archive-api.open-meteo.com/v1/archive?{params}",
-        timeout=15,
-    ) as response:
-        results = json.load(response)
+    url = f"https://archive-api.open-meteo.com/v1/archive?{params}"
+
+    try:
+        with urlopen(url, timeout=15) as response:
+            results = json.load(response)
+    except HTTPError as exc:
+        error_body = exc.read().decode("utf-8")
+        raise RuntimeError(
+            f"Open-Meteo request failed for {year}: {error_body}"
+        ) from exc
 
     if not isinstance(results, list) or len(results) != len(MAP_POINTS):
         raise ValueError(f"Unexpected archive response for {year}")

@@ -1,4 +1,4 @@
-"""Current lunar details for the SparkCity Center location."""
+"""Current lunar details for the New York City Digital City Center location."""
 
 from __future__ import annotations
 

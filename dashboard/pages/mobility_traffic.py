@@ -65,8 +65,7 @@ def render_mobility_traffic():
 
     st.markdown(
         '<p class="mobility-page-description">Explore traffic volume, average speeds, congestion patterns, '
-        "road conditions, and transportation considerations for "
-        "New York Digital City convention planning.</p>",
+        "road conditions, and transportation considerations for New York Digital City convention planning.</p>",
         unsafe_allow_html=True,
     )
 
@@ -368,7 +367,7 @@ scenario, not a measured 2027 traffic observation.
         fourier_left, fourier_right = st.columns([1.35, 1])
 
         with fourier_left:
-            st.altair_chart(fourier_chart, use_container_width=True)
+            st.altair_chart(fourier_chart, width="stretch")
             st.caption(
                 "Higher values indicate stronger recurring patterns "
                 "in historical traffic data."
@@ -487,7 +486,7 @@ It is not a percentage of vehicles or a congestion probability.
         congestion_chart_col, congestion_text_col = st.columns([1.1, 1])
 
         with congestion_chart_col:
-            st.altair_chart(congestion_chart, use_container_width=True)
+            st.altair_chart(congestion_chart, width="stretch")
 
         high_row = congestion_df[
             congestion_df["congestion_level"] == "high"
@@ -623,7 +622,7 @@ coordination.
 
             st.pydeck_chart(
                 deck,
-                use_container_width=True,
+                width="stretch",
             )
 
             st.caption(

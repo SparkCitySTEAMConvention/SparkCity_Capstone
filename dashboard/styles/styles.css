@@ -97,8 +97,11 @@ html {scrollbar-gutter:stable;}
 
 /* SparkCity page heading system, shared by any non-hero page title (2026-09-18). */
 .mobility-page-title {color:#F3F6F9;font-size:38px;font-weight:750;line-height:1.15;margin:4px 0 6px;}
-.mobility-page-description {color:#B8C4CF;font-size:17px;line-height:1.6;max-width:820px;margin:0 0 20px;}
-
+.mobility-page-description {
+    max-width: none;
+    width: 100%;
+    white-space: nowrap;
+}
 .mobility-kpi-card {
     display: flex;
     flex-direction: column;
