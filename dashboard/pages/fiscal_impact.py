@@ -12,7 +12,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from components.shared import STYLES_PATH, load_css, read_css
+from components.shared import STYLES_PATH, read_css
 from sparkcityx.fiscal_analysis import calendar_analogues
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -21,7 +21,6 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 # developers and deployments.
 FISCAL_RUNS_DIR = PROJECT_ROOT / "dashboard" / "data" / "fiscal_analysis"
 OCCUPANCY_SNAPSHOT = PROJECT_ROOT / "dashboard" / "data" / "convention_monthly_inputs_2025.csv"
-FISCAL_HERO_IMAGE = PROJECT_ROOT / "dashboard" / "assets" / "domains" / "fiscal_impact.png"
 SOURCE_ICON_DIR = PROJECT_ROOT / "dashboard" / "assets" / "source_icons"
 DEFAULT_EVENT_START = date(2027, 11, 3)
 NYC_2025_HOTEL_ADR = 333.71
@@ -505,7 +504,6 @@ def _render_date_explorer(daily_indexed, monthly, occupancy):
 
 
 def render_fiscal_impact():
-    load_css(section="shared")
     st.markdown(f"<style>{read_css(STYLES_PATH, section='fiscal_impact')}</style>", unsafe_allow_html=True)
 
     try:
@@ -540,8 +538,7 @@ def render_fiscal_impact():
 
     # --- Hero ---
     with st.container(key="fiscal_hero"):
-        if FISCAL_HERO_IMAGE.exists():
-            st.image(str(FISCAL_HERO_IMAGE), width="stretch")
+        # Large hero banner image removed (2026-09-19): redundant with the shared image-backed navigation header. Text/chart below untouched.
         st.markdown('<span class="fiscal-eyebrow">FISCAL IMPACT · HISTORICAL PROFILE</span>', unsafe_allow_html=True)
         st.markdown("<h1>Fiscal activity builds toward summer, then cools through year-end</h1>", unsafe_allow_html=True)
         st.markdown(

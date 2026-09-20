@@ -4,54 +4,129 @@
    one page (e.g. overview) is never injected on another page (e.g. Traffic). */
 
 /* >>> shared */
-.stApp {background:#f4f7fb;color:#172b46;}
-[data-testid="stMainBlockContainer"] {max-width:none;padding:2rem 2.5rem;}
-.st-key-sparkcity_navigation {background:#101f39;border:1px solid #243e60;border-radius:14px;padding:16px 20px;margin-bottom:20px;}
-.sparkcity-brand {display:flex;justify-content:space-between;align-items:center;gap:20px;color:white;margin-bottom:10px;}
-.sparkcity-brand strong {font-size:25px;letter-spacing:.3px;}
+/* Reserve stable scrollbar-gutter width (2026-09-18) so the centered app
+   shell doesn't shift left/right when navigating between a page short
+   enough to not need a vertical scrollbar and one tall enough to need one. */
+html {scrollbar-gutter:stable;}
+/* Canvas experiment (2026-09-19): page background slightly darker so white/faint cards separate more. History: original #f4f7fb -> first experiment #EBEFF3 (not #EEF1F4: nearly identical to Overview's #eef4f9 plan container) -> #DDE3E9 -> #CDD5DE -> current #BEC8D2. Revert = set this one value back to #CDD5DE, #DDE3E9, #EBEFF3 or #f4f7fb. */
+.stApp {background:#101820;color:#F3F6F9;}
+/* Canonical SparkCity page width/gutters (2026-09-18): every page shares this
+   same capped, centered content column so left/right edges line up across
+   pages, not just on Overview. */
+[data-testid="stMainBlockContainer"] {max-width:1800px;margin:auto;padding:2rem clamp(20px,3vw,48px);}
+/* Canonical SparkCity navbar shell (2026-09-18): one shared shape/typography
+   for every page — Overview no longer carries any navbar-geometry override
+   (removed once its hero stopped needing to flush against a zero-margin
+   navbar bottom edge); every destination renders this exact same rule.
+   min-height (2026-09-18) reserves the navbar's own known settled height
+   — padding plus one line of brand text at this breakpoint, computed from
+   the values below, not the page's actual content — so the box doesn't
+   start short and grow once the radio widget finishes acquiring its final
+   styled size on a fresh page load (the same reserved-geometry approach
+   already proven for .st-key-sparkcity_page_content above). */
+.st-key-sparkcity_navigation {background:#101f39;border:1px solid #243e60;border-radius:14px;padding:20px 24px;margin-bottom:20px;position:relative;min-height:150px;}
+.sparkcity-brand {display:flex;justify-content:space-between;align-items:center;gap:20px;color:white;margin-bottom:16px;}
+.sparkcity-brand strong {font-size:32px;letter-spacing:.3px;}
 .sparkcity-brand small {color:#bed0e6;text-align:right;line-height:1.5;}
 .st-key-sparkcity_navigation [role="radiogroup"] {gap:3px;flex-wrap:wrap;}
-/* Nav button padding enlarged 8px/5px->10px/7px (2026-09-17) to fit larger label text; shared nav, visible on every page. */
-.st-key-sparkcity_navigation [role="radiogroup"] label {background:#172c48;border:1px solid #2b4361;border-radius:8px;padding:10px 7px;margin:0;cursor:pointer;}
+/* Nav button padding enlarged 8px/5px->10px/7px->11px/7px (2026-09-17) to fit larger label text; shared nav, visible on every page. */
+.st-key-sparkcity_navigation [role="radiogroup"] label {background:#172c48;border:1px solid #2b4361;border-radius:8px;padding:11px 7px;margin:0;cursor:pointer;}
 .st-key-sparkcity_navigation [role="radiogroup"] label > div > div:first-child {display:none;}
 /* Nav label font-size enlarged 12.5px->14px->16px (2026-09-17), per request; shared nav, visible on every page. */
 .st-key-sparkcity_navigation [role="radiogroup"] label p {color:#e5eefb;font-size:16px;white-space:nowrap;}
 .st-key-sparkcity_navigation [role="radiogroup"] label:has(input:checked) {background:#246db4;border-color:#65a9ed;}
 .st-key-sparkcity_navigation [role="radiogroup"] label:focus-within {outline:2px solid #b9ddff;outline-offset:2px;}
 @media(max-width:800px) {.sparkcity-brand small {display:none;}}
+@media(min-width:900px) {
+/* Overview desktop navbar min-height 76px->140px + justify-content:center (2026-09-19): the visible header is now 140px on every destination (the five city headers are 140px) so it no longer changes height on navigation; contents just stay vertically centered, nothing enlarged. */
+.st-key-sparkcity_navigation {padding:14px 24px;min-height:140px;justify-content:center;}
+.sparkcity-brand {margin-bottom:0;}
+.sparkcity-brand strong {font-size:20px;}
+.sparkcity-brand small {font-size:15px;}
+.st-key-sparkcity_navigation [data-testid="stElementContainer"]:has([role="radiogroup"]) {position:static;}
+.st-key-sparkcity_navigation [role="radiogroup"] {position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);margin:0;width:max-content;flex-wrap:nowrap;}
+/* Constant nav-region footprint (2026-09-19, experiment C5): Overview navbar is ~87.6px tall,
+   the non-Overview city header is 140px. The wrapper reserves 160px (the 140px header + the
+   navbar's existing 20px margin-bottom, which sits inside the wrapper) so page content starts
+   at the same Y on every destination. The flex rule stops the compact Overview navbar from
+   stretching to fill the wrapper. The sibling margin cancels the extra 16px flex gap from the
+   style-only element app.py adds after the first run (its 70vh rule is untouched). Measured
+   target: content Y ~224px on Overview and on the five pages. Purpose: remove the Home <-> non-Home
+   vertical navigation jump. */
+[data-testid="stLayoutWrapper"]:has(> .st-key-sparkcity_navigation) {
+    min-height: 160px;
+}
+.st-key-sparkcity_navigation {
+    flex: 0 0 auto;
+}
+[data-testid="stLayoutWrapper"]:has(> .st-key-sparkcity_navigation)
+    + [data-testid="stElementContainer"] {
+    margin-top: -16px;
+}
+}
+/* Streamlit keeps elements from the previous destination mounted and marks
+   them data-stale="true" (a real DOM attribute, confirmed in the installed
+   1.64 frontend bundle) until the current script run finishes successfully
+   and its own clearStaleNodes() cleanup removes them; in the meantime it
+   fades them via its own delayed opacity transition, which is what showed
+   up as a lingering ghost of the previous destination's content (e.g. the
+   Fiscal hero image) during navigation. This overrides only that fade to an
+   immediate opacity:0, scoped to our page-content region, without touching
+   Streamlit's own pruning timing -- clearStaleNodes() still runs exactly
+   when it always did, this only changes how the stale interval looks
+   (2026-09-19, stale-element-opacity investigation).  */
+.st-key-sparkcity_page_content [data-stale="true"] {opacity:0 !important;transition:none !important;}
+/* opacity:0 above hides stale leaves but doesn't remove them from layout --
+   the old destination's block wrapper (no data-stale attribute of its own,
+   only its stElementContainer leaves carry one) stays in normal flow at its
+   full previous height until Streamlit's script-finish pruning removes it,
+   leaving a blank region the size of the old page below the navbar while
+   the new destination renders. This collapses only a destination wrapper
+   whose leaves are ALL stale and NONE current -- the :not(:has(...=false))
+   half is what keeps this from ever matching the current destination just
+   because it happens to have some of its own stale leftovers mixed with
+   fresh content (2026-09-19, stale-wrapper-height investigation). */
+.st-key-sparkcity_page_content [class*="st-key-sparkcity_destination_"]:has([data-stale="true"]):not(:has([data-stale="false"])) {height:0 !important;min-height:0 !important;overflow:hidden !important;margin:0 !important;padding:0 !important;}
 
+/* >>> mobility */
 /*==========================================================================================
   Leigh D - Mobility and Traffic dashboard styles
+  (radius/shadow constants harmonized with the shared SparkCity card system;
+  no color, copy, or data-bearing rule below was changed)
 ==========================================================================================*/
+
+/* SparkCity page heading system, shared by any non-hero page title (2026-09-18). */
+.mobility-page-title {color:#F3F6F9;font-size:38px;font-weight:750;line-height:1.15;margin:4px 0 6px;}
+.mobility-page-description {color:#B8C4CF;font-size:17px;line-height:1.6;max-width:820px;margin:0 0 20px;}
 
 .mobility-kpi-card {
     display: flex;
     flex-direction: column;
     justify-content: center;
-    background-color: #ffffff;
-    border: 1px solid #d8e2ee;
-    border-radius: 14px;
+    background-color: #182430;
+    border: 1px solid #34495A;
+    border-radius: 20px;
     padding: 18px 22px;
     min-height: 125px;
-    box-shadow: 0 3px 10px rgba(15, 42, 70, 0.06);
+    box-shadow: 0 4px 14px rgba(16, 41, 68, 0.10);
 }
 
 .mobility-kpi-label {
-    color: #53677f !important;
+    color: #B8C4CF !important;
     font-size: 14px;
     font-weight: 600;
     margin-bottom: 6px;
 }
 
 .mobility-kpi-value {
-    color: #142b4a !important;
+    color: #F3F6F9 !important;
     font-size: 30px;
     font-weight: 700;
     line-height: 1.15;
 }
 
 .mobility-kpi-detail {
-    color: #6b7f95 !important;
+    color: #8FA1B2 !important;
     font-size: 13px;
     margin-top: 5px;
 }
@@ -59,32 +134,32 @@
 /* Mobility insight and recommendation cards */
 .mobility-insight-card,
 .mobility-recommendation-card {
-    border-radius: 14px;
+    border-radius: 20px;
     padding: 14px 18px;
     min-height: 0;
-    border: 1px solid #d8e2ee;
-    box-shadow: 0 3px 10px rgba(15, 42, 70, 0.06);
+    border: 1px solid #34495A;
+    box-shadow: 0 4px 14px rgba(16, 41, 68, 0.10);
 }
 
 .mobility-insight-card {
-    background-color: #eaf3fb;
+    background-color: #223342;
     border-left: 5px solid #4da3d9;
 }
 
 .mobility-recommendation-card {
-    background-color: #fff4e5;
+    background-color: #383429;
     border-left: 5px solid #f2a23a;
 }
 
 .mobility-card-title {
-    color: #142b4a !important;
+    color: #F3F6F9 !important;
     font-size: 20px;
     font-weight: 700;
     margin-bottom: 8px;
 }
 
 .mobility-card-item {
-    color: #334e68 !important;
+    color: #B8C4CF !important;
     font-size: 15px;
     line-height: 1.6;
     margin-bottom: 9px;
@@ -99,17 +174,17 @@
 
 /* Convention mobility forecast */
 .convention-forecast-panel {
-    background: linear-gradient(135deg, #eaf6ef 0%, #f7fbf8 100%);
-    border: 1px solid #c8dfd0;
+    background: linear-gradient(135deg, #1F383A 0%, #213738 100%);
+    border: 1px solid #34495A;
     border-left: 6px solid #3f9d68;
-    border-radius: 16px;
+    border-radius: 20px;
     padding: 22px 26px;
-    margin: 8px 0 26px;
-    box-shadow: 0 4px 14px rgba(15, 42, 70, 0.07);
+    margin: 18px 0 26px;
+    box-shadow: 0 4px 14px rgba(16, 41, 68, 0.10);
 }
 
 .convention-forecast-eyebrow {
-    color: #3f7d59 !important;
+    color: #A0CFB4 !important;
     font-size: 15px;
     font-weight: 800;
     letter-spacing: 1.2px;
@@ -117,14 +192,14 @@
 }
 
 .convention-forecast-title {
-    color: #142b4a !important;
+    color: #F3F6F9 !important;
     font-size: 32px;
     font-weight: 750;
     line-height: 1.2;
 }
 
 .convention-forecast-subtitle {
-    color: #53677f !important;
+    color: #B8C4CF !important;
     font-size: 17px;
     margin-top: 3px;
 }
@@ -135,36 +210,36 @@
     gap: 0;
     margin: 20px 0;
     padding: 16px 0;
-    border-top: 1px solid #cfe2d5;
-    border-bottom: 1px solid #cfe2d5;
+    border-top: 1px solid #34495A;
+    border-bottom: 1px solid #34495A;
 }
 
 .convention-forecast-metric {
     display: flex;
     flex-direction: column;
     padding: 0 18px;
-    border-right: 1px solid #cfe2d5;
+    border-right: 1px solid #34495A;
 }
 
 .convention-forecast-metric:first-child { padding-left: 0; }
 .convention-forecast-metric:last-child { border-right: none; }
 
 .convention-forecast-value {
-    color: #142b4a !important;
+    color: #F3F6F9 !important;
     font-size: 34px;
     font-weight: 750;
     line-height: 1.15;
 }
 
 .convention-forecast-label {
-    color: #5d7184 !important;
+    color: #B8C4CF !important;
     font-size: 15px;
     margin-top: 5px;
 }
 
 .convention-forecast-takeaway {
-    color: #294e3b !important;
-    background: rgba(255, 255, 255, 0.62);
+    color: #A1CEB7 !important;
+    background: rgba(24,36,48,0.62);
     border-radius: 9px;
     padding: 12px 14px;
     font-size: 17px;
@@ -172,14 +247,14 @@
 }
 
 .convention-forecast-note {
-    color: #6b7f75 !important;
+    color: #B8C4CF !important;
     font-size: 14px;
     line-height: 1.5;
     margin-top: 10px;
 }
 
 .mobility-analysis-heading {
-    color: #142b4a !important;
+    color: #F3F6F9 !important;
     font-size: 22px;
     font-weight: 700;
     margin: 8px 0 2px;
@@ -200,11 +275,11 @@
 /* Fourier analysis and congestion planning cards */
 .mobility-fourier-card,
 .mobility-congestion-card {
-    background: #ffffff;
-    border: 1px solid #d8e2ee;
-    border-radius: 14px;
+    background: #182430;
+    border: 1px solid #34495A;
+    border-radius: 20px;
     padding: 20px 22px;
-    box-shadow: 0 3px 10px rgba(15, 42, 70, 0.06);
+    box-shadow: 0 4px 14px rgba(16, 41, 68, 0.10);
     min-height: 220px;
 }
 
@@ -218,21 +293,20 @@
 
 .mobility-fourier-card p,
 .mobility-congestion-card p {
-    color: #334e68 !important;
+    color: #B8C4CF !important;
     font-size: 16px;
     line-height: 1.55;
     margin: 8px 0;
 }
 
 .mobility-fourier-note {
-    color: #6b7f95 !important;
+    color: #8FA1B2 !important;
     font-size: 13px !important;
     margin-top: 14px !important;
 }
 
 /* >>> overview */
 html {scroll-behavior:smooth;}
-[data-testid="stMainBlockContainer"] {max-width:1800px;margin:auto;padding-left:clamp(20px,3vw,48px);padding-right:clamp(20px,3vw,48px);}
 /* Hero compact pass (2026-09-17): Streamlit's default inter-widget gap between
    WELCOME TO / SparkCity / subtitle / description / buttons was the biggest
    contributor to the hero's excess height (same fix already applied to the
@@ -262,23 +336,23 @@ html {scroll-behavior:smooth;}
 .st-key-overview_domains [data-testid="stHorizontalBlock"] {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px;align-items:start;}
 .st-key-overview_domains [data-testid="stColumn"] {width:100%!important;min-width:0!important;}
 .st-key-overview_domains [data-testid="stVerticalBlock"] {display:flex;flex-direction:column;gap:0;}
-.explore-card {display:flex;flex-direction:column;background:white;}
-.explore-card-image {height:110px;flex:0 0 auto;background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 18%,white),color-mix(in srgb,var(--accent) 45%,white));background-size:cover;background-position:center;display:flex;align-items:center;justify-content:center;font-size:34px;color:color-mix(in srgb,var(--accent) 65%,white);}
+.explore-card {display:flex;flex-direction:column;background:#182430;}
+.explore-card-image {height:110px;flex:0 0 auto;background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 18%,#182430),color-mix(in srgb,var(--accent) 45%,#182430));background-size:cover;background-position:center;display:flex;align-items:center;justify-content:center;font-size:34px;color:color-mix(in srgb,var(--accent) 65%,white);}
 /* Icon glyph enlarged 16px->22px (2026-09-17); circle stays 40x40, flex-centering keeps it balanced. */
-.explore-card-icon {flex:0 0 auto;align-self:flex-start;display:flex;align-items:center;justify-content:center;width:40px;height:40px;margin:-20px 0 0 16px;background:white;border:2px solid white;box-shadow:0 3px 8px #10294426;border-radius:50%;font-size:22px;color:var(--accent);}
+.explore-card-icon {flex:0 0 auto;align-self:flex-start;display:flex;align-items:center;justify-content:center;width:40px;height:40px;margin:-20px 0 0 16px;background:#182430;border:2px solid #34495A;box-shadow:0 3px 8px #10294426;border-radius:50%;font-size:22px;color:var(--accent);}
 .explore-card-body {display:flex;flex-direction:column;padding:6px 16px 10px;min-height:106px;}
 /* Card title/description font-size enlarged (2026-09-17), per request: h3 16px->19px, p 13px->15px. */
-.explore-card-body h3 {color:#223b57;font-size:19px;line-height:1.25;margin:8px 0 3px;padding:0;}
-.explore-card-body p {color:#62758a;font-size:15px;line-height:1.4;margin:0;}
+.explore-card-body h3 {color:#F3F6F9;font-size:19px;line-height:1.25;margin:8px 0 3px;padding:0;}
+.explore-card-body p {color:#B8C4CF;font-size:15px;line-height:1.4;margin:0;}
 .explore-card-kpi {display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-top:8px;padding-top:8px;}
-.explore-card-kpi .kpi-value {font-size:19px;font-weight:700;color:#223b57;}
-.explore-card-kpi .kpi-label {font-size:11px;color:#8a99ab;display:block;}
-.explore-card-status {font-size:10.5px;font-weight:700;padding:3px 8px;border-radius:999px;background:color-mix(in srgb,var(--accent) 14%,white);color:var(--accent);text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;}
+.explore-card-kpi .kpi-value {font-size:19px;font-weight:700;color:#F3F6F9;}
+.explore-card-kpi .kpi-label {font-size:11px;color:#8FA1B2;display:block;}
+.explore-card-status {font-size:10.5px;font-weight:700;padding:3px 8px;border-radius:999px;background:color-mix(in srgb,var(--accent) 14%,#182430);color:var(--accent);text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;}
 /* "Explore ->" link font-size enlarged (2026-09-17), per request: added explicit 16px (was unset/default). */
-.st-key-overview_domains button {color:#236db2;background:white;border:none;font-weight:600;padding:8px 16px;font-size:16px;}
+.st-key-overview_domains button {color:#6BB8FF;background:#182430;border:none;font-weight:600;padding:8px 16px;font-size:16px;}
 /* Softened bg + subtle blue/teal border (2026-09-17) for color consistency with the rest of the page; no shadow added, per "no strong glow". */
 /* Top/bottom padding cut 28px->16px (2026-09-17, compact pass) to shorten the section; left/right (section width) unchanged. */
-.st-key-overview_plan {background:#eef4f9;border:1px solid #c9e0e0;border-radius:16px;padding:16px 32px;margin-top:28px;}
+.st-key-overview_plan {background:#223342;border:1px solid #34495A;border-radius:16px;padding:16px 32px;margin-top:28px;}
 /* Streamlit's default inter-widget gap (heading/description/button/highlights on the
    left, the card row on the right) tightened 2026-09-17, compact pass; this is the
    actual source of most of the "too much empty space" — the individual widgets
@@ -286,7 +360,7 @@ html {scroll-behavior:smooth;}
 .st-key-overview_plan [data-testid="stVerticalBlock"] {gap:10px;}
 .plan-heading {display:flex;align-items:center;gap:12px;margin-bottom:4px;}
 .plan-heading h3 {margin:0;}
-.plan-icon {flex:0 0 auto;display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;background:color-mix(in srgb,#287dcc 14%,white);color:#287dcc;font-size:19px;}
+.plan-icon {flex:0 0 auto;display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;background:color-mix(in srgb,#287dcc 14%,#182430);color:#3B9EFF;font-size:19px;}
 .st-key-overview_plan button {background:#287dcc;color:white;border:none;border-radius:8px;padding:12px 20px;font-weight:600;box-shadow:0 4px 12px rgba(40,125,204,.25);transition:background-color .2s ease, transform .2s ease, box-shadow .2s ease;}
 .st-key-overview_plan button:hover {background:#1f68b0;transform:translateY(-2px);box-shadow:0 6px 16px rgba(40,125,204,.35);}
 /* Suitability-card redesign (2026-09-17, visual-only, per approved direction):
@@ -299,21 +373,21 @@ html {scroll-behavior:smooth;}
    margins below all trimmed to remove internal empty space — font sizes untouched,
    and justify-content:space-between (above) still centers/balances content across
    the shorter height. All three cards share this CSS, so heights stay equal. */
-.plan-card {display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;background:white;border:1px solid #dce5ef;border-radius:20px;padding:16px 20px;min-height:150px;box-shadow:0 4px 14px rgba(16,41,68,.10);transition:transform .2s ease, box-shadow .2s ease;}
+.plan-card {display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;background:#182430;border:1px solid #34495A;border-radius:20px;padding:16px 20px;min-height:150px;box-shadow:0 4px 14px rgba(16,41,68,.10);transition:transform .2s ease, box-shadow .2s ease;}
 .plan-card:hover {transform:translateY(-5px);box-shadow:0 14px 30px rgba(16,41,68,.2);}
-.plan-card-icon {display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;background:#eaf1f8;color:#287dcc;font-size:16px;margin-bottom:8px;}
-.plan-card-title {font-size:14px;line-height:1.3;color:#5b6c81;font-weight:600;margin:0 0 6px;text-transform:uppercase;letter-spacing:.3px;min-height:2.6em;}
-.plan-card-value {font-size:24px;color:#223b57;font-weight:800;margin-bottom:6px;}
-.plan-card-status {font-size:10.5px;font-weight:700;padding:4px 10px;border-radius:999px;background:#eef2f6;color:#7c8ba0;text-transform:uppercase;letter-spacing:.3px;}
+.plan-card-icon {display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;background:#223342;color:#3B9EFF;font-size:16px;margin-bottom:8px;}
+.plan-card-title {font-size:14px;line-height:1.3;color:#B8C4CF;font-weight:600;margin:0 0 6px;text-transform:uppercase;letter-spacing:.3px;min-height:2.6em;}
+.plan-card-value {font-size:24px;color:#F3F6F9;font-weight:800;margin-bottom:6px;}
+.plan-card-status {font-size:10.5px;font-weight:700;padding:4px 10px;border-radius:999px;background:#223342;color:#8FA1B2;text-transform:uppercase;letter-spacing:.3px;}
 /* Per-card accent (2026-09-17, color-consistency pass): moved from icon-only tint to
    the card itself, so icon background + thin border + status badge all share one
    muted/pastel accent per card, matching the rest of the SparkCity palette. */
-.plan-card-gold {border-color:color-mix(in srgb,#caa153 55%,white);}
-.plan-card-gold .plan-card-icon,.plan-card-gold .plan-card-status {background:color-mix(in srgb,#caa153 16%,white);color:#8a6a1f;}
-.plan-card-mint {border-color:color-mix(in srgb,#3fae82 55%,white);}
-.plan-card-mint .plan-card-icon,.plan-card-mint .plan-card-status {background:color-mix(in srgb,#3fae82 16%,white);color:#1f7d59;}
-.plan-card-lavender {border-color:color-mix(in srgb,#7b83d6 55%,white);}
-.plan-card-lavender .plan-card-icon,.plan-card-lavender .plan-card-status {background:color-mix(in srgb,#7b83d6 16%,white);color:#4f56a8;}
+.plan-card-gold {border-color:color-mix(in srgb,#caa153 55%,#182430);}
+.plan-card-gold .plan-card-icon,.plan-card-gold .plan-card-status {background:color-mix(in srgb,#caa153 16%,#182430);color:#E5CA8A;}
+.plan-card-mint {border-color:color-mix(in srgb,#3fae82 55%,#182430);}
+.plan-card-mint .plan-card-icon,.plan-card-mint .plan-card-status {background:color-mix(in srgb,#3fae82 16%,#182430);color:#8DE3C2;}
+.plan-card-lavender {border-color:color-mix(in srgb,#7b83d6 55%,#182430);}
+.plan-card-lavender .plan-card-icon,.plan-card-lavender .plan-card-status {background:color-mix(in srgb,#7b83d6 16%,#182430);color:#9EA2D1;}
 /* Left-side supporting items (2026-09-17): laid out horizontally, each with its
    own pale theme-colored icon circle; text stays dark navy/slate. nowrap forces
    one even row (2026-09-17 follow-up: wrap was breaking unevenly onto two lines,
@@ -322,20 +396,13 @@ html {scroll-behavior:smooth;}
    the stVerticalBlock gap:10px set above already provides the base separation. */
 .plan-highlights {display:flex;flex-direction:row;flex-wrap:nowrap;align-items:center;gap:18px;margin-top:0;}
 @media(max-width:640px) {.plan-highlights {flex-wrap:wrap;}}
-.plan-highlight-item {display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:600;color:#223b57;}
+.plan-highlight-item {display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:600;color:#F3F6F9;}
 .plan-highlight-icon {display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;font-size:13px;flex:0 0 auto;}
-.plan-highlight-icon-blue {background:color-mix(in srgb,#337bc0 16%,white);}
-.plan-highlight-icon-lavender {background:color-mix(in srgb,#7b83d6 16%,white);}
-.plan-highlight-icon-yellow {background:color-mix(in srgb,#d9b544 16%,white);}
-.overview-footer {display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;border-top:1px solid #dce5ef;padding:36px 0 20px;margin-top:42px;color:#718399;font-size:13px;}
-.overview-footer strong {color:#274460;font-size:20px;}
-/* Overview-only overrides; shared navigation behavior and other pages are untouched. */
-.st-key-sparkcity_navigation {padding:20px 24px;margin-bottom:0;border-radius:14px 14px 0 0;border-bottom:none;}
-.sparkcity-brand {margin-bottom:16px;}
-.sparkcity-brand strong {font-size:32px;}
-.st-key-sparkcity_navigation [role="radiogroup"] {gap:3px;}
-/* Overview-page nav button padding enlarged 9px/5px->11px/7px (2026-09-17) to match larger label text. */
-.st-key-sparkcity_navigation [role="radiogroup"] label {padding:11px 7px;}
+.plan-highlight-icon-blue {background:color-mix(in srgb,#337bc0 16%,#182430);}
+.plan-highlight-icon-lavender {background:color-mix(in srgb,#7b83d6 16%,#182430);}
+.plan-highlight-icon-yellow {background:color-mix(in srgb,#d9b544 16%,#182430);}
+.overview-footer {display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;border-top:1px solid #34495A;padding:36px 0 20px;margin-top:42px;color:#8FA1B2;font-size:13px;}
+.overview-footer strong {color:#F3F6F9;font-size:20px;}
 /* padding-top cut 22px->4px (2026-09-17) to close the excessive gap above this heading, per request; paired with the hero margin-bottom cut in overview.py. */
 h2#explore-sparkcity {font-size:34px;padding-top:4px;}
 [data-testid="stElementContainer"]:has(#explore-sparkcity) + [data-testid="stElementContainer"] p {font-size:18px;line-height:1.7;}
@@ -343,148 +410,136 @@ h2#explore-sparkcity {font-size:34px;padding-top:4px;}
 .st-key-overview_plan [data-testid="stMarkdownContainer"] > p {font-size:17px;line-height:1.7;}
 @media(max-width:1250px) {.st-key-overview_domains [data-testid="stHorizontalBlock"] {grid-template-columns:repeat(3,minmax(0,1fr));}}
 @media(max-width:700px) {.st-key-overview_domains [data-testid="stHorizontalBlock"] {grid-template-columns:repeat(2,minmax(0,1fr));}.st-key-overview_hero {padding:24px;}}
+/* Overview hero reserved height (2026-09-19, experiment): it mounted at 340px then grew to ~383.7px once its columns rendered, pushing everything below it down ~44px on every navigation to Overview. min-height only (never height) so it can still grow. Doubled class selector on purpose: overview.py's inline .st-key-overview_hero rule (min-height:340px) is emitted after this section and would otherwise win on source order. */
+.st-key-overview_hero.st-key-overview_hero {min-height:384px;}
 @media(max-width:420px) {.st-key-overview_domains [data-testid="stHorizontalBlock"] {grid-template-columns:1fr;}}
 @media(min-width:641px) {
 .st-key-overview_hero [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(2) [data-testid="stElementContainer"] {position:static;}
 /* max-width 240px->480px->320px->210px->180px (2026-09-17): widened per reference image, then reduced repeatedly since it kept reading too big and was blocking the skyline; right/bottom anchor unchanged. */
 .overview-mission {position:absolute;right:40px;bottom:16px;width:100%;max-width:180px;}
 }
-@media(min-width:900px) {
-.st-key-sparkcity_navigation {position:relative;padding:14px 24px;}
-.sparkcity-brand {margin-bottom:0;}
-.sparkcity-brand strong {font-size:20px;}
-/* Tagline ("Smarter Data. Stronger Communities.") font-size enlarged 12px->15px (2026-09-17), per request. */
-.sparkcity-brand small {font-size:15px;}
-.st-key-sparkcity_navigation [data-testid="stElementContainer"]:has([role="radiogroup"]) {position:static;}
-.st-key-sparkcity_navigation [role="radiogroup"] {position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);margin:0;width:max-content;flex-wrap:nowrap;}
-}
-
 /* >>> fiscal_impact */
-:root {--fiscal-content-width:1240px;}
-[data-testid="stMainBlockContainer"] {max-width:calc(var(--fiscal-content-width) + 80px);margin:0 auto;padding-left:40px;padding-right:40px;}
+/* Fiscal hero banner-image rules removed (2026-09-19): the st.image banner is gone (redundant with the shared image header); its stImage/::after CITY FISCAL PLANNING rules were hero-image-only. */
 .st-key-fiscal_hero {padding:12px 0 8px;}
-.fiscal-eyebrow {font-size:13px;font-weight:700;letter-spacing:3px;color:#428778;}
-.st-key-fiscal_hero h1 {font-size:clamp(30px,3.2vw,44px);color:#172b46;padding-top:8px;line-height:1.15;letter-spacing:-.5px;}
-.fiscal-hero-summary {font-size:18px;color:#405874;margin:2px 0 20px;}
-.fiscal-hero-summary strong {color:#172b46;}
-.st-key-fiscal_hero [data-testid="stImage"] {position:relative;height:190px;border:1px solid #243e60;border-radius:14px;overflow:hidden;margin:2px 0 18px;box-shadow:0 8px 22px rgba(16,41,68,.18);}
-.st-key-fiscal_hero [data-testid="stImage"] img {width:100%;height:190px;object-fit:cover;object-position:center 58%;}
-.st-key-fiscal_hero [data-testid="stImage"]::after {content:"CITY FISCAL PLANNING";position:absolute;inset:0;display:flex;align-items:flex-end;padding:18px 22px;box-sizing:border-box;background:linear-gradient(90deg,rgba(6,14,30,.72),rgba(6,14,30,.18) 55%,rgba(6,14,30,0));color:#e8f2fb;font-size:12px;font-weight:800;letter-spacing:2px;pointer-events:none;}
+.fiscal-eyebrow {font-size:13px;font-weight:700;letter-spacing:3px;color:#9FD0C5;}
+.st-key-fiscal_hero h1 {font-size:clamp(30px,3.2vw,44px);color:#F3F6F9;padding-top:8px;line-height:1.15;letter-spacing:-.5px;}
+.fiscal-hero-summary {font-size:18px;color:#B8C4CF;margin:2px 0 20px;}
+.fiscal-hero-summary strong {color:#F3F6F9;}
 .fiscal-hero-takeaways {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;}
-.fiscal-hero-takeaways > div {background:white;border:1px solid #dce5ef;border-top:4px solid #428778;border-radius:12px;padding:17px 20px;box-shadow:0 4px 14px #10294408;}
+.fiscal-hero-takeaways > div {background:#182430;border:1px solid #34495A;border-top:4px solid #428778;border-radius:12px;padding:17px 20px;box-shadow:0 4px 14px #10294408;}
 .fiscal-hero-takeaways > div:last-child {border-top-color:#d49a2f;}
-.fiscal-hero-takeaways span {display:block;font-size:12px;font-weight:800;letter-spacing:.8px;color:#62758a;margin-bottom:6px;}
-.fiscal-hero-takeaways strong {display:block;font-size:19px;color:#223b57;line-height:1.3;}
-.fiscal-hero-takeaways p {font-size:13.5px;color:#62758a;line-height:1.5;margin:6px 0 0;}
-.fiscal-data-note {font-size:13px;color:#62758a;margin-top:12px;}
+.fiscal-hero-takeaways span {display:block;font-size:12px;font-weight:800;letter-spacing:.8px;color:#B8C4CF;margin-bottom:6px;}
+.fiscal-hero-takeaways strong {display:block;font-size:19px;color:#F3F6F9;line-height:1.3;}
+.fiscal-hero-takeaways p {font-size:13.5px;color:#B8C4CF;line-height:1.5;margin:6px 0 0;}
+.fiscal-data-note {font-size:13px;color:#B8C4CF;margin-top:12px;}
 .fiscal-callout {border-radius:12px;padding:16px 20px;margin:18px 0;font-size:14px;line-height:1.6;}
-.fiscal-callout.warn {background:#fdf3e2;border:1px solid #f0d9a8;color:#6b4e12;}
-.fiscal-callout.warn strong {color:#8a5a00;}
-.fiscal-callout.info {background:#eaf1f8;border:1px solid #d6e3f0;color:#2c4a68;}
+.fiscal-callout.warn {background:#36352C;border:1px solid #65562C;color:#EAC985;}
+.fiscal-callout.warn strong {color:#FFCD70;}
+.fiscal-callout.info {background:#223342;border:1px solid #34495A;color:#F3F6F9;}
 .fiscal-kpi-row [data-testid="stHorizontalBlock"] {gap:18px;}
-.fiscal-kpi {background:white;border:1px solid #dce5ef;border-radius:14px;padding:18px 20px;box-shadow:0 4px 14px #10294408;height:100%;}
-.fiscal-kpi-label {font-size:12px;font-weight:700;letter-spacing:.4px;color:#7c8ba0;text-transform:uppercase;margin-bottom:6px;}
-.fiscal-kpi-value {font-size:26px;font-weight:700;color:#223b57;}
-.fiscal-kpi-sub {font-size:12.5px;color:#62758a;margin-top:4px;line-height:1.4;}
-.fiscal-section-title {font-size:24px;font-weight:700;color:#223b57;margin:38px 0 5px;display:flex;align-items:center;gap:8px;letter-spacing:-.2px;}
-.fiscal-section-note {font-size:15px;color:#526a82;margin-bottom:16px;line-height:1.55;}
-.fiscal-evidence-note {margin-top:10px;padding:10px 14px;background:#eaf1f8;border-left:3px solid #428778;border-radius:6px;color:#526a82;font-size:12.5px;line-height:1.5;}
-.fiscal-comparison-result {margin:14px 0;padding:12px 16px;background:#eaf5f1;border:1px solid #cbe4dc;border-radius:9px;color:#385f57;font-size:14px;line-height:1.5;}
-.fiscal-chart-title {font-size:18px;font-weight:750;color:#223b57;margin:18px 0 0;}
-.fiscal-month-chart {display:flex;flex-direction:column;gap:7px;margin:10px 0 8px;background:white;border:1px solid #dce5ef;border-radius:14px;padding:18px 20px;box-shadow:0 4px 14px #10294408;}
+.fiscal-kpi {background:#182430;border:1px solid #34495A;border-radius:14px;padding:18px 20px;box-shadow:0 4px 14px #10294408;height:100%;}
+.fiscal-kpi-label {font-size:12px;font-weight:700;letter-spacing:.4px;color:#8FA1B2;text-transform:uppercase;margin-bottom:6px;}
+.fiscal-kpi-value {font-size:26px;font-weight:700;color:#F3F6F9;}
+.fiscal-kpi-sub {font-size:12.5px;color:#B8C4CF;margin-top:4px;line-height:1.4;}
+.fiscal-section-title {font-size:24px;font-weight:700;color:#F3F6F9;margin:38px 0 5px;display:flex;align-items:center;gap:8px;letter-spacing:-.2px;}
+.fiscal-section-note {font-size:15px;color:#B8C4CF;margin-bottom:16px;line-height:1.55;}
+.fiscal-evidence-note {margin-top:10px;padding:10px 14px;background:#223342;border-left:3px solid #428778;border-radius:6px;color:#B8C4CF;font-size:12.5px;line-height:1.5;}
+.fiscal-comparison-result {margin:14px 0;padding:12px 16px;background:#20373D;border:1px solid #315956;border-radius:9px;color:#F3F6F9;font-size:14px;line-height:1.5;}
+.fiscal-chart-title {font-size:18px;font-weight:750;color:#F3F6F9;margin:18px 0 0;}
+.fiscal-month-chart {display:flex;flex-direction:column;gap:7px;margin:10px 0 8px;background:#182430;border:1px solid #34495A;border-radius:14px;padding:18px 20px;box-shadow:0 4px 14px #10294408;}
 .fiscal-month-row {display:grid;grid-template-columns:42px minmax(160px,1fr) 64px 110px;align-items:center;gap:10px;min-height:24px;padding:2px 8px;border-radius:6px;}
-.fiscal-month-row.peak {background:#eaf5f1;}
-.fiscal-month-row.low {background:#fdf3e2;}
-.fiscal-month-label {font-size:13px;color:#526a82;font-weight:600;}
-.fiscal-month-track {height:12px;background:#e5ebf1;border-radius:999px;overflow:hidden;}
+.fiscal-month-row.peak {background:#20373D;}
+.fiscal-month-row.low {background:#36352C;}
+.fiscal-month-label {font-size:13px;color:#B8C4CF;font-weight:600;}
+.fiscal-month-track {height:12px;background:#223342;border-radius:999px;overflow:hidden;}
 .fiscal-month-fill {height:100%;background:#7d92a8;border-radius:999px;}
 .fiscal-month-row.peak .fiscal-month-fill {background:#428778;}
 .fiscal-month-row.low .fiscal-month-fill {background:#d49a2f;}
-.fiscal-month-row strong {font-size:13px;color:#2c425c;text-align:right;}
-.fiscal-month-row em {font-size:11px;color:#428778;font-style:normal;font-weight:700;text-transform:uppercase;letter-spacing:.4px;}
-.fiscal-verdict {background:#eaf5f1;border-left:4px solid #428778;border-radius:10px;padding:15px 18px;margin:12px 0 18px;}
-.fiscal-verdict > span {display:block;color:#428778;font-size:12px;font-weight:800;letter-spacing:.8px;margin-bottom:3px;}
-.fiscal-verdict > strong {display:block;color:#223b57;font-size:20px;}
-.fiscal-verdict p {color:#526a82;font-size:14px;line-height:1.55;margin:6px 0 0;}
-.fiscal-range-chart {background:white;border:1px solid #dce5ef;border-radius:12px;padding:15px 18px 10px;margin:10px 0;}
-.fiscal-range-row {display:grid;grid-template-columns:135px minmax(200px,1fr) 120px;align-items:center;gap:16px;padding:10px;border-bottom:1px solid #edf1f5;}
-.fiscal-range-row.selected {background:#eaf5f1;border-radius:8px;}
+.fiscal-month-row strong {font-size:13px;color:#F3F6F9;text-align:right;}
+.fiscal-month-row em {font-size:11px;color:#9FD0C5;font-style:normal;font-weight:700;text-transform:uppercase;letter-spacing:.4px;}
+.fiscal-verdict {background:#20373D;border-left:4px solid #428778;border-radius:10px;padding:15px 18px;margin:12px 0 18px;}
+.fiscal-verdict > span {display:block;color:#9FD0C5;font-size:12px;font-weight:800;letter-spacing:.8px;margin-bottom:3px;}
+.fiscal-verdict > strong {display:block;color:#F3F6F9;font-size:20px;}
+.fiscal-verdict p {color:#B8C4CF;font-size:14px;line-height:1.55;margin:6px 0 0;}
+.fiscal-range-chart {background:#182430;border:1px solid #34495A;border-radius:12px;padding:15px 18px 10px;margin:10px 0;}
+.fiscal-range-row {display:grid;grid-template-columns:135px minmax(200px,1fr) 120px;align-items:center;gap:16px;padding:10px;border-bottom:1px solid #34495A;}
+.fiscal-range-row.selected {background:#20373D;border-radius:8px;}
 .fiscal-range-label strong,.fiscal-range-label span,.fiscal-range-value strong,.fiscal-range-value span {display:block;}
-.fiscal-range-label strong,.fiscal-range-value strong {color:#2c425c;font-size:14px;}
-.fiscal-range-label span,.fiscal-range-value span {color:#718399;font-size:11.5px;margin-top:2px;}
-.fiscal-range-track {position:relative;height:20px;background:linear-gradient(to right,transparent 49.7%,#edf1f5 50%,transparent 50.3%);}
+.fiscal-range-label strong,.fiscal-range-value strong {color:#F3F6F9;font-size:14px;}
+.fiscal-range-label span,.fiscal-range-value span {color:#8FA1B2;font-size:11.5px;margin-top:2px;}
+.fiscal-range-track {position:relative;height:20px;background:linear-gradient(to right,transparent 49.7%,#223342 50%,transparent 50.3%);}
 .fiscal-range-line {position:absolute;top:9px;height:3px;background:#8da0b3;border-radius:3px;min-width:3px;}
-.fiscal-range-dot {position:absolute;top:4px;width:12px;height:12px;margin-left:-6px;border-radius:50%;background:#657f99;border:2px solid white;box-shadow:0 0 0 1px #657f99;}
+.fiscal-range-dot {position:absolute;top:4px;width:12px;height:12px;margin-left:-6px;border-radius:50%;background:#657f99;border:2px solid #34495A;box-shadow:0 0 0 1px #657f99;}
 .fiscal-range-row.selected .fiscal-range-line,.fiscal-range-row.selected .fiscal-range-dot {background:#428778;}
 .fiscal-range-row.selected .fiscal-range-dot {box-shadow:0 0 0 1px #428778;}
-.fiscal-range-axis {display:grid;grid-template-columns:1fr 1fr 1fr;margin:6px 136px 0 151px;color:#8a99ab;font-size:11px;}
+.fiscal-range-axis {display:grid;grid-template-columns:1fr 1fr 1fr;margin:6px 136px 0 151px;color:#8FA1B2;font-size:11px;}
 .fiscal-range-axis span:nth-child(2) {text-align:center;}.fiscal-range-axis span:last-child {text-align:right;}
-.st-key-fiscal_explorer {background:#eaf1f8;border:1px solid #d6e3f0;border-radius:16px;padding:22px 24px;box-shadow:0 4px 14px #10294408;}
+.st-key-fiscal_explorer {background:#223342;border:1px solid #34495A;border-radius:16px;padding:22px 24px;box-shadow:0 4px 14px #10294408;}
 .st-key-fiscal_explorer [data-testid="stWidgetLabel"],
-.st-key-fiscal_explorer [data-testid="stWidgetLabel"] p {color:#223b57!important;font-weight:700!important;}
-.st-key-fiscal_explorer [data-testid="stDateInput"] input {color:#223b57!important;background:white!important;}
-.st-key-fiscal_explorer [data-testid="stSlider"] {color:#223b57!important;}
-.st-key-fiscal_explorer [data-testid="stSelectbox"] div[data-baseweb="select"] > div {color:#223b57!important;background:white!important;}
+.st-key-fiscal_explorer [data-testid="stWidgetLabel"] p {color:#F3F6F9!important;font-weight:700!important;}
+.st-key-fiscal_explorer [data-testid="stDateInput"] input {color:#F3F6F9!important;background:#182430!important;}
+.st-key-fiscal_explorer [data-testid="stSlider"] {color:#F3F6F9!important;}
+.st-key-fiscal_explorer [data-testid="stSelectbox"] div[data-baseweb="select"] > div {color:#F3F6F9!important;background:#182430!important;}
 .fiscal-explorer-intro {margin-bottom:14px;}
 .fiscal-explorer-intro strong,.fiscal-explorer-intro span {display:block;}
-.fiscal-explorer-intro strong {color:#223b57;font-size:19px;}
-.fiscal-explorer-intro span {color:#62758a;font-size:14px;line-height:1.5;margin-top:4px;}
-.fiscal-test-summary {border-left:3px solid #428778;padding:8px 12px;margin:5px 0 14px;background:#f4f9f7;border-radius:5px;}
-.fiscal-test-summary span {display:block;color:#428778;font-size:11px;font-weight:800;letter-spacing:.8px;}
-.fiscal-test-summary strong {display:block;color:#223b57;font-size:17px;margin-top:2px;}
-.fiscal-test-summary p {color:#62758a;font-size:12.5px;margin:2px 0 0;}
-.fiscal-impact-breakdown {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;background:#f7fafc;border:1px solid #dce5ef;border-radius:12px;padding:15px 16px;margin:12px 0;}
-.fiscal-impact-breakdown > div:not(.fiscal-spend-bar) {padding-right:10px;border-right:1px solid #dce5ef;}
+.fiscal-explorer-intro strong {color:#F3F6F9;font-size:19px;}
+.fiscal-explorer-intro span {color:#B8C4CF;font-size:14px;line-height:1.5;margin-top:4px;}
+.fiscal-test-summary {border-left:3px solid #428778;padding:8px 12px;margin:5px 0 14px;background:#1E2D3A;border-radius:5px;}
+.fiscal-test-summary span {display:block;color:#9FD0C5;font-size:11px;font-weight:800;letter-spacing:.8px;}
+.fiscal-test-summary strong {display:block;color:#F3F6F9;font-size:17px;margin-top:2px;}
+.fiscal-test-summary p {color:#B8C4CF;font-size:12.5px;margin:2px 0 0;}
+.fiscal-impact-breakdown {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;background:#1E2D3A;border:1px solid #34495A;border-radius:12px;padding:15px 16px;margin:12px 0;}
+.fiscal-impact-breakdown > div:not(.fiscal-spend-bar) {padding-right:10px;border-right:1px solid #34495A;}
 .fiscal-impact-breakdown > div:nth-child(4) {border-right:none;}
 .fiscal-impact-breakdown span,.fiscal-impact-breakdown strong {display:block;}
-.fiscal-impact-breakdown span {font-size:11.5px;color:#718399;margin-bottom:3px;}
-.fiscal-impact-breakdown strong {font-size:16px;color:#223b57;}
-.fiscal-spend-bar {grid-column:1/-1;height:8px;background:#d7e2ec;border-radius:999px;overflow:hidden;margin-top:2px;}
+.fiscal-impact-breakdown span {font-size:11.5px;color:#8FA1B2;margin-bottom:3px;}
+.fiscal-impact-breakdown strong {font-size:16px;color:#F3F6F9;}
+.fiscal-spend-bar {grid-column:1/-1;height:8px;background:#223342;border-radius:999px;overflow:hidden;margin-top:2px;}
 .fiscal-spend-bar i {display:block;height:100%;background:#428778;border-radius:999px;}
-.fiscal-subheading {font-size:18px;font-weight:700;color:#223b57;margin:24px 0 2px;}
+.fiscal-subheading {font-size:18px;font-weight:700;color:#F3F6F9;margin:24px 0 2px;}
 .fiscal-takeaway-grid {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;}
-.fiscal-takeaway-grid > div {background:white;border:1px solid #dce5ef;border-radius:12px;padding:17px 18px;}
-.fiscal-takeaway-grid span {display:block;color:#428778;font-size:12px;font-weight:800;margin-bottom:6px;}
-.fiscal-takeaway-grid strong {display:block;color:#223b57;font-size:16px;line-height:1.35;}
-.fiscal-takeaway-grid p {color:#62758a;font-size:13.5px;line-height:1.5;margin:6px 0 0;}
+.fiscal-takeaway-grid > div {background:#182430;border:1px solid #34495A;border-radius:12px;padding:17px 18px;}
+.fiscal-takeaway-grid span {display:block;color:#9FD0C5;font-size:12px;font-weight:800;margin-bottom:6px;}
+.fiscal-takeaway-grid strong {display:block;color:#F3F6F9;font-size:16px;line-height:1.35;}
+.fiscal-takeaway-grid p {color:#B8C4CF;font-size:13.5px;line-height:1.5;margin:6px 0 0;}
 .fiscal-bar-group {margin-bottom:18px;}
-.fiscal-bar-metric {font-size:13px;font-weight:600;color:#3d4f68;margin-bottom:6px;}
+.fiscal-bar-metric {font-size:13px;font-weight:600;color:#B8C4CF;margin-bottom:6px;}
 .fiscal-bar-row {display:flex;align-items:center;gap:10px;margin-bottom:4px;}
-.fiscal-bar-tag {flex:0 0 64px;font-size:12px;color:#62758a;text-align:right;}
-.fiscal-bar-track {flex:1;background:#eef2f6;border-radius:999px;height:22px;position:relative;overflow:hidden;}
+.fiscal-bar-tag {flex:0 0 64px;font-size:12px;color:#B8C4CF;text-align:right;}
+.fiscal-bar-track {flex:1;background:#223342;border-radius:999px;height:22px;position:relative;overflow:hidden;}
 .fiscal-bar-fill {height:100%;border-radius:999px;display:flex;align-items:center;justify-content:flex-end;padding-right:8px;box-sizing:border-box;color:white;font-size:11.5px;font-weight:700;white-space:nowrap;}
-.fiscal-bar-fill.low-fill {color:#3d4f68;justify-content:flex-start;padding-left:8px;}
+.fiscal-bar-fill.low-fill {color:#B8C4CF;justify-content:flex-start;padding-left:8px;}
 .fiscal-insights {list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;}
-.fiscal-insights li {font-size:14px;color:#3d4f68;line-height:1.55;padding-left:22px;position:relative;}
-.fiscal-insights li::before {content:"✓";position:absolute;left:0;color:#428778;font-weight:700;}
-.fiscal-chart-caption {font-size:12.5px;color:#7c8ba0;margin-top:6px;}
+.fiscal-insights li {font-size:14px;color:#B8C4CF;line-height:1.55;padding-left:22px;position:relative;}
+.fiscal-insights li::before {content:"✓";position:absolute;left:0;color:#9FD0C5;font-weight:700;}
+.fiscal-chart-caption {font-size:12.5px;color:#8FA1B2;margin-top:6px;}
 .fiscal-source-list {display:flex;flex-direction:column;gap:8px;margin:2px 0 14px;}
-.fiscal-source-list a {display:flex;align-items:center;gap:9px;width:fit-content;color:#315f8c;text-decoration:none;line-height:1.4;}
+.fiscal-source-list a {display:flex;align-items:center;gap:9px;width:fit-content;color:#6BB8FF;text-decoration:none;line-height:1.4;}
 .fiscal-source-list a:hover span {text-decoration:underline;}
 .fiscal-source-icon-shell {display:flex;align-items:center;justify-content:center;width:24px;height:24px;flex:0 0 24px;border-radius:4px;overflow:hidden;}
 .fiscal-source-icon {width:24px;height:24px;object-fit:contain;}
 .fiscal-source-icon-shell.nyc-mark {box-sizing:border-box;padding:4px;background:#050505;}
 .fiscal-source-icon-shell.nyc-mark .fiscal-source-icon {width:16px;height:16px;filter:grayscale(1) brightness(0) invert(1);}
-.fiscal-footer {font-size:12px;color:#8a99ab;border-top:1px solid #dce5ef;padding-top:14px;margin-top:30px;}
+.fiscal-footer {font-size:12px;color:#8FA1B2;border-top:1px solid #34495A;padding-top:14px;margin-top:30px;}
 /* Streamlit theme colors can otherwise produce white labels on pale panels and
    black-on-black expander summaries. Keep every accordion state readable. */
-[data-testid="stExpander"] details {background:white;border-color:#d6e3f0!important;border-radius:10px;overflow:hidden;}
-[data-testid="stExpander"] details > summary {background:white!important;color:#223b57!important;}
-[data-testid="stExpander"] details > summary:hover {background:#eef4fa!important;color:#172b46!important;}
-[data-testid="stExpander"] details[open] > summary {background:#eaf1f8!important;color:#172b46!important;border-bottom:1px solid #d6e3f0;}
+[data-testid="stExpander"] details {background:#182430;border-color:#34495A!important;border-radius:10px;overflow:hidden;}
+[data-testid="stExpander"] details > summary {background:#182430!important;color:#F3F6F9!important;}
+[data-testid="stExpander"] details > summary:hover {background:#1E2D3A!important;color:#F3F6F9!important;}
+[data-testid="stExpander"] details[open] > summary {background:#223342!important;color:#F3F6F9!important;border-bottom:1px solid #34495A;}
 [data-testid="stExpander"] details > summary p,
 [data-testid="stExpander"] details > summary span {color:inherit!important;font-weight:650;}
 [data-testid="stExpander"] details > summary svg {fill:currentColor!important;color:currentColor!important;}
 [data-testid="stExpander"] details > summary:focus-visible {outline:3px solid #65a9ed!important;outline-offset:-3px;}
 @media(max-width:760px) {
 [data-testid="stMainBlockContainer"] {padding-left:20px;padding-right:20px;}
-.st-key-fiscal_hero [data-testid="stImage"],.st-key-fiscal_hero [data-testid="stImage"] img {height:140px;}
 .fiscal-hero-takeaways {grid-template-columns:1fr;}
 .fiscal-month-row {grid-template-columns:36px minmax(100px,1fr) 58px;}.fiscal-month-row em {display:none;}
 .fiscal-range-row {grid-template-columns:105px minmax(100px,1fr);gap:10px;}.fiscal-range-value {grid-column:2;}.fiscal-range-axis {display:none;}
 .fiscal-takeaway-grid {grid-template-columns:1fr;}
 .fiscal-impact-breakdown {grid-template-columns:repeat(2,minmax(0,1fr));}.fiscal-impact-breakdown > div:nth-child(2) {border-right:none;}.fiscal-spend-bar {grid-column:1/-1;}
 }
+
 /* >>> convention_planner */
 /* BEGIN MCC / Convention Planner page styles
    Team merge note: keep this section separate from shared and overview.
@@ -497,8 +552,8 @@ h2#explore-sparkcity {font-size:34px;padding-top:4px;}
     .st-key-planner_alternative, .st-key-planner_takeaways, .st-key-planner_team_takeaways, .st-key-planner_candidate_score, .st-key-planner_candidate_factors,
     .st-key-planner_candidate_comparison, .st-key-planner_candidate_why,
     .st-key-planner_candidate_alternative, .st-key-planner_candidate_takeaways) {
-    background: #ffffff;
-    border: 1px solid #dce5ef;
+    background: #182430;
+    border: 1px solid #34495A;
     border-radius: 10px;
     padding: 16px;
     box-shadow: 0 4px 14px #10294408;
@@ -508,7 +563,7 @@ h2#explore-sparkcity {font-size:34px;padding-top:4px;}
     .st-key-planner_alternative, .st-key-planner_takeaways, .st-key-planner_team_takeaways, .st-key-planner_candidate_score, .st-key-planner_candidate_factors,
     .st-key-planner_candidate_comparison, .st-key-planner_candidate_why,
     .st-key-planner_candidate_alternative, .st-key-planner_candidate_takeaways) h4 {
-    color: #223b57;
+    color: #F3F6F9;
     font-size: 17px;
     line-height: 1.3;
     padding-top: 0;
@@ -516,7 +571,7 @@ h2#explore-sparkcity {font-size:34px;padding-top:4px;}
 :is(.st-key-planner_score, .st-key-planner_recommendation,
     .st-key-planner_alternative, .st-key-planner_candidate_score,
     .st-key-planner_candidate_alternative) [data-testid="stMetricValue"] {
-    color: #236db2;
+    color: #6BB8FF;
     font-weight: 700;
 }
 :is(.st-key-planner_score, .st-key-planner_candidate_score) [data-testid="stMetricValue"] {
@@ -528,14 +583,14 @@ h2#explore-sparkcity {font-size:34px;padding-top:4px;}
     .st-key-planner_candidate_comparison, .st-key-planner_candidate_why,
     .st-key-planner_candidate_alternative, .st-key-planner_candidate_takeaways)
     [data-testid="stCaptionContainer"] {
-    color: #62758a;
+    color: #B8C4CF;
 }
 .st-key-planner_breakdown [role="progressbar"] {
     accent-color: #287dcc;
 }
 
 /* MCC: compact mockup layout, scoped to the planner explorer only. */
-.st-key-planner_explorer h3 {font-size:22px;color:#223b57;}
+.st-key-planner_explorer h3 {font-size:22px;color:#F3F6F9;}
 .st-key-planner_breakdown [data-testid="stVerticalBlock"] {gap:0.45rem;}
 .st-key-planner_explorer .st-key-planner_takeaways {padding:12px 16px;}
 .st-key-planner_explorer .st-key-planner_takeaways [data-testid="stVerticalBlock"] {gap:0.35rem;}
@@ -545,14 +600,14 @@ h2#explore-sparkcity {font-size:34px;padding-top:4px;}
 }
 /* MCC: Key Takeaways nested under Suitability Score as a compact stacked tile. */
 .st-key-planner_takeaways {margin-top:14px;padding:10px 14px;}
-.st-key-planner_takeaways h5 {font-size:14px;color:#223b57;margin:0 0 4px;padding-top:0;}
+.st-key-planner_takeaways h5 {font-size:14px;color:#F3F6F9;margin:0 0 4px;padding-top:0;}
 /* MCC: compact factor rows and takeaways, matching the planner mockup. */
 .st-key-planner_breakdown .planner-factor-row {
     display:grid;grid-template-columns:85px minmax(40px,1fr) 48px;
-    gap:12px;align-items:center;margin:10px 0;font-size:13px;color:#223b57;
+    gap:12px;align-items:center;margin:10px 0;font-size:13px;color:#F3F6F9;
 }
 .st-key-planner_breakdown .planner-factor-row strong {text-align:right;font-size:12px;}
-.st-key-planner_breakdown .planner-factor-track {height:12px;background:#edf2f8;border-radius:2px;overflow:hidden;}
+.st-key-planner_breakdown .planner-factor-track {height:12px;background:#223342;border-radius:2px;overflow:hidden;}
 .st-key-planner_breakdown .planner-factor-track > div {height:100%;border-radius:2px;}
 .st-key-planner_takeaways p {font-size:14px;line-height:1.45;}
 .st-key-planner_explorer [data-testid="stCaptionContainer"] p {font-size:12px;}
@@ -585,62 +640,200 @@ h2#explore-sparkcity {font-size:34px;padding-top:4px;}
 .st-key-planner_team_takeaways {border-top:4px solid #8b5cf6;}
 /* MCC: quiet page heading complements the shared navy navigation. */
 .planner-banner {
-    background:#eaf1f8;color:#223b57;border:1px solid #d6e3f0;
-    border-left:4px solid #287dcc;border-bottom:1px solid #d6e3f0;
+    background:#223342;color:#F3F6F9;border:1px solid #34495A;
+    border-left:4px solid #287dcc;border-bottom:1px solid #34495A;
     padding:16px 20px;box-shadow:none;
 }
-.planner-banner h1 {color:#223b57;font-size:clamp(20px,1.8vw,27px);}
-.planner-banner .planner-eyebrow {color:#526d88;}
-.planner-banner p,.planner-banner-meta {color:#405c78;}
-.planner-banner-meta span {color:#62758a;}
+.planner-banner h1 {color:#F3F6F9;font-size:clamp(20px,1.8vw,27px);}
+.planner-banner .planner-eyebrow {color:#B8C4CF;}
+.planner-banner p,.planner-banner-meta {color:#B8C4CF;}
+.planner-banner-meta span {color:#B8C4CF;}
+/* Ranked-period summary echoes the planner banner while keeping each time scale distinct. */
+.planner-leaders-banner {
+    background:#223342;color:#F3F6F9;border:1px solid #34495A;
+    border-left:4px solid #287dcc;border-radius:10px;
+    padding:16px 20px;margin:0 0 10px;box-shadow:none;
+}
+.planner-leaders-heading {
+    display:flex;justify-content:space-between;align-items:center;gap:24px;
+    margin-bottom:14px;
+}
+.planner-leaders-heading .planner-eyebrow {
+    color:#B8C4CF;font-size:11px;font-weight:700;letter-spacing:1.7px;
+}
+.planner-leaders-heading h2 {
+    color:#F3F6F9;font-size:clamp(19px,1.6vw,25px);line-height:1.2;
+    margin:5px 0 4px;padding:0;
+}
+.planner-leaders-heading p {color:#B8C4CF;font-size:13px;margin:0;}
+.planner-leaders-meta {
+    flex-shrink:0;text-align:right;color:#B8C4CF;font-size:13px;line-height:1.7;
+}
+.planner-leaders-meta span {color:#8FA1B2;font-size:12px;}
+.planner-leaders-grid {
+    display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;
+}
+.planner-leader-card {
+    background:#182430;border:1px solid #34495A;border-top:4px solid #287dcc;
+    border-radius:8px;padding:13px 15px;
+}
+.planner-leader-card.week {border-top-color:#49ae83;}
+.planner-leader-card.day {border-top-color:#e5ad35;}
+.planner-leader-card > span {
+    display:block;color:#8FA1B2;font-size:11px;font-weight:700;
+    letter-spacing:.8px;text-transform:uppercase;margin-bottom:4px;
+}
+.planner-leader-card > strong {
+    display:block;color:#F3F6F9;font-size:20px;line-height:1.25;margin-bottom:7px;
+}
+.planner-leader-card > div {color:#B8C4CF;font-size:12px;}
+.planner-leader-card b {color:#6BB8FF;font-size:16px;margin-left:3px;}
+.planner-leaders-note {
+    color:#B8C4CF;font-size:12px;line-height:1.5;margin:12px 0 0;
+    padding-top:10px;border-top:1px solid #34495A;
+}
+.planner-decision-panel {
+    background:#1E2D3A;border:1px solid #34495A;border-left:4px solid #49ae83;
+    border-radius:10px;padding:18px 20px;margin:16px 0 20px;color:#F3F6F9;
+}
+.planner-decision-panel .planner-eyebrow {
+    color:#7FD1A8;font-size:11px;font-weight:700;letter-spacing:1.5px;
+}
+.planner-window-hero {
+    display:grid;grid-template-columns:170px minmax(0,1fr);gap:22px;align-items:stretch;
+    margin-bottom:14px;
+}
+.planner-date-tile {
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    min-height:150px;background:linear-gradient(145deg,#176b58,#49ae83);
+    border-radius:10px;color:#ffffff;text-align:center;box-shadow:0 8px 20px #176b5826;
+}
+.planner-date-tile span {font-size:13px;font-weight:800;letter-spacing:2.4px;}
+.planner-date-tile strong {font-size:38px;line-height:1.15;margin:5px 0;letter-spacing:-1px;}
+.planner-date-tile small {font-size:10px;font-weight:700;letter-spacing:1px;color:#dcf6ec;}
+.planner-window-copy {padding:4px 0;}
+.planner-score-chips {display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;}
+.planner-score-chips > div {
+    display:grid;grid-template-columns:auto auto;column-gap:7px;align-items:baseline;
+    min-width:104px;background:#182430;border:1px solid #34495A;border-radius:7px;
+    padding:7px 10px;
+}
+.planner-score-chips span {grid-column:1/-1;color:#8FA1B2;font-size:9px;font-weight:800;letter-spacing:1px;}
+.planner-score-chips strong {color:#7FD1A8;font-size:19px;line-height:1;}
+.planner-score-chips small {color:#8FA1B2;font-size:10px;}
+.planner-decision-heading {
+    display:flex;justify-content:space-between;align-items:flex-start;gap:24px;
+}
+.planner-decision-badge {
+    flex-shrink:0;background:#1E332F;border:1px solid #2E5647;border-radius:8px;
+    color:#7FD1A8;font-size:11px;font-weight:800;letter-spacing:1px;
+    line-height:1.35;padding:9px 13px;text-align:center;
+}
+.planner-decision-badge span {color:#B8C4CF;font-size:10px;font-weight:700;}
+.planner-decision-panel h2 {
+    color:#F3F6F9;font-size:clamp(19px,1.6vw,25px);margin:5px 0 6px;padding:0;
+}
+.planner-decision-intro {color:#B8C4CF;font-size:13px;line-height:1.55;margin:0 0 14px;}
+.planner-decision-grid {
+    display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;
+}
+.planner-decision-grid article {
+    background:#182430;border:1px solid #34495A;border-radius:8px;padding:13px 15px;
+}
+.planner-decision-grid article > span {
+    display:block;color:#8FA1B2;font-size:10px;font-weight:700;
+    letter-spacing:.8px;text-transform:uppercase;margin-bottom:3px;
+}
+.planner-decision-grid article > strong {display:block;color:#F3F6F9;font-size:16px;margin-bottom:5px;}
+.planner-decision-grid article p {color:#B8C4CF;font-size:12px;line-height:1.5;margin:0;}
+.planner-decision-verdict {
+    color:#B8C4CF;background:#1E332F;border-radius:7px;font-size:12px;
+    line-height:1.5;margin:12px 0 0;padding:10px 12px;
+}
+@media(max-width:800px) {
+    .planner-leaders-heading {flex-direction:column;align-items:flex-start;gap:6px;}
+    .planner-leaders-meta {text-align:left;}
+}
+@media(max-width:620px) {
+    .planner-leaders-grid {grid-template-columns:1fr;}
+    .planner-decision-grid {grid-template-columns:1fr;}
+    .planner-decision-heading {flex-direction:column;gap:8px;}
+    .planner-window-hero {grid-template-columns:1fr;gap:14px;}
+    .planner-date-tile {min-height:125px;}
+}
 /* MCC: Proposed Conference Window, styled to match the banner directly above it. */
 .st-key-planner_window {
-    background:#eaf1f8;color:#223b57;border:1px solid #d6e3f0;
-    border-left:4px solid #287dcc;border-bottom:1px solid #d6e3f0;
+    background:#223342;color:#F3F6F9;border:1px solid #34495A;
+    border-left:4px solid #287dcc;border-bottom:1px solid #34495A;
     border-radius:10px;padding:16px 20px;margin-bottom:18px;box-shadow:none;
 }
-.st-key-planner_window h3 {color:#223b57;padding-top:0;}
-.st-key-planner_window [data-testid="stCaptionContainer"] {color:#526d88;}
+.st-key-planner_window h3 {color:#F3F6F9;padding-top:0;}
+.st-key-planner_window [data-testid="stCaptionContainer"] {color:#B8C4CF;}
 /* MCC: factor scores and weighted contributions, with colored in-row bars. */
 .st-key-planner_breakdown .planner-factor-table-wrap {overflow-x:auto;}
 .st-key-planner_breakdown .planner-factor-table {width:100%;table-layout:fixed;border-collapse:collapse;font-size:12px;}
 .st-key-planner_breakdown .planner-factor-table th,
-.st-key-planner_breakdown .planner-factor-table td {padding:9px 5px;border-bottom:1px solid #e8eef5;text-align:center;white-space:nowrap;vertical-align:middle;}
+.st-key-planner_breakdown .planner-factor-table td {padding:9px 5px;border-bottom:1px solid #34495A;text-align:center;white-space:nowrap;vertical-align:middle;}
 .st-key-planner_breakdown .planner-factor-table th:first-child {text-align:left;width:58%;}
 .st-key-planner_breakdown .planner-factor-table th:nth-child(2),
 .st-key-planner_breakdown .planner-factor-table th:nth-child(3) {width:12%;}
 .st-key-planner_breakdown .planner-factor-table th:last-child {width:18%;}
-.st-key-planner_breakdown .planner-factor-table thead th {color:#62758a;font-size:11px;}
-.st-key-planner_breakdown .planner-factor-table tbody th {color:#223b57;font-weight:600;}
-.st-key-planner_breakdown .planner-factor-table td:last-child {color:#236db2;}
+.st-key-planner_breakdown .planner-factor-table thead th {color:#B8C4CF;font-size:11px;}
+.st-key-planner_breakdown .planner-factor-table tbody th {color:#F3F6F9;font-weight:600;}
+.st-key-planner_breakdown .planner-factor-table td:last-child {color:#6BB8FF;}
 .st-key-planner_breakdown .planner-factor-table .planner-factor-track {margin-top:6px;height:10px;min-width:70px;}
 /* END MCC / Convention Planner page styles */
+
 /* >>> capacity */
+/* Page-local heading (2026-09-18): replaces native st.title()/st.write() so
+   navbar-to-title spacing is explicit and predictable, matching the same
+   pattern already used on Mobility/Environment. Colors reuse Sloan's own
+   existing card palette (#223b57 heading text, #3d5064 body text) rather
+   than importing another page's colors. */
+.capacity-page-title {color:#F3F6F9;font-size:2.25rem;font-weight:700;line-height:1.2;margin:0 0 8px;}
+.capacity-page-description {color:#B8C4CF;font-size:17px;line-height:1.6;max-width:820px;margin:0 0 20px;}
 .cap-kpi-grid {display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px;margin:6px 0 20px;}
-.cap-kpi-card {background:white;border:1px solid #dce5ef;border-top:3px solid var(--accent);border-radius:12px;padding:16px 16px 14px;box-shadow:0 4px 14px #10294408;}
+.cap-kpi-card {background:#182430;border:1px solid #34495A;border-top:3px solid var(--accent);border-radius:12px;padding:16px 16px 14px;box-shadow:0 4px 14px #10294408;}
 .cap-kpi-icon {font-size:18px;}
-.cap-kpi-label {font-size:12px;font-weight:600;color:#5b6c81;text-transform:uppercase;letter-spacing:.3px;margin-top:6px;min-height:2.4em;}
-.cap-kpi-value {font-size:24px;font-weight:700;color:#223b57;margin-top:2px;}
-.cap-kpi-sublabel {font-size:11.5px;color:#8a99ab;margin-top:4px;line-height:1.35;}
+.cap-kpi-label {font-size:12px;font-weight:600;color:#B8C4CF;text-transform:uppercase;letter-spacing:.3px;margin-top:6px;min-height:2.4em;}
+.cap-kpi-value {font-size:24px;font-weight:700;color:#F3F6F9;margin-top:2px;}
+.cap-kpi-sublabel {font-size:11.5px;color:#8FA1B2;margin-top:4px;line-height:1.35;}
 @media(max-width:1250px) {.cap-kpi-grid {grid-template-columns:repeat(3,minmax(0,1fr));}}
 @media(max-width:700px) {.cap-kpi-grid {grid-template-columns:repeat(2,minmax(0,1fr));}}
-.cap-verdict {background:#eaf7f2;border:1px solid #bfe3d3;border-left:5px solid #2a9d8f;border-radius:10px;padding:14px 20px;font-size:15px;color:#1d4d40;line-height:1.6;margin-bottom:26px;}
-.cap-insight-card {background:#eaf1f8;border:1px solid #d6e3f0;border-radius:14px;padding:18px 22px;height:100%;}
-.cap-insight-card h4 {margin:0 0 10px;color:#223b57;font-size:16px;}
-.cap-insight-card p {font-size:13.5px;line-height:1.65;color:#3d5064;margin:0 0 10px;}
+.cap-verdict {background:#1E393D;border:1px solid #2D5D52;border-left:5px solid #2a9d8f;border-radius:10px;padding:14px 20px;font-size:15px;color:#97D8C6;line-height:1.6;margin-bottom:26px;}
+.cap-insight-card {background:#223342;border:1px solid #34495A;border-radius:14px;padding:18px 22px;height:100%;}
+.cap-insight-card h4 {margin:0 0 10px;color:#F3F6F9;font-size:16px;}
+.cap-insight-card p {font-size:13.5px;line-height:1.65;color:#B8C4CF;margin:0 0 10px;}
 .cap-insight-card p:last-child {margin-bottom:0;}
 .cap-step-flow {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:6px 0 24px;}
-.cap-step-card {display:flex;gap:12px;background:white;border:1px solid #dce5ef;border-radius:12px;padding:16px;box-shadow:0 4px 14px #10294408;}
+.cap-step-card {display:flex;gap:12px;background:#182430;border:1px solid #34495A;border-radius:12px;padding:16px;box-shadow:0 4px 14px #10294408;}
 .cap-step-num {flex:0 0 auto;display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:#287dcc;color:white;font-size:12px;font-weight:700;}
-.cap-step-title {font-size:12.5px;font-weight:700;color:#5b6c81;text-transform:uppercase;letter-spacing:.2px;margin-bottom:6px;}
-.cap-step-math {font-size:12px;color:#7c8ba0;line-height:1.5;margin-bottom:8px;}
-.cap-step-result {font-size:14px;font-weight:700;color:#223b57;}
+.cap-step-title {font-size:12.5px;font-weight:700;color:#B8C4CF;text-transform:uppercase;letter-spacing:.2px;margin-bottom:6px;}
+.cap-step-math {font-size:12px;color:#8FA1B2;line-height:1.5;margin-bottom:8px;}
+.cap-step-result {font-size:14px;font-weight:700;color:#F3F6F9;}
 @media(max-width:1250px) {.cap-step-flow {grid-template-columns:repeat(2,minmax(0,1fr));}}
 @media(max-width:700px) {.cap-step-flow {grid-template-columns:1fr;}}
-.cap-list-card {background:white;border:1px solid #dce5ef;border-radius:14px;padding:18px 22px;height:100%;box-shadow:0 4px 14px #10294408;}
-.cap-list-card h4 {margin:0 0 10px;color:#223b57;font-size:16px;}
+.cap-list-card {background:#182430;border:1px solid #34495A;border-radius:14px;padding:18px 22px;height:100%;box-shadow:0 4px 14px #10294408;}
+.cap-list-card h4 {margin:0 0 10px;color:#F3F6F9;font-size:16px;}
 .cap-list-card ul {margin:0;padding-left:18px;}
-.cap-list-card li {font-size:13.5px;line-height:1.65;color:#3d5064;margin-bottom:8px;}
+.cap-list-card li {font-size:13.5px;line-height:1.65;color:#B8C4CF;margin-bottom:8px;}
 .cap-list-card li:last-child {margin-bottom:0;}
-.cap-list-card-muted {background:#fbf7ee;border-color:#ecdfc2;}
-.cap-list-card-muted h4 {color:#8a6d1f;}
+.cap-list-card-muted {background:#323530;border-color:#5C5335;}
+.cap-list-card-muted h4 {color:#E5CC8A;}
+
+/* >>> navheader */
+@media(min-width:900px) {
+/* City-image header (2026-09-19): fixed 140px tall (was 195px; reduced 2026-09-19 to shrink the Overview<->other-page navbar height jump, height-only experiment); the extra height is city image shown ABOVE a compact 60px translucent nav strip anchored to the bottom (no padding added below the nav). Image (assets/nav_city.png; its white top/bottom margins need the oversize background-size above instead of plain cover, 2026-09-19): shared.py swaps the placeholder in the background line below for the real url() at inject time. Brand block hidden here. This section is injected on every destination EXCEPT Overview, which keeps the original compact navbar from the shared section (2026-09-19). */
+.st-key-sparkcity_navigation {height:140px;min-height:140px;padding:0;overflow:hidden;border-radius:18px;background:linear-gradient(rgba(7,20,32,.82),rgba(7,20,32,.82)) left bottom/100% 60px no-repeat,linear-gradient(180deg,rgba(7,20,32,0) 40%,rgba(7,20,32,.35)),var(--sc-city,none) 62% 49%/max(100%,1850px) auto no-repeat,#071420;}
+/* Nav-strip darkening moved (2026-09-19) from the radiogroup (a child of a Streamlit element that gets faded while stale during a rerun, exposing the city image) into the persistent navbar container's own background as the first (top) layer: 60px at the bottom, same rgba(7,20,32,.82). Radiogroup keeps only its blur. */
+.st-key-sparkcity_navigation .sparkcity-brand {display:none;}
+/* Strip backdrop-filter blur removed (2026-09-19): frame-by-frame capture showed backdrop-filter dropping out for a frame during Streamlit reruns (crisp city image flashing through the dark strip) -- first on the radiogroup, and still on a ::before of the persistent container (1 of 5 transitions), so it is unreliable during reruns wherever it lives. The strip is now plain layered backgrounds only (constant). */
+/* "CITY FISCAL PLANNING" label (::before pseudo-element) removed (2026-09-19); it was absolutely positioned so removing it does not change header height or layout. */
+.st-key-sparkcity_navigation [role="radiogroup"] {top:auto;bottom:0;left:0;right:0;transform:none;width:100%;height:60px;box-sizing:border-box;padding:0 24px;align-items:center;justify-content:center;}
+}
+
+/* >>> navlineart */
+/* Overview navbar line-art (2026-09-19): decorative background layer only, no geometry change. Injected on Overview only (shared.py swaps the placeholder below for the assets/nav_lineart.png data URI). The PNG is 2172x724 with transparent margins; its drawn art spans y=365..527, so it is sized to 378px tall (art ~85px tall, ~75% of the navbar width at 1600px viewport; was 201px/45px art/-55px offset before the 2026-09-19 widening) and shifted down 103px so the art sits along the navbar's bottom edge. The first, semi-opaque navy gradient layer sits on top of the art and dims it to ~30% -- background layering, not opacity on the navbar. */
+@media(min-width:900px) {
+.st-key-sparkcity_navigation {background:linear-gradient(rgba(16,31,57,.7),rgba(16,31,57,.7)),url('__NAV_LINEART__') center bottom -103px/auto 378px no-repeat,#101f39;}
+}

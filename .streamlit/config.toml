@@ -11,8 +11,10 @@ showSidebarNavigation = false
 # as its default accent color. Flagging with this comment for merge conflicts since
 # it's a new top-level config section, not a change to an existing one.
 [theme]
-base = "light"
-primaryColor = "#287dcc"
-backgroundColor = "#ffffff"
-secondaryBackgroundColor = "#f4f7fb"
-textColor = "#172b46"
+# Dark-theme experiment (2026-09-19). OLD: base "light", primaryColor "#287dcc", backgroundColor "#ffffff",
+# secondaryBackgroundColor "#f4f7fb", textColor "#172b46".
+base = "dark"
+primaryColor = "#3B9EFF"
+backgroundColor = "#101820"
+secondaryBackgroundColor = "#182430"
+textColor = "#F3F6F9"

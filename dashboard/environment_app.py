@@ -9,12 +9,14 @@ from urllib.parse import urlencode
 
 import altair as alt
 import pandas as pd
+import pydeck as pdk
 import streamlit as st
 from dotenv import load_dotenv
 
 from sparkcityx.current_air_quality import load_current_air_quality
 from components.weather_scene import render_weather_scene
 from sparkcityx.current_weather import load_current_weather_points
+from sparkcityx.convention_projection import load_convention_projection
 from sparkcityx.database import connect_database
 from sparkcityx.lunar_data import NEW_YORK, load_lunar_details
 from sparkcityx.environment_data import (
@@ -85,6 +87,35 @@ def get_lunar_details(local_date: str) -> dict[str, str]:
     return load_lunar_details()
 
 
+@st.cache_data(ttl=86400, show_spinner="Preparing convention projection...")
+def get_convention_projection() -> list[dict]:
+    """Cache historical reanalysis baselines for the 2027 event map."""
+    return load_convention_projection()
+
+
+def projection_marker_color(value: float, layer: str) -> list[int]:
+    """Use fixed scales so colors stay comparable across all three days."""
+    if layer == "Temperature":
+        if value < 50:
+            return [59, 130, 246, 180]
+        if value < 60:
+            return [56, 189, 248, 180]
+        if value < 70:
+            return [34, 197, 94, 180]
+        if value < 80:
+            return [250, 204, 21, 180]
+        return [239, 111, 38, 180]
+    if value < 0.1:
+        return [169, 184, 196, 140]
+    if value < 1:
+        return [147, 197, 253, 180]
+    if value < 5:
+        return [59, 130, 246, 180]
+    if value < 10:
+        return [29, 78, 216, 190]
+    return [88, 28, 135, 190]
+
+
 def render_environment_page() -> None:
     """Render Environment inside its own styling boundary."""
     with st.container(key="environment-page"):
@@ -98,20 +129,27 @@ def _render_environment_content() -> None:
         <style>
         .st-key-environment-page [data-testid="stMetricLabel"],
         .st-key-environment-page [data-testid="stMetricValue"] {
-            color: #172b46 !important;
+            color: #F3F6F9 !important;
         }
         .st-key-environment-page [data-testid="stMetricLabel"] p,
         .st-key-environment-page [data-testid="stCaptionContainer"] p {
             font-size: 0.95rem !important;
             line-height: 1.45 !important;
         }
+        .environment-page-title {
+            color: #F3F6F9;
+            font-size: 2.25rem;
+            font-weight: 700;
+            line-height: 1.2;
+            margin: 0 0 6px;
+        }
         </style>
         """,
         unsafe_allow_html=True,
     )
-    st.title("Environment")
+    st.markdown('<div class="environment-page-title">Environment</div>', unsafe_allow_html=True)
     st.caption(
-        "Current modeled weather and historical observations from SparkCity S2"
+        "Current modeled weather and historical observations from New York Digital City S2"
     )
 
     st.html(
@@ -119,28 +157,28 @@ def _render_environment_content() -> None:
         <style>
           .environment-date-banner {
             padding: 20px 24px;
-            border: 1px solid #c9dfd2;
+            border: 1px solid #34495A;
             border-left: 6px solid #37966b;
             border-radius: 14px;
-            background: #f0faf5;
-            color: #172b46;
+            background: #1E332F;
+            color: #F3F6F9;
           }
           .environment-date-banner .eyebrow {
             margin: 0 0 6px;
-            color: #287452;
+            color: #7FD1A8;
             font-size: 0.85rem;
             font-weight: 700;
             letter-spacing: 0.09em;
           }
           .environment-date-banner h2 {
             margin: 0 0 6px;
-            color: #172b46;
+            color: #F3F6F9;
             font-size: 1.7rem;
             line-height: 1.2;
           }
           .environment-date-banner .context {
             margin: 0;
-            color: #405c52;
+            color: #B8C4CF;
             font-size: 0.95rem;
             line-height: 1.45;
           }
@@ -267,6 +305,100 @@ def _render_environment_content() -> None:
             "forecast and air readings closer to the convention before "
             "finalizing outdoor activities."
         )
+
+    st.subheader("Projected weather map · April 6–8, 2027")
+    st.caption(
+        "Planning projection from 2021–2026 matching dates, using Open-Meteo "
+        "historical reanalysis across nine map locations. This is not a "
+        "2027 weather forecast."
+    )
+    map_day_column, map_layer_column = st.columns(2, gap="small")
+    with map_day_column:
+        projection_day = st.selectbox(
+            "Event day",
+            [6, 7, 8],
+            format_func=lambda day: f"April {day}",
+            key="environment_projection_day",
+        )
+    with map_layer_column:
+        projection_layer = st.selectbox(
+            "Projected layer",
+            ["Temperature", "Precipitation"],
+            key="environment_projection_layer",
+        )
+
+    try:
+        projection = get_convention_projection()
+    except Exception:
+        st.warning(
+            "The projected weather map is temporarily unavailable. "
+            "Historical S2 planning details above are still available."
+        )
+    else:
+        map_data = []
+        for point in projection:
+            if point["day"] != projection_day:
+                continue
+            metric = (
+                point["temperature_f"]
+                if projection_layer == "Temperature"
+                else point["precipitation_mm"]
+            )
+            map_data.append(
+                {
+                    **point,
+                    "marker_color": projection_marker_color(
+                        metric, projection_layer
+                    ),
+                }
+            )
+        if map_data:
+            map_layer = pdk.Layer(
+                "ScatterplotLayer",
+                data=map_data,
+                get_position="[lon, lat]",
+                get_fill_color="marker_color",
+                get_radius=3700,
+                pickable=True,
+                stroked=True,
+                get_line_color=[255, 255, 255],
+                line_width_min_pixels=1,
+            )
+            st.pydeck_chart(
+                pdk.Deck(
+                    layers=[map_layer],
+                    initial_view_state=pdk.ViewState(
+                        latitude=40.76,
+                        longitude=-73.97,
+                        zoom=10.6,
+                        pitch=0,
+                    ),
+                    map_style="dark",
+                    tooltip={
+                        "html": (
+                            "<b>{location} · April {day}, 2027 baseline</b><br/>"
+                            "Mean temperature: {temperature_f} °F "
+                            "(past range {temperature_min_f}–{temperature_max_f} °F)"
+                            "<br/>Mean daily precipitation: {precipitation_mm} mm "
+                            "(past range {precipitation_min_mm}–"
+                            "{precipitation_max_mm} mm)"
+                        ),
+                        "style": {"color": "white"},
+                    },
+                ),
+                use_container_width=True,
+                height=300,
+            )
+            st.caption(
+                "Colors show six-year historical averages for the selected "
+                "calendar day. Temperature: blue → green → orange as values "
+                "rise. Precipitation: gray → light blue → dark blue/purple as "
+                "daily totals rise. Hover for the past range. Nearby circles "
+                "may share a source model grid cell (roughly 9 km), so local "
+                "detail is limited. Rainfall totals are not the chance of "
+                "rain in 2027. [Source: Open-Meteo Historical Weather API]"
+                "(https://open-meteo.com/en/docs/historical-weather-api)."
+            )
 
     current_points = []
     try:
@@ -400,7 +532,7 @@ def _render_environment_content() -> None:
             )
 
     st.markdown(
-        '<p style="color:#172B46;font-weight:600;">Year</p>',
+        '<p style="color:#F3F6F9;font-weight:600;">Year</p>',
         unsafe_allow_html=True,
     )
     year = st.selectbox(
@@ -496,12 +628,12 @@ def _render_environment_content() -> None:
                 air_chart = (
                     air_chart
                     .properties(height=190)
-                    .configure(background="#FFFFFF")
+                    .configure(background="#182430")
                     .configure_view(stroke=None)
                     .configure_axis(
-                        labelColor="#172B46",
-                        titleColor="#172B46",
-                        gridColor="#DCE5EF",
+                        labelColor="#B8C4CF",
+                        titleColor="#F3F6F9",
+                        gridColor="#34495A",
                     )
                 )
                 st.altair_chart(air_chart, use_container_width=True, theme=None)
@@ -553,12 +685,12 @@ def _render_environment_content() -> None:
                 weather_chart = (
                     weather_chart
                     .properties(height=190)
-                    .configure(background="#FFFFFF")
+                    .configure(background="#182430")
                     .configure_view(stroke=None)
                     .configure_axis(
-                        labelColor="#172B46",
-                        titleColor="#172B46",
-                        gridColor="#DCE5EF",
+                        labelColor="#B8C4CF",
+                        titleColor="#F3F6F9",
+                        gridColor="#34495A",
                     )
                 )
                 st.altair_chart(
@@ -630,7 +762,7 @@ def _render_environment_content() -> None:
 
                 st.markdown(
                     '<div style="display:flex;height:20px;'
-                    'border-radius:5px;overflow:hidden;background:#E5E7EB;" '
+                    'border-radius:5px;overflow:hidden;background:#34495A;" '
                     f'role="img" aria-label="{normal_percent:.1f}% normal, '
                     f'{monitor_percent:.1f}% monitor">'
                     f'<div style="width:{normal_percent:.1f}%;'
@@ -651,59 +783,87 @@ def _render_environment_content() -> None:
                 )
 
     with insights_column:
-        with st.container(border=True):
-            st.subheader("Key Insights")
+        april = monthly.loc[monthly["month"] == 4]
+        july = monthly.loc[monthly["month"] == 7]
+        insight_lines = []
 
-            april = monthly.loc[monthly["month"] == 4]
-            july = monthly.loc[monthly["month"] == 7]
+        if april.empty or july.empty:
+            insight_lines.append(
+                "<p>An April–July comparison is unavailable for this year. "
+                "Select 2025 for the complete comparison.</p>"
+            )
+        else:
+            april = april.iloc[0]
+            july = july.iloc[0]
 
-            if april.empty or july.empty:
-                st.info(
-                    "An April–July comparison is unavailable for "
-                    "this year. Select 2025 for the complete "
-                    "comparison."
+            if pd.notna(april["average_pm25"]) and pd.notna(
+                july["average_pm25"]
+            ):
+                direction = (
+                    "lower"
+                    if july["average_pm25"] < april["average_pm25"]
+                    else "higher"
+                )
+                insight_lines.append(
+                    f"<p>July average PM2.5 was <strong>{direction}</strong> "
+                    f"than April: {july['average_pm25']:.2f} "
+                    f"versus {april['average_pm25']:.2f}.</p>"
                 )
             else:
-                april = april.iloc[0]
-                july = july.iloc[0]
+                insight_lines.append(
+                    "<p>The April–July PM2.5 comparison is "
+                    f"unavailable for {year}.</p>"
+                )
 
-                if pd.notna(april["average_pm25"]) and pd.notna(
-                    july["average_pm25"]
-                ):
-                    direction = (
-                        "lower"
-                        if july["average_pm25"]
-                        < april["average_pm25"]
-                        else "higher"
-                    )
-                    st.write(
-                        f"July average PM2.5 was **{direction}** "
-                        f"than April: {july['average_pm25']:.2f} "
-                        f"versus {april['average_pm25']:.2f}."
-                    )
-                else:
-                    st.caption(
-                        "The April–July PM2.5 comparison is "
-                        f"unavailable for {year}."
-                    )
+            if pd.notna(april["average_temperature"]) and pd.notna(
+                july["average_temperature"]
+            ):
+                direction = (
+                    "lower"
+                    if july["average_temperature"]
+                    < april["average_temperature"]
+                    else "higher"
+                )
+                insight_lines.append(
+                    "<p>July average weather temperature was "
+                    f"<strong>{direction}</strong> than April: "
+                    f"{july['average_temperature']:.2f} versus "
+                    f"{april['average_temperature']:.2f}.</p>"
+                )
 
-                if pd.notna(
-                    april["average_temperature"]
-                ) and pd.notna(
-                    july["average_temperature"]
-                ):
-                    direction = (
-                        "lower"
-                        if july["average_temperature"]
-                        < april["average_temperature"]
-                        else "higher"
-                    )
-                    st.write(
-                        "July average weather temperature was "
-                        f"**{direction}** than April: "
-                        f"{july['average_temperature']:.2f} versus "
-                        f"{april['average_temperature']:.2f}."
-                    )
+        st.html(
+            """
+            <style>
+              .environment-insights-card {
+                position: relative;
+                padding: 20px 24px;
+                border: 1px solid #5A4A2C;
+                border-left: 6px solid #e88c28;
+                border-radius: 14px;
+                background: #332E25;
+                box-shadow: 0 4px 14px rgb(114 71 16 / 9%);
+                color: #F3F6F9;
+              }
+              .environment-insights-card h3 {
+                margin: 0 0 12px;
+                color: #F0B573;
+                font-size: 1.3rem;
+                line-height: 1.25;
+              }
+              .environment-insights-card p {
+                margin: 0 0 10px;
+                font-size: 1rem;
+                line-height: 1.5;
+              }
+              .environment-insights-card p:last-child { margin-bottom: 0; }
+            </style>
+            <section class="environment-insights-card"
+                     aria-label="Key insights">
+              <h3>📌 Key Insights</h3>
+            """
+            + "".join(insight_lines)
+            + "</section>"
+        )
 
 
     st.subheader("Interactive weather map")
@@ -742,7 +902,7 @@ def _render_environment_content() -> None:
 
 if __name__ == "__main__":
     st.set_page_config(
-        page_title="SparkCity Environment",
+        page_title="New York Digital City Environment",
         page_icon="🌿",
         layout="wide",
     )
