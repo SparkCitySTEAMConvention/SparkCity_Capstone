@@ -9,6 +9,7 @@ import streamlit as st
 from PIL import Image
 
 from components.shared import STYLES_PATH, open_page, read_css
+from components.planner_scores import load_scores
 
 ASSETS_DIR = Path(__file__).resolve().parents[1] / "assets"
 HERO_IMAGE_PATH = ASSETS_DIR / "updated_hero.png"  # hero background swapped from city.png (2026-09-19); city.png itself is untouched
@@ -35,7 +36,10 @@ def _domain_image_data_uri(filename):
         img = img.convert("RGB")
         if img.width > DOMAIN_IMAGE_MAX_WIDTH:
             new_height = round(img.height * DOMAIN_IMAGE_MAX_WIDTH / img.width)
-            img = img.resize((DOMAIN_IMAGE_MAX_WIDTH, new_height), Image.LANCZOS)
+            img = img.resize(
+                (DOMAIN_IMAGE_MAX_WIDTH, new_height),
+                Image.Resampling.LANCZOS
+            )
         buffer = io.BytesIO()
         img.save(buffer, format="JPEG", quality=80)
     encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
@@ -163,44 +167,115 @@ def render_domain_card(index, card):
 
 
 def render_suitability():
-    """Team integration point: replace each card's value/status only with approved
-    results later (e.g. value="November", status="Finalized") without changing
-    this structure. Card 2 is named "Alternative Month", not "High-Confidence
-    Alternative" (2026-09-17) — no statistical confidence measure exists yet, so
-    the docstring example above avoids "confidence" language too."""
+    """Display the team's final convention recommendation using planner results."""
+
+    try:
+        monthly = load_scores("Monthly")
+
+        november = monthly.loc[
+            monthly["start_date"].dt.month == 11
+        ].iloc[0]
+
+        alternative_months = monthly.loc[
+            monthly["start_date"].dt.month != 11
+        ]
+
+        alternative = alternative_months.loc[
+            alternative_months["suitability"].idxmax()
+        ]
+
+        recommended_month = "November"
+        alternative_month = alternative["start_date"].strftime("%B")
+        recommended_score = float(november["suitability"])
+
+    except (OSError, ValueError, KeyError, IndexError):
+        recommended_month = "Unavailable"
+        alternative_month = "Unavailable"
+        recommended_score = None
+
     with st.container(key="overview_plan"):
         intro, slots = st.columns([1.1, 2], gap="large")
+
         with intro:
-            st.markdown('<div class="plan-heading"><span class="plan-icon">📅</span><h3>Plan the STEAM Convention</h3></div>', unsafe_allow_html=True)
-            st.write("Combine insights from across New York Digital City to identify the best time and strategy for a successful STEAM convention.")
-            st.button("Go to Convention Planner →", on_click=open_page, args=("Convention Planner",), width="stretch")
-            # Supporting bullets (2026-09-17): laid out horizontally (styles.css wraps
-            # them if space is tight) with their own pale theme-colored icon circle,
-            # per the color-consistency pass.
-            st.markdown('''<div class="plan-highlights">
-<span class="plan-highlight-item"><span class="plan-highlight-icon plan-highlight-icon-blue">📊</span>Data-driven insights</span>
-<span class="plan-highlight-item"><span class="plan-highlight-icon plan-highlight-icon-lavender">👥</span>Cross-domain analysis</span>
-<span class="plan-highlight-item"><span class="plan-highlight-icon plan-highlight-icon-yellow">💡</span>Smarter planning</span>
-</div>''', unsafe_allow_html=True)
+            st.markdown(
+                '<div class="plan-heading">'
+                '<span class="plan-icon">📅</span>'
+                '<h3>Plan the STEAM Convention</h3>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+
+            st.write(
+                "Combine insights from across New York Digital City to identify "
+                "the best time and strategy for a successful STEAM convention."
+            )
+
+            st.button(
+                "Go to Convention Planner →",
+                on_click=open_page,
+                args=("Convention Planner",),
+                width="stretch",
+            )
+
+            st.markdown(
+                '''<div class="plan-highlights">
+<span class="plan-highlight-item">
+<span class="plan-highlight-icon plan-highlight-icon-blue">📊</span>Data-driven insights
+</span>
+<span class="plan-highlight-item">
+<span class="plan-highlight-icon plan-highlight-icon-lavender">👥</span>Cross-domain analysis
+</span>
+<span class="plan-highlight-item">
+<span class="plan-highlight-icon plan-highlight-icon-yellow">💡</span>Smarter planning
+</span>
+</div>''',
+                unsafe_allow_html=True,
+            )
+
         with slots:
-            # Card 2 renamed "High-Confidence Alternative"->"Alternative Month" and
-            # icon 🎖->📅 (2026-09-17); each card carries a `tint` used by the
-            # plan-card-{tint} class (styles.css) to color that card's icon
-            # background, thin border, and status badge together (color-consistency
-            # pass, same day) — no border/glow beyond that thin tinted border.
+            score_display = (
+                f"{recommended_score:.2f}"
+                if recommended_score is not None
+                else "Unavailable"
+            )
+
             cards = [
-                ("🏆", "Recommended Month", "gold"),
-                ("📅", "Alternative Month", "mint"),
-                ("📊", "Monthly Suitability Score", "lavender"),
+                (
+                    "🏆",
+                    "Recommended Month",
+                    recommended_month,
+                    "Team Recommendation",
+                    "gold",
+                ),
+                (
+                    "📅",
+                    "Alternative Month",
+                    alternative_month,
+                    "Next Best Option",
+                    "mint",
+                ),
+                (
+                    "📊",
+                    f"{recommended_month} Suitability Score",
+                    score_display,
+                    "0–100 Scale",
+                    "lavender",
+                ),
             ]
-            for column, (icon, title, tint) in zip(st.columns(3), cards):
+
+            for column, (icon, title, value, status, tint) in zip(
+                st.columns(3), cards
+            ):
                 with column:
-                    st.markdown(f'''<div class="plan-card plan-card-{tint}">
+                    st.markdown(
+                        f'''<div class="plan-card plan-card-{tint}">
 <span class="plan-card-icon">{icon}</span>
 <div class="plan-card-title">{title}</div>
-<div class="plan-card-value">Team Analysis</div>
-<span class="plan-card-status">Integration Pending</span>
-</div>''', unsafe_allow_html=True)
+<div class="plan-card-value">{value}</div>
+<span class="plan-card-status">{status}</span>
+</div>''',
+                        unsafe_allow_html=True,
+                    )
 
 
 def render_pending(destination):

@@ -1,4 +1,4 @@
-"""Current modeled weather for a small set of SparkCity map locations."""
+"""Current modeled weather for a small set of New York City Digital City map locations."""
 
 from __future__ import annotations
 

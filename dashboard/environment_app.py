@@ -71,13 +71,13 @@ def get_convention_history() -> tuple[pd.DataFrame, pd.DataFrame]:
 
 @st.cache_data(ttl=900, show_spinner="Loading current weather...")
 def get_current_weather_points() -> list[dict]:
-    """Cache current modeled conditions for the SparkCity map."""
+    """Cache current modeled conditions for the New York City Digital City map."""
     return load_current_weather_points()
 
 
 @st.cache_data(ttl=900, show_spinner="Loading modeled air quality...")
 def get_current_air_quality() -> dict:
-    """Cache the current modeled US AQI for SparkCity Center."""
+    """Cache the current modeled US AQI for New York City Digital City."""
     return load_current_air_quality()
 
 
@@ -321,7 +321,7 @@ def _render_environment_content() -> None:
 
     st.subheader("Projected weather map · November 3–5, 2027")
     st.caption(
-        "Planning projection from 2021–2026 matching dates, using Open-Meteo "
+        "Planning projection from 2021–2025 matching dates, using Open-Meteo "
         "historical reanalysis across nine map locations. This is not a "
         "2027 weather forecast."
     )
@@ -345,7 +345,7 @@ def _render_environment_content() -> None:
     except Exception:
         st.warning(
             "The projected weather map is temporarily unavailable. "
-            "Historical S2 planning details above are still available."
+            "Historical database planning details above are still available."
         )
     else:
         map_data = []
@@ -387,23 +387,23 @@ def _render_environment_content() -> None:
                         pitch=0,
                     ),
                     map_style="dark",
-                    tooltip={
+                    tooltip={  # type: ignore[arg-type]
                         "html": (
                             "<b>{location} · November {day}, 2027 baseline</b><br/>"
                             "Mean temperature: {temperature_f} °F "
-                            "(past range {temperature_min_f}–{temperature_max_f} °F)"
+                            "(past range {temperature_min_f}-{temperature_max_f} °F)"
                             "<br/>Mean daily precipitation: {precipitation_mm} mm "
-                            "(past range {precipitation_min_mm}–"
+                            "(past range {precipitation_min_mm}-"
                             "{precipitation_max_mm} mm)"
                         ),
                         "style": {"color": "white"},
                     },
-                ),
-                use_container_width=True,
+                width="stretch",
                 height=300,
+                 )
             )
             st.caption(
-                "Colors show six-year historical averages for the selected "
+                "Colors show five-year historical averages for the selected "
                 "calendar day. Temperature: blue → green → orange as values "
                 "rise. Precipitation: gray → light blue → dark blue/purple as "
                 "daily totals rise. Hover for the past range. Nearby circles "
@@ -649,7 +649,7 @@ def _render_environment_content() -> None:
                         gridColor="#34495A",
                     )
                 )
-                st.altair_chart(air_chart, use_container_width=True, theme=None)
+                st.altair_chart(air_chart, width="stretch", theme=None)
                 st.caption(
                     f"{int(air['air_readings'].sum()):,} air quality readings in {year}. "
                     "PM2.5 units await team confirmation."
@@ -714,7 +714,7 @@ def _render_environment_content() -> None:
                 )
                 st.altair_chart(
                     weather_chart,
-                    use_container_width=True,
+                    width="stretch",
                     theme=None,
                 )
                 st.caption(

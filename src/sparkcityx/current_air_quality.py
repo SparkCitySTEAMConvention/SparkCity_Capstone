@@ -1,4 +1,4 @@
-"""Current modeled air quality for the SparkCity Center location."""
+"""Current modeled air quality for the New York City Digital City location."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ def aqi_category(value: int) -> tuple[str, str]:
 
 
 def load_current_air_quality() -> dict:
-    """Fetch current modeled US AQI and PM2.5 for SparkCity Center."""
+    """Fetch current modeled US AQI and PM2.5 for New York City Digital City."""
     _, latitude, longitude = MAP_LOCATIONS[0]
     params = urlencode(
         {

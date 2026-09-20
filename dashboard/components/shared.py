@@ -93,7 +93,7 @@ def render_navigation():
         # item (below) changes. Do not fork this per destination again.
         st.markdown('<div class="sparkcity-brand"><div><strong>New York Digital City</strong><br><small>Data for a Brighter Tomorrow</small></div><small>Smarter Data.<br>Stronger Communities.</small></div>', unsafe_allow_html=True)
         return st.radio(
-            "SparkCity Navigation", list(DESTINATIONS),
+            "New York Digital City Navigation", list(DESTINATIONS),
             format_func=DESTINATIONS.get, horizontal=True,
             label_visibility="collapsed", key="dashboard_destination",
         )

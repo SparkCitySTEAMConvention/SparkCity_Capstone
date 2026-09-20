@@ -2,13 +2,13 @@
 
 ### Prerequisites
 
-Before running SparkCity locally, make sure you have:
+Before running New York Digital City locally, make sure you have:
 
 - Python 3.13+
 - PostgreSQL
 - Git
 - A virtual environment
-- Access to the SparkCity database credentials
+- Access to the New York Digital City database credentials
 
 ---
 
