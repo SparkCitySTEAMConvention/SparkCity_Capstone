@@ -46,7 +46,7 @@ def test_archive_requests_matching_days_at_nine_locations() -> None:
     results = [
         {
             "daily": {
-                "time": ["2025-04-06", "2025-04-07", "2025-04-08"],
+                "time": ["2025-11-03", "2025-11-04", "2025-11-05"],
                 "temperature_2m_mean": [62.0, 64.0, 68.0],
                 "precipitation_sum": [0.0, 2.0, 1.0],
             }
@@ -60,8 +60,8 @@ def test_archive_requests_matching_days_at_nine_locations() -> None:
         samples = _archive_year(2025)
 
     assert len(samples) == 27
-    assert samples[0]["day"] == 6
-    assert samples[-1]["day"] == 8
+    assert samples[0]["day"] == 3
+    assert samples[-1]["day"] == 5
     params = parse_qs(urlparse(open_url.call_args.args[0]).query)
     assert params["daily"] == ["temperature_2m_mean,precipitation_sum"]
     assert params["temperature_unit"] == ["fahrenheit"]
