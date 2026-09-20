@@ -69,8 +69,8 @@ def calculate_exploratory_scores(monthly_inputs):
     ) / 2
 
     scores["Fiscal"] = (
-        normalize("revenue")
-        + normalize("net_profit")
+        normalize("revenue", higher_is_better=False)
+        + normalize("net_profit", higher_is_better=False)
     ) / 2
 
     scores["Air Quality"] = (
@@ -302,8 +302,8 @@ def render_convention_planner():
             "to a relative 0–100 scale."
         )
         st.markdown(
-            "**Higher is better:** available rooms, revenue, net profit.  \n"
-            "**Lower is better:** occupancy rate, PM2.5, NO₂, precipitation."
+            "**Higher is better:** available rooms.  \n"
+            "**Lower is better:** occupancy rate, revenue, net profit, PM2.5, NO₂, precipitation."
         )
         st.latex(
             r"\text{Higher-is-better score} = "
