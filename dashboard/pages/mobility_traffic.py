@@ -6,14 +6,46 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
+from components.shared import load_css
 from sparkcityx.mobility import (
-    get_congestion_breakdown,
+    get_congestion_breakdown as _get_congestion_breakdown,
     get_convention_mobility_outlook,
-    get_fourier_traffic_patterns,
-    get_mobility_summary,
-    get_sensor_summary,
-    has_month_data,
+    get_fourier_traffic_patterns as _get_fourier_traffic_patterns,
+    get_mobility_summary as _get_mobility_summary,
+    get_sensor_summary as _get_sensor_summary,
+    has_month_data as _has_month_data,
 )
+
+
+# Thin cached wrappers around sparkcityx.mobility's query functions (2026-09-18).
+# The underlying module stays free of any Streamlit import; these wrappers just
+# reuse the previous result within the TTL instead of re-querying the shared
+# database on every navigation to this page. Same names, signatures, and
+# return values as the functions they wrap, so every call site below is
+# unchanged.
+@st.cache_data(ttl=3600)
+def has_month_data(month: int) -> bool:
+    return _has_month_data(month)
+
+
+@st.cache_data(ttl=3600)
+def get_mobility_summary(month: int | None = None) -> dict[str, Any]:
+    return _get_mobility_summary(month)
+
+
+@st.cache_data(ttl=3600)
+def get_congestion_breakdown(month: int | None = None) -> list[dict[str, Any]]:
+    return _get_congestion_breakdown(month)
+
+
+@st.cache_data(ttl=3600)
+def get_fourier_traffic_patterns() -> list[dict[str, Any]]:
+    return _get_fourier_traffic_patterns()
+
+
+@st.cache_data(ttl=3600)
+def get_sensor_summary(month: int | None = None) -> list[dict[str, Any]]:
+    return _get_sensor_summary(month)
 
 
 def render_mobility_traffic():
@@ -27,12 +59,15 @@ def render_mobility_traffic():
     # Page Header
     # ---------------------------------------------------------
 
-    st.title("Mobility & Traffic")
+    load_css(section="mobility")
 
-    st.write(
-        "Explore traffic volume, average speeds, congestion patterns, "
+    st.markdown('<div class="mobility-page-title">Mobility &amp; Traffic</div>', unsafe_allow_html=True)
+
+    st.markdown(
+        '<p class="mobility-page-description">Explore traffic volume, average speeds, congestion patterns, '
         "road conditions, and transportation considerations for "
-        "SparkCity convention planning."
+        "New York Digital City convention planning.</p>",
+        unsafe_allow_html=True,
     )
 
     # ---------------------------------------------------------
@@ -580,7 +615,7 @@ coordination.
                 sensor_layer,
             ],
             initial_view_state=view_state,
-            map_style="light",
+            map_style="dark",
             tooltip=True,
         )
 
