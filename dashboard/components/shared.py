@@ -3,19 +3,24 @@
 Domain pages should add content, not restyle this shell. Page-specific UI
 (hero, cards, footer, etc.) belongs in its own page module, not here.
 """
+import base64
+from functools import lru_cache
 from pathlib import Path
 
 import streamlit as st
 
 STYLES_PATH = Path(__file__).resolve().parents[1] / "styles" / "styles.css"
+HEADER_IMAGE_PATH = Path(__file__).resolve().parents[1] / "assets" / "nav_city.png"  # NOT city.png (that is the sunset Overview hero image)
+LINEART_IMAGE_PATH = Path(__file__).resolve().parents[1] / "assets" / "nav_lineart.png"
 
 DESTINATIONS = {
-    "Overview": "🏠 Overview",
-    "Convention Planner": "📅 Convention Planner",
-    "Mobility & Traffic": "🚗 Mobility & Traffic",
-    "Environment": "🍃 Environment",
-    "Capacity & Utilization": "🏢 Capacity & Utilization",
-    "Fiscal Impact": "💰 Fiscal Impact",
+    # Nav-label emojis removed (2026-09-19); keys (routing values) unchanged, only the displayed labels.
+    "Overview": "Overview",
+    "Convention Planner": "Convention Planner",
+    "Mobility & Traffic": "Mobility & Traffic",
+    "Environment": "Environment",
+    "Capacity & Utilization": "Capacity & Utilization",
+    "Fiscal Impact": "Fiscal Impact",
     # "Sustainability" intentionally removed (2026-09-17) — no page was ever routed to it.
 }
 
@@ -50,6 +55,18 @@ def load_css(path=STYLES_PATH, section=None):
     st.markdown(f"<style>{read_css(path, section)}</style>", unsafe_allow_html=True)
 
 
+@lru_cache(maxsize=1)
+def _header_image_data_uri():
+    """Nav header background (2026-09-19): assets/nav_city.png (daytime civic image), embedded unmodified (raw bytes, no resize/re-encode). Only used off-Overview."""
+    return "data:image/png;base64," + base64.b64encode(HEADER_IMAGE_PATH.read_bytes()).decode("ascii")
+
+
+@lru_cache(maxsize=1)
+def _lineart_data_uri():
+    """Overview navbar decoration (2026-09-19): assets/nav_lineart.png embedded unmodified (raw bytes)."""
+    return "data:image/png;base64," + base64.b64encode(LINEART_IMAGE_PATH.read_bytes()).decode("ascii")
+
+
 def open_page(destination):
     """Generic session-state navigation setter, reusable by any page's buttons."""
     st.session_state["dashboard_destination"] = destination
@@ -58,13 +75,23 @@ def open_page(destination):
 def render_navigation():
     # Shared/frozen contract: navigation, page width, palette, headers and existing
     # common card styles. Teammates should reuse them rather than redesign them.
-    load_css(section="shared")
+    # City-image header (2026-09-19): Overview keeps the original compact navbar
+    # (shared CSS only); every other destination also gets the "navheader" CSS
+    # section with city.png substituted straight into its background declaration.
+    # NOT via a CSS custom property (fix 2026-09-19): the ~3MB data URI exceeded
+    # Chrome's custom-property/var() size cap, so the whole declaration was dropped.
+    # Still one style call and one st.radio.
+    css = read_css(section="shared")
+    if st.session_state.get("dashboard_destination", "Overview") != "Overview":
+        css += read_css(section="navheader").replace("var(--sc-city,none)", f"url('{_header_image_data_uri()}')")
+    else:
+        # Overview-only decorative line-art background (2026-09-19); background layer, no layout effect.
+        css += read_css(section="navlineart").replace("__NAV_LINEART__", _lineart_data_uri())
+    st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
     with st.container(key="sparkcity_navigation"):
-        # Landing-page branding only; keep the existing domain-page shell intact.
-        if st.session_state.get("dashboard_destination", "Overview") == "Overview":
-            st.markdown('<div class="sparkcity-brand"><div><strong>SparkCity</strong><br><small>Data for a Brighter Tomorrow</small></div><small>Smarter Data.<br>Stronger Communities.</small></div>', unsafe_allow_html=True)
-        else:
-            st.markdown('<div class="sparkcity-brand"><strong>SparkCity</strong><small>SparkCity STEAM Convention<br>Data-Driven Planning Dashboard</small></div>', unsafe_allow_html=True)
+        # One shared brand block on every page/destination; only the active nav
+        # item (below) changes. Do not fork this per destination again.
+        st.markdown('<div class="sparkcity-brand"><div><strong>New York Digital City</strong><br><small>Data for a Brighter Tomorrow</small></div><small>Smarter Data.<br>Stronger Communities.</small></div>', unsafe_allow_html=True)
         return st.radio(
             "SparkCity Navigation", list(DESTINATIONS),
             format_func=DESTINATIONS.get, horizontal=True,

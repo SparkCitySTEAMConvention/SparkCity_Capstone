@@ -129,20 +129,27 @@ def _render_environment_content() -> None:
         <style>
         .st-key-environment-page [data-testid="stMetricLabel"],
         .st-key-environment-page [data-testid="stMetricValue"] {
-            color: #172b46 !important;
+            color: #F3F6F9 !important;
         }
         .st-key-environment-page [data-testid="stMetricLabel"] p,
         .st-key-environment-page [data-testid="stCaptionContainer"] p {
             font-size: 0.95rem !important;
             line-height: 1.45 !important;
         }
+        .environment-page-title {
+            color: #F3F6F9;
+            font-size: 2.25rem;
+            font-weight: 700;
+            line-height: 1.2;
+            margin: 0 0 6px;
+        }
         </style>
         """,
         unsafe_allow_html=True,
     )
-    st.title("Environment")
+    st.markdown('<div class="environment-page-title">Environment</div>', unsafe_allow_html=True)
     st.caption(
-        "Current modeled weather and historical observations from SparkCity S2"
+        "Current modeled weather and historical observations from New York Digital City S2"
     )
 
     st.html(
@@ -150,28 +157,28 @@ def _render_environment_content() -> None:
         <style>
           .environment-date-banner {
             padding: 20px 24px;
-            border: 1px solid #c9dfd2;
+            border: 1px solid #34495A;
             border-left: 6px solid #37966b;
             border-radius: 14px;
-            background: #f0faf5;
-            color: #172b46;
+            background: #1E332F;
+            color: #F3F6F9;
           }
           .environment-date-banner .eyebrow {
             margin: 0 0 6px;
-            color: #287452;
+            color: #7FD1A8;
             font-size: 0.85rem;
             font-weight: 700;
             letter-spacing: 0.09em;
           }
           .environment-date-banner h2 {
             margin: 0 0 6px;
-            color: #172b46;
+            color: #F3F6F9;
             font-size: 1.7rem;
             line-height: 1.2;
           }
           .environment-date-banner .context {
             margin: 0;
-            color: #405c52;
+            color: #B8C4CF;
             font-size: 0.95rem;
             line-height: 1.45;
           }
@@ -366,7 +373,7 @@ def _render_environment_content() -> None:
                         zoom=10.6,
                         pitch=0,
                     ),
-                    map_style="light",
+                    map_style="dark",
                     tooltip={
                         "html": (
                             "<b>{location} · April {day}, 2027 baseline</b><br/>"
@@ -525,7 +532,7 @@ def _render_environment_content() -> None:
             )
 
     st.markdown(
-        '<p style="color:#172B46;font-weight:600;">Year</p>',
+        '<p style="color:#F3F6F9;font-weight:600;">Year</p>',
         unsafe_allow_html=True,
     )
     year = st.selectbox(
@@ -621,12 +628,12 @@ def _render_environment_content() -> None:
                 air_chart = (
                     air_chart
                     .properties(height=190)
-                    .configure(background="#FFFFFF")
+                    .configure(background="#182430")
                     .configure_view(stroke=None)
                     .configure_axis(
-                        labelColor="#172B46",
-                        titleColor="#172B46",
-                        gridColor="#DCE5EF",
+                        labelColor="#B8C4CF",
+                        titleColor="#F3F6F9",
+                        gridColor="#34495A",
                     )
                 )
                 st.altair_chart(air_chart, use_container_width=True, theme=None)
@@ -678,12 +685,12 @@ def _render_environment_content() -> None:
                 weather_chart = (
                     weather_chart
                     .properties(height=190)
-                    .configure(background="#FFFFFF")
+                    .configure(background="#182430")
                     .configure_view(stroke=None)
                     .configure_axis(
-                        labelColor="#172B46",
-                        titleColor="#172B46",
-                        gridColor="#DCE5EF",
+                        labelColor="#B8C4CF",
+                        titleColor="#F3F6F9",
+                        gridColor="#34495A",
                     )
                 )
                 st.altair_chart(
@@ -755,7 +762,7 @@ def _render_environment_content() -> None:
 
                 st.markdown(
                     '<div style="display:flex;height:20px;'
-                    'border-radius:5px;overflow:hidden;background:#E5E7EB;" '
+                    'border-radius:5px;overflow:hidden;background:#34495A;" '
                     f'role="img" aria-label="{normal_percent:.1f}% normal, '
                     f'{monitor_percent:.1f}% monitor">'
                     f'<div style="width:{normal_percent:.1f}%;'
@@ -830,16 +837,16 @@ def _render_environment_content() -> None:
               .environment-insights-card {
                 position: relative;
                 padding: 20px 24px;
-                border: 1px solid #f2d4a5;
+                border: 1px solid #5A4A2C;
                 border-left: 6px solid #e88c28;
                 border-radius: 14px;
-                background: #fff9ef;
+                background: #332E25;
                 box-shadow: 0 4px 14px rgb(114 71 16 / 9%);
-                color: #172b46;
+                color: #F3F6F9;
               }
               .environment-insights-card h3 {
                 margin: 0 0 12px;
-                color: #8a4a0b;
+                color: #F0B573;
                 font-size: 1.3rem;
                 line-height: 1.25;
               }
@@ -895,7 +902,7 @@ def _render_environment_content() -> None:
 
 if __name__ == "__main__":
     st.set_page_config(
-        page_title="SparkCity Environment",
+        page_title="New York Digital City Environment",
         page_icon="🌿",
         layout="wide",
     )

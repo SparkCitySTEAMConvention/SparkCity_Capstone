@@ -102,7 +102,7 @@ def render_convention_planner():
     load_css(section="convention_planner")
     st.markdown(
         '<section class="planner-banner">'
-        '<div><span class="planner-eyebrow">SPARKCITY · COMMUNITY PLANNING</span>'
+        '<div><span class="planner-eyebrow">NEW YORK DIGITAL CITY · COMMUNITY PLANNING</span>'
         '<h1>Find the Best Time to Host the STEAM Convention</h1>'
         '<p>Compare monthly, weekly and daily suitability.</p></div>'
         '<div class="planner-banner-meta">Convention planning<br>'

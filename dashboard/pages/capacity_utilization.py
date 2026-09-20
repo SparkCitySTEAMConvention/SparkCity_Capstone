@@ -247,9 +247,12 @@ def render_capacity_utilization():
     traffic_lo, traffic_hi = traffic_monthly["pct_high_congestion"].min(), traffic_monthly["pct_high_congestion"].max()
     apr_congestion = traffic_monthly.loc[traffic_monthly["month_name"] == "Apr", "pct_high_congestion"].iloc[0]
 
-    st.title("🏢 Capacity & Utilization")
-    st.write("Can SparkCity support the convention? Occupancy, energy, and traffic data for the "
-             "recommended **April 6–8, 2027 (Tuesday–Thursday)** convention window.")
+    st.markdown('<div class="capacity-page-title">🏢 Capacity &amp; Utilization</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<p class="capacity-page-description">Can New York Digital City support the convention? Occupancy, energy, and traffic data for the '
+        "recommended <strong>April 6–8, 2027 (Tuesday–Thursday)</strong> convention window.</p>",
+        unsafe_allow_html=True,
+    )
 
     with st.container(key="cap_kpi_row"):
         cards = [
@@ -274,7 +277,7 @@ def render_capacity_utilization():
         chart = alt.Chart(chart_df).mark_bar().encode(
             x=alt.X("month_name:N", sort=MONTH_ORDER, title="Month", axis=alt.Axis(labelAngle=0)),
             y=alt.Y("headroom_pct:Q", title="Room headroom (%)"),
-            color=alt.condition(alt.datum.is_april, alt.value("#287dcc"), alt.value("#c9d6e3")),
+            color=alt.condition(alt.datum.is_april, alt.value("#287dcc"), alt.value("#4A6074")),
             tooltip=[alt.Tooltip("month_name:N", title="Month"), alt.Tooltip("headroom_pct:Q", title="Headroom %")],
         ).properties(height=280)
         st.altair_chart(chart, width="stretch")
@@ -313,7 +316,7 @@ def render_capacity_utilization():
         dow_chart = alt.Chart(dow_df).mark_bar().encode(
             x=alt.X("day_name:N", sort=["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"], title=None),
             y=alt.Y("avg_occupancy_rate:Q", title="Avg occupancy rate", axis=alt.Axis(format="%")),
-            color=alt.condition(alt.datum.is_event, alt.value("#287dcc"), alt.value("#c9d6e3")),
+            color=alt.condition(alt.datum.is_event, alt.value("#287dcc"), alt.value("#4A6074")),
             tooltip=[alt.Tooltip("day_name:N", title="Day"), alt.Tooltip("avg_occupancy_rate:Q", title="Occupancy", format=".1%")],
         ).properties(height=260)
         st.altair_chart(dow_chart, width="stretch")
