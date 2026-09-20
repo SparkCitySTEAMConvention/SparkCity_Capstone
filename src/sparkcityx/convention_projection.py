@@ -95,7 +95,10 @@ def summarize_projection(samples: list[dict], years: tuple[int, ...]) -> list[di
         for name, latitude, longitude in MAP_POINTS:
             readings = by_point.get((day, name), [])
             if sorted(row["year"] for row in readings) != sorted(years):
-                raise ValueError(f"Incomplete historical coverage for November {day}, {name}")
+                raise ValueError(
+                    "Incomplete historical coverage for "
+                    f"November {day}, {name}"
+                )
             temperatures = [row["temperature_f"] for row in readings]
             rainfall = [row["precipitation_mm"] for row in readings]
             projections.append(
