@@ -30,7 +30,7 @@ from sparkcityx.environment_data import (
 ROOT = Path(__file__).resolve().parents[1]
 
 
-@st.cache_data(ttl=300, show_spinner="Loading Environment data from S2...")
+@st.cache_data(ttl=300, show_spinner="Loading Environment data...")
 def get_monthly_environment(year: int) -> pd.DataFrame:
     """Fetch monthly aggregates without changing the shared database."""
     load_dotenv(ROOT / "secrets" / ".env", override=False)
@@ -54,9 +54,9 @@ def get_air_monitoring_status(year: int) -> dict[str, int]:
         return load_air_monitoring_status(connection, year)
 
 
-@st.cache_data(ttl=300, show_spinner="Loading convention history from S2...")
+@st.cache_data(ttl=300, show_spinner="Loading convention history...")
 def get_convention_history() -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Fetch November 3–5 weather and air history without writing to S2."""
+    """Fetch November 3–5 weather and air history using read-only queries."""
     load_dotenv(ROOT / "secrets" / ".env", override=False)
 
     with connect_database() as connection:
@@ -143,13 +143,59 @@ def _render_environment_content() -> None:
             line-height: 1.2;
             margin: 0 0 6px;
         }
+        .environment-action-card {
+            min-height: 188px;
+            padding: 16px 18px;
+            border: 1px solid #34495A;
+            border-left-width: 5px;
+            border-radius: 12px;
+            color: #F3F6F9;
+        }
+        .environment-action-card.weather {
+            border-left-color: #38BDF8;
+            background: linear-gradient(135deg, #132B3A, #17283A);
+        }
+        .environment-action-card.air {
+            border-left-color: #F59E0B;
+            background: linear-gradient(135deg, #332815, #2C271B);
+        }
+        .environment-action-card .card-label {
+            margin: 0 0 10px;
+            font-size: 0.78rem;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+        }
+        .environment-action-card.weather .card-label { color: #7DD3FC; }
+        .environment-action-card.air .card-label { color: #FBBF24; }
+        .environment-action-card .action-row {
+            display: grid;
+            grid-template-columns: 72px 1fr;
+            gap: 10px;
+            padding: 8px 0;
+            border-top: 1px solid rgba(184, 196, 207, 0.18);
+        }
+        .environment-action-card .action-row:first-of-type {
+            border-top: 0;
+            padding-top: 0;
+        }
+        .environment-action-card .action-key {
+            color: #B8C4CF;
+            font-size: 0.78rem;
+            font-weight: 800;
+            letter-spacing: 0.05em;
+        }
+        .environment-action-card .action-copy {
+            color: #F3F6F9;
+            font-size: 0.92rem;
+            line-height: 1.4;
+        }
         </style>
         """,
         unsafe_allow_html=True,
     )
     st.markdown('<div class="environment-page-title">Environment</div>', unsafe_allow_html=True)
     st.caption(
-        "Current modeled weather and historical observations from New York Digital City S2"
+        "Current modeled weather and historical environmental observations"
     )
 
     st.html(
@@ -212,7 +258,7 @@ def _render_environment_content() -> None:
     try:
         weather_history, air_history = get_convention_history()
     except Exception:
-        st.warning("Convention history could not be loaded from S2.")
+        st.warning("Convention history could not be loaded.")
     else:
         weather_plan_column, air_plan_column = st.columns(2, gap="medium")
 
@@ -244,13 +290,29 @@ def _render_environment_content() -> None:
                         f"Based on {len(weather_history)} matching days "
                         f"from {weather_history['year'].nunique()} historical years."
                     )
-                    st.markdown(
-                        "- **Bring a layer:** Historical daily averages vary "
-                        "across the three dates.\n"
-                        "- **Keep umbrellas and covered routes available:** "
-                        "Precipitation appeared in the historical readings.\n"
-                        "- **Offer shade and water:** Prepare comfortable "
-                        "outdoor waiting areas if conditions are sunny."
+                    st.html(
+                        """
+                        <section class="environment-action-card weather"
+                                 aria-label="Weather readiness actions">
+                          <p class="card-label">WEATHER READINESS</p>
+                          <div class="action-row">
+                            <span class="action-key">PLAN</span>
+                            <span class="action-copy">Prepare layers for cooler
+                            November mornings and evenings.</span>
+                          </div>
+                          <div class="action-row">
+                            <span class="action-key">PREPARE</span>
+                            <span class="action-copy">Keep umbrellas, covered
+                            routes, and indoor staging available.</span>
+                          </div>
+                          <div class="action-row">
+                            <span class="action-key">CHECK</span>
+                            <span class="action-copy">Review the short-range
+                            forecast 72 hours before the event and each
+                            convention morning.</span>
+                          </div>
+                        </section>
+                        """
                     )
                     st.caption(
                         "Historical precipitation readings do not give the "
@@ -287,13 +349,29 @@ def _render_environment_content() -> None:
                         f"readings from {years}. No November 3–5, 2026 air "
                         "readings are available; these are not 2027 predictions."
                     )
-                    st.markdown(
-                        "- **Check current air readings** shortly before "
-                        "and during each convention day.\n"
-                        "- **Keep an indoor option** for outdoor activities "
-                        "if current conditions warrant a change.\n"
-                        "- **Share updates with attendees** if the outdoor "
-                        "plan changes."
+                    st.html(
+                        """
+                        <section class="environment-action-card air"
+                                 aria-label="Air quality readiness actions">
+                          <p class="card-label">AIR QUALITY READINESS</p>
+                          <div class="action-row">
+                            <span class="action-key">CONTEXT</span>
+                            <span class="action-copy">Treat the available 2025
+                            history as limited planning context.</span>
+                          </div>
+                          <div class="action-row">
+                            <span class="action-key">MONITOR</span>
+                            <span class="action-copy">Check current AQI and
+                            PM2.5 before opening and throughout each day.</span>
+                          </div>
+                          <div class="action-row">
+                            <span class="action-key">RESPOND</span>
+                            <span class="action-copy">Move outdoor activities
+                            inside and notify attendees if current readings
+                            become elevated.</span>
+                          </div>
+                        </section>
+                        """
                     )
                     st.caption(
                         "The dashboard's NORMAL/MONITOR indicator is based "
@@ -321,7 +399,7 @@ def _render_environment_content() -> None:
 
     st.subheader("Projected weather map · November 3–5, 2027")
     st.caption(
-        "Planning projection from 2021–2025 matching dates, using Open-Meteo "
+        "Planning projection from 2021–2026 matching dates, using Open-Meteo "
         "historical reanalysis across nine map locations. This is not a "
         "2027 weather forecast."
     )
@@ -464,7 +542,7 @@ def _render_environment_content() -> None:
         st.caption(
             f"{center_now['description']} · Model time "
             f"{center_now['reported_at']} America/New_York. "
-            "Current model estimates, not S2 station readings."
+            "Current model estimates, not local station observations."
         )
 
     try:
@@ -493,7 +571,7 @@ def _render_environment_content() -> None:
         )
         st.caption(
             f"Open-Meteo air-quality model · {current_air['reported_at']} "
-            "America/New_York. Separate from the historical S2 "
+            "America/New_York. Separate from the historical "
             "NORMAL/MONITOR indicator below."
         )
 
@@ -559,7 +637,7 @@ def _render_environment_content() -> None:
         monthly = get_monthly_environment(year)
     except Exception:
         st.error(
-            "Environment data could not be loaded from S2. "
+            "Environment data could not be loaded. "
             "Check the database connection and try again."
         )
         return
@@ -755,7 +833,7 @@ def _render_environment_content() -> None:
                 status = get_air_monitoring_status(year)
             except Exception:
                 st.warning(
-                    "Monitoring counts could not be loaded from S2."
+                    "Monitoring counts could not be loaded."
                 )
             else:
                 total = status["total"]
@@ -796,7 +874,7 @@ def _render_environment_content() -> None:
                 st.caption(
                     "MONITOR means at least one pollutant met or "
                     "exceeded its historical 90th-percentile threshold "
-                    "across all S2 air quality readings. This is a "
+                    "across all historical air quality readings. This is a "
                     "statistical monitoring indicator, not a "
                     "public-health classification."
                 )
@@ -914,7 +992,7 @@ def _render_environment_content() -> None:
     st.caption(
         "Interactive map and weather layers: Windy.com. "
         "Temperature and wind are forecasts; rain radar shows recent "
-        "conditions. This map is separate from S2 historical data and "
+        "conditions. This map is separate from historical observations and "
         "is not a November 2027 forecast."
     )
 
