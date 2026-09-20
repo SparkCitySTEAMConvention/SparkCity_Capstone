@@ -11,7 +11,7 @@ from PIL import Image
 from components.shared import STYLES_PATH, open_page, read_css
 
 ASSETS_DIR = Path(__file__).resolve().parents[1] / "assets"
-HERO_IMAGE_PATH = ASSETS_DIR / "city.png"
+HERO_IMAGE_PATH = ASSETS_DIR / "updated_hero.png"  # hero background swapped from city.png (2026-09-19); city.png itself is untouched
 DOMAIN_IMAGE_DIR = ASSETS_DIR / "domains"
 DOMAIN_IMAGE_MAX_WIDTH = 480  # card image area is ~110px tall; source photos are far larger
 
@@ -47,7 +47,7 @@ def _domain_image_data_uri(filename):
 # for later reuse); reintroduce their dicts here to bring them back.
 DOMAINS = [
     {"title": "Environment", "description": "Explore air quality and weather conditions.", "icon": "🍃", "accent": "#39846d", "destination": "Environment", "image": "environment.png"},
-    {"title": "Mobility & Traffic", "description": "Understand how people move through SparkCity.", "icon": "🚘", "accent": "#337bc0", "destination": "Mobility & Traffic", "image": "mobility_traffic.png"},
+    {"title": "Mobility & Traffic", "description": "Understand how people move through New York Digital City.", "icon": "🚘", "accent": "#337bc0", "destination": "Mobility & Traffic", "image": "mobility_traffic.png"},
     {"title": "Capacity & Utilization", "description": "Explore venue and accommodation capacity.", "icon": "▦", "accent": "#8767b1", "destination": "Capacity & Utilization", "image": "capacity_utilization.png"},
     {"title": "Fiscal Impact", "description": "Explore the economic impact of the convention.", "icon": "▤", "accent": "#428778", "destination": "Fiscal Impact", "image": "fiscal_impact.png"},
 ]
@@ -67,7 +67,7 @@ def render_overview(load_data=None):
     # to a subtle neutral depth shadow, per request; border color (not the shadow)
     # now carries each card's accent identity.
     card_wrapper_css = "".join(
-        f".st-key-domain_card_{i} {{border:1.5px solid {c['accent']};border-radius:20px;overflow:hidden;background:white;"
+        f".st-key-domain_card_{i} {{border:1.5px solid {c['accent']};border-radius:20px;overflow:hidden;background:#182430;"
         f"box-shadow:0 4px 14px rgba(16,41,68,.10);"
         f"transition:transform .2s ease, box-shadow .2s ease, border-color .2s ease;}}\n"
         f".st-key-domain_card_{i}:hover {{transform:translateY(-5px);box-shadow:0 14px 30px rgba(16,41,68,.2);"
@@ -79,7 +79,7 @@ def render_overview(load_data=None):
         # button selector below. Parent's overflow:hidden + border-radius already clips
         # this into the matching rounded bottom corners, so no radius needed here.
         f".st-key-domain_card_{i} [data-testid='stElementContainer']:has(button),"
-        f".st-key-domain_card_{i} button {{background:color-mix(in srgb,{c['accent']} 24%,white) !important;}}\n"
+        f".st-key-domain_card_{i} button {{background:color-mix(in srgb,{c['accent']} 24%,#182430) !important;}}\n"
         for i, c in enumerate(DOMAINS)
     )
     # The hero rule needs the runtime hero image data URI, so it can't live in the
@@ -93,33 +93,43 @@ def render_overview(load_data=None):
     # Compact pass (2026-09-17, same day): padding 64px->36px top/bottom (56px
     # left/right unchanged, so width/horizontal layout is untouched) and
     # min-height 460px->340px. Background image/size/position, overlay gradient,
-    # rounded corners, and the -32px pull-up under the nav are all unchanged.
-    st.markdown(f'''<style>
+    # rounded corners are unchanged. Hero no longer pulls up under the navbar
+    # (margin-top:-32px -> 0) and its top corners are now fully rounded
+    # (border-radius:0 0 18px 18px -> 18px) now that Overview's navbar uses
+    # the same shared geometry as every other page instead of a flush,
+    # zero-margin fusion with the hero.
+    with st.container(key="overview_hero"):
+        # Style block deliberately lives inside this container, as its first
+        # child, rather than before it (2026-09-18): keeps this hero as
+        # sparkcity_page_content's first-and-only top-level child on refresh,
+        # with no style-only sibling ahead of it consuming a shared-container
+        # gap — same structural pattern Environment already uses successfully.
+        # CSS scoping is selector-based, not position-based, so this changes
+        # nothing about what's styled, only which gap this element consumes.
+        st.markdown(f'''<style>
 {read_css(STYLES_PATH, section="overview")}
-.st-key-overview_hero {{position:relative;margin-top:-32px;background:linear-gradient(90deg,rgba(6,14,30,.90) 0%,rgba(6,14,30,.78) 26%,rgba(6,14,30,.42) 50%,rgba(6,14,30,.12) 70%,rgba(6,14,30,0) 85%),url('{_hero_image_data_uri()}');background-size:cover;background-position:center;background-repeat:no-repeat;border-radius:0 0 18px 18px;padding:36px 56px;min-height:340px;margin-bottom:6px;color:white;overflow:hidden;}}
+.st-key-overview_hero {{position:relative;margin-top:0;background:linear-gradient(90deg,rgba(6,14,30,.90) 0%,rgba(6,14,30,.78) 26%,rgba(6,14,30,.42) 50%,rgba(6,14,30,.12) 70%,rgba(6,14,30,0) 85%),url('{_hero_image_data_uri()}');background-size:cover;background-position:center;background-repeat:no-repeat;border-radius:18px;padding:36px 56px;min-height:340px;margin-bottom:6px;color:white;overflow:hidden;}}
 {card_wrapper_css}
 </style>''', unsafe_allow_html=True)
-    with st.container(key="overview_hero"):
         intro, mission = st.columns([1.8, 1], gap="large")
         with intro:
             st.markdown('<span class="overview-eyebrow">WELCOME TO</span>', unsafe_allow_html=True)
-            st.markdown('<h1>Spark<span class="title-accent">City</span></h1>', unsafe_allow_html=True)
+            # Hero title "SparkCity" -> "New York Digital City" (2026-09-19); same white + blue-accent split.
+            st.markdown('<h1>New York <span class="title-accent">Digital City</span></h1>', unsafe_allow_html=True)
             st.subheader("Data-Driven Decisions for a Stronger Tomorrow")
             st.write("Explore real city data to plan a successful and sustainable STEAM convention.")
             st.markdown('<div class="overview-actions"><a href="#explore-sparkcity">Explore the Data →</a><a href="#about-the-data">Learn More</a></div>', unsafe_allow_html=True)
         with mission:
-            st.markdown('<div class="overview-mission"><h3>Our Mission</h3><p>Use real city data to support events that bring people, innovation, and opportunity to SparkCity.</p></div>', unsafe_allow_html=True)
-    st.header("Explore SparkCity", anchor="explore-sparkcity")
+            st.markdown('<div class="overview-mission"><h3>Our Mission</h3><p>Use real city data to support events that bring people, innovation, and opportunity to New York Digital City.</p></div>', unsafe_allow_html=True)
+    st.header("Explore New York Digital City", anchor="explore-sparkcity")
     st.write("Dive into key aspects of the city to understand opportunities and plan the best STEAM convention.")
     with st.container(key="overview_domains"):
         for index, (column, card) in enumerate(zip(st.columns(4), DOMAINS)):
             with column:
                 render_domain_card(index, card)
     render_suitability()
-    st.markdown('<div id="about-the-data"></div>', unsafe_allow_html=True)
-    with st.expander("About the Data"):
-        st.caption("Mission statement describes the intended application. This Overview is a navigation UI: no metrics, suitability scores, or recommendations are calculated here. Team analysis integration is pending. Existing Traffic analysis uses simulated SparkCity data—not live municipal observations.")
-    st.markdown('<footer class="overview-footer"><div><strong>SparkCity</strong><br>People • Innovation • Opportunity</div><div>“Data today. A brighter tomorrow.”</div></footer>', unsafe_allow_html=True)
+    # "About the Data" expander (+ its #about-the-data anchor spacer) removed (2026-09-19); page now ends after the footer.
+    st.markdown('<footer class="overview-footer"><div><strong>New York Digital City</strong><br>People • Innovation • Opportunity</div><div>“Data today. A brighter tomorrow.”</div></footer>', unsafe_allow_html=True)
 
 
 def render_domain_card(index, card):
@@ -162,7 +172,7 @@ def render_suitability():
         intro, slots = st.columns([1.1, 2], gap="large")
         with intro:
             st.markdown('<div class="plan-heading"><span class="plan-icon">📅</span><h3>Plan the STEAM Convention</h3></div>', unsafe_allow_html=True)
-            st.write("Combine insights from across SparkCity to identify the best time and strategy for a successful STEAM convention.")
+            st.write("Combine insights from across New York Digital City to identify the best time and strategy for a successful STEAM convention.")
             st.button("Go to Convention Planner →", on_click=open_page, args=("Convention Planner",), width="stretch")
             # Supporting bullets (2026-09-17): laid out horizontally (styles.css wraps
             # them if space is tight) with their own pale theme-colored icon circle,
