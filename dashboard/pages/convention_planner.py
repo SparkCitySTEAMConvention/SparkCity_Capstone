@@ -127,37 +127,37 @@ def render_convention_planner():
     best_november_week = november_weeks.loc[november_weeks["suitability"].idxmax()]
     st.markdown(
         '<section class="planner-decision-panel">'
-        '<div class="planner-window-hero">'
-        '<div class="planner-date-tile"><span>NOV</span><strong>03–05</strong>'
-        '<small>2027 · WED–FRI</small></div>'
-        '<div class="planner-window-copy"><span class="planner-eyebrow">RECOMMENDED OPERATING WINDOW</span>'
-        '<h2>Early November balances the data with real operations</h2>'
-        '<p class="planner-decision-intro">The model favors December, but its leading '
-        'week overlaps Christmas. November provides the strongest usable window after '
-        'holiday and travel checks.</p>'
-        '<div class="planner-score-chips">'
-        f'<div><span>MONTH</span><strong>{november["suitability"]:.2f}</strong><small>rank 2</small></div>'
-        f'<div><span>WEEK</span><strong>{best_november_week["suitability"]:.2f}</strong>'
-        f'<small>rank {int(best_november_week["suitability_rank"])}</small></div>'
-        '<div><span>DURATION</span><strong>3</strong><small>days</small></div>'
-        '</div></div></div>'
-        '<div class="planner-decision-grid">'
-        f'<article><span>Why November</span><strong>{best_november_week["suitability"] - best_october_week["suitability"]:.2f} points stronger</strong>'
-        '<p>The best November week outperforms October’s best observed week and avoids '
-        'the Christmas conflict attached to December’s numerical lead.</p></article>'
-        '<article><span>Calendar check</span><strong>Clear of major November holidays</strong>'
-        '<p>The window follows Election Day on November 2 and precedes Veterans Day and '
-        'Thanksgiving. Confirm election-adjacent staffing and November 2 travel.</p></article>'
-        '<article><span>Fallback window</span><strong>October 19–21, 2027</strong>'
-        f'<p>Use October if the Election Day check fails. Its best observed week scores '
-        f'{best_october_week["suitability"]:.2f}, with lodging availability as the main constraint.</p></article>'
-        '</div>'
-        '<p class="planner-decision-verdict"><b>Decision gates:</b> confirm venue '
-        'availability, hotel room blocks, election-adjacent staffing and travel, and '
-        'competing citywide events before final approval.</p>'
-        '</section>',
-        unsafe_allow_html=True,
-    )
+            '<div class="planner-window-hero">'
+            '<div class="planner-date-tile"><span>NOV</span><strong>3–5</strong>'
+                '<small>2027 · WED–FRI</small></div>'
+            '<div class="planner-window-copy"><span class="planner-eyebrow">RECOMMENDED OPERATING WINDOW</span>'
+                '<h2>Early November balances the data with real operations</h2>'
+                '<p class="planner-decision-intro">The model favors December, but its leading '
+                'week overlaps Christmas. November provides the strongest usable window after '
+                'holiday and travel checks.</p>'
+            '<div class="planner-score-chips">'
+                f'<div><span>MONTH</span><strong>{november["suitability"]:.2f}</strong><small>rank 2</small></div>'
+                f'<div><span>WEEK</span><strong>{best_november_week["suitability"]:.2f}</strong>'
+                f'<small>rank {int(best_november_week["suitability_rank"])}</small></div>'
+            '<div><span>DURATION</span><strong>3</strong><small>days</small></div>'
+            '</div></div></div>'
+            '<div class="planner-decision-grid">'
+                f'<article><span>Why November</span><strong>{best_november_week["suitability"] - best_october_week["suitability"]:.2f} points stronger</strong>'
+                '<p>The best November week outperforms October’s best observed week and avoids '
+                'the Christmas conflict attached to December’s numerical lead.</p></article>'
+                '<article><span>Calendar check</span><strong>Clear of major November holidays</strong>'
+                '<p>The window follows Election Day on November 2 and precedes Veterans Day and '
+                'Thanksgiving. Confirm election-adjacent staffing and November 2 travel.</p></article>'
+                '<article><span>Fallback window</span><strong>October 19–21, 2027</strong>'
+                f'<p>Use October if the Election Day check fails. Its best observed week scores '
+                f'{best_october_week["suitability"]:.2f}, with lodging availability as the main constraint.</p></article>'
+            '</div>'
+            '<p class="planner-decision-verdict"><b>Decision gates:</b> confirm venue '
+            'availability, hotel room blocks, election-adjacent staffing and travel, and '
+            'competing citywide events before final approval.</p>'
+            '</section>',
+            unsafe_allow_html=True,
+        )
     st.caption(
         f"Model leaders: {best_month['start_date']:%B} month {best_month['suitability']:.2f} · "
         f"{best_week['start_date']:%b %d}–{best_week['end_date']:%b %d} week "
@@ -244,7 +244,10 @@ def render_convention_planner():
                     st.caption("One or more required factors are unavailable.")
                 else:
                     st.metric("Suitability", f"{adjusted_score:.2f}")
+
                 st.caption("Scale: 0–100 • Not a probability")
+
+            st.markdown('<div class="planner-left-spacer"></div>', unsafe_allow_html=True)
 
             explorer_takeaways_area = st.container()
 

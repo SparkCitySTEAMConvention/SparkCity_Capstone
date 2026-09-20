@@ -1,0 +1,95 @@
+PYTHONPATH=src python - <<'PY'
+import numpy as np
+import pandas as pd
+
+from sparkcityx.database import connect_database
+
+with connect_database() as conn:
+    df = pd.read_sql(
+        """
+        SELECT
+            timestamp,
+            AVG(vehicle_count) AS vehicle_count
+        FROM sparkcity.traffic_sensors
+        WHERE timestamp >= '2025-01-01'
+          AND timestamp < '2026-01-01'
+        GROUP BY timestamp
+        ORDER BY timestamp
+        """,
+        conn,
+    )
+
+df["timestamp"] = pd.to_datetime(df["timestamp"])
+df["vehicle_count"] = pd.to_numeric(df["vehicle_count"])
+
+# Build a complete 5-minute 2025 timeline.
+full_index = pd.date_range(
+    start="2025-01-01 00:00:00",
+    end="2025-12-31 23:55:00",
+    freq="5min",
+)
+
+series = (
+    df.set_index("timestamp")["vehicle_count"]
+    .reindex(full_index)
+    .interpolate(method="time")
+)
+
+print(f"Raw unique timestamps: {len(df):,}")
+print(f"Complete time series:   {len(series):,}")
+print(f"Missing after cleanup:  {series.isna().sum():,}")
+
+# Remove the mean/DC component.
+values = series.to_numpy(dtype=float)
+values = values - values.mean()
+
+# Fourier transform.
+fft_values = np.fft.rfft(values)
+frequencies = np.fft.rfftfreq(
+    len(values),
+    d=5 / 60,  # 5 minutes expressed in hours
+)
+
+amplitudes = np.abs(fft_values)
+
+# Ignore zero frequency.
+valid = frequencies > 0
+frequencies = frequencies[valid]
+amplitudes = amplitudes[valid]
+
+periods_hours = 1 / frequencies
+
+results = pd.DataFrame(
+    {
+        "period_hours": periods_hours,
+        "amplitude": amplitudes,
+    }
+)
+
+# Focus on cycles useful for traffic planning:
+# 2 hours through 7 days.
+results = results[
+    (results["period_hours"] >= 2)
+    & (results["period_hours"] <= 24 * 7)
+]
+
+results = results.nlargest(20, "amplitude").copy()
+results["period_days"] = results["period_hours"] / 24
+
+print("\nTop recurring traffic cycles:")
+print(
+    results[
+        ["period_hours", "period_days", "amplitude"]
+    ].to_string(index=False)
+)
+
+print("\nTarget planning cycles:")
+for target in [24, 12, 8, 6]:
+    idx = np.abs(periods_hours - target).argmin()
+
+    print(
+        f"{target:>2}-hour cycle: "
+        f"period={periods_hours[idx]:.4f} hours, "
+        f"amplitude={amplitudes[idx]:,.2f}"
+    )
+PY
