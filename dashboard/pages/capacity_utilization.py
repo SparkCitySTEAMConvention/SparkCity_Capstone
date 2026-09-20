@@ -1,13 +1,14 @@
 """Capacity & Utilization page UI + live queries against the shared sparkcity schema.
 
-Answers three questions for the Convention Planner's chosen date (April 6-8,
+Answers three questions for the Convention Planner's chosen date (November 3-5,
 2027): how would ~15,000 extra attendees load the city's room/venue capacity,
 is there enough headroom to hold the convention on those dates, and what does
 the occupancy/energy/traffic data show about capacity more generally. Numbers
 are queried live (cached) rather than hardcoded so they stay in sync with the
 shared database; see sql/analytical_queries.sql (Day 5 & Day 6 sections) and
 notebooks/day5_Sloane_capacity_infrastructure.ipynb for the exploratory work
-this page productionizes.
+this page productionizes (that work was built on the earlier April 6-8 window;
+the EVENT_* constants below re-point the baseline at November Wed-Fri).
 """
 from decimal import Decimal
 from html import escape
@@ -22,6 +23,20 @@ from sparkcityx.database import connect_database
 
 ATTENDEES = 15_000
 MONTH_ORDER = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+FULL_MONTH_NAMES = {
+    "Jan": "January", "Feb": "February", "Mar": "March", "Apr": "April", "May": "May", "Jun": "June",
+    "Jul": "July", "Aug": "August", "Sep": "September", "Oct": "October", "Nov": "November", "Dec": "December",
+}
+
+# The convention window, Nov 3-5, 2027, is a Wednesday-Friday. Its baseline is the
+# same calendar month and weekdays in the observed 2025 data.
+EVENT_MONTH = "Nov"
+EVENT_MONTH_NAME = FULL_MONTH_NAMES[EVENT_MONTH]
+EVENT_MONTH_NUM = 11
+EVENT_MONTH_START = "2025-11-01"
+EVENT_MONTH_END = "2025-12-01"
+EVENT_DOWS = (3, 4, 5)  # Postgres extract(dow): 0 = Sunday, so 3-5 = Wed-Fri
+EVENT_DAYS_LABEL = "Wed–Fri"
 
 
 def _run_query(conn, sql):
@@ -76,15 +91,15 @@ def load_capacity_data():
             ORDER BY date_trunc('month', timestamp)
         """)
 
-        # energy_meters now runs past 2025, so a second observed April exists as a
-        # cross-year check on the April baseline.
-        april_energy_by_year = _run_query(conn, """
+        # energy_meters now runs past 2025, so a second observed November exists as a
+        # cross-year check on the event-month baseline.
+        event_energy_by_year = _run_query(conn, f"""
             SELECT
                 extract(year FROM timestamp)::int AS year,
                 round(avg(power_consumption)::numeric, 2) AS avg_power_kw,
                 round(max(power_consumption)::numeric, 2) AS max_power_kw
             FROM sparkcity.energy_meters
-            WHERE extract(month FROM timestamp) = 4
+            WHERE extract(month FROM timestamp) = {EVENT_MONTH_NUM}
             GROUP BY 1
             ORDER BY 1
         """)
@@ -112,31 +127,31 @@ def load_capacity_data():
             ORDER BY 2
         """)
 
-        april_totals = _run_query(conn, """
-            WITH per_sensor_april AS (
+        event_month_totals = _run_query(conn, f"""
+            WITH per_sensor_event_month AS (
                 SELECT
                     sensor_id,
                     avg(available_rooms) AS avg_capacity,
                     avg(occupied_rooms) AS avg_occupied,
                     avg(guests) AS avg_guests
                 FROM sparkcity.occupancy_data
-                WHERE timestamp >= '2025-04-01' AND timestamp < '2025-05-01'
+                WHERE timestamp >= '{EVENT_MONTH_START}' AND timestamp < '{EVENT_MONTH_END}'
                 GROUP BY sensor_id
             )
             SELECT
                 sum(avg_capacity) AS total_capacity_rooms,
                 sum(avg_occupied) AS total_occupied_rooms,
                 sum(avg_guests) / NULLIF(sum(avg_occupied), 0) AS guests_per_occupied_room
-            FROM per_sensor_april
+            FROM per_sensor_event_month
         """)
 
-        april_tue_thu = _run_query(conn, """
+        event_day_split = _run_query(conn, f"""
             SELECT
-                CASE WHEN extract(dow FROM timestamp) IN (2, 3, 4) THEN 'Tue-Thu' ELSE 'Other' END AS day_group,
+                CASE WHEN extract(dow FROM timestamp) IN {EVENT_DOWS} THEN 'Event days' ELSE 'Other' END AS day_group,
                 avg(occupied_rooms::numeric / NULLIF(available_rooms, 0)) AS avg_occupancy_rate,
                 count(*) AS readings
             FROM sparkcity.occupancy_data
-            WHERE timestamp >= '2025-04-01' AND timestamp < '2025-05-01'
+            WHERE timestamp >= '{EVENT_MONTH_START}' AND timestamp < '{EVENT_MONTH_END}'
             GROUP BY 1
         """)
 
@@ -157,11 +172,11 @@ def load_capacity_data():
     return {
         "occupancy_monthly": occupancy_monthly,
         "energy_monthly": energy_monthly,
-        "april_energy_by_year": april_energy_by_year,
+        "event_energy_by_year": event_energy_by_year,
         "traffic_monthly": traffic_monthly,
         "day_of_week": day_of_week,
-        "april_totals": april_totals.iloc[0],
-        "april_tue_thu": april_tue_thu,
+        "event_month_totals": event_month_totals.iloc[0],
+        "event_day_split": event_day_split,
         "daily_series": daily_series,
     }
 
@@ -169,7 +184,7 @@ def load_capacity_data():
 def _dominant_weekly_cycle(daily_series):
     """Discrete Fourier transform of the daily occupancy-rate series: how strong,
     and how highly ranked, is the ~7-day cycle relative to every other periodic
-    component in the year (used to justify using the Tue-Thu rate, not the
+    component in the year (used to justify using the Wed-Fri rate, not the
     whole-month average, as the planning baseline)."""
     y = daily_series["avg_occupancy_rate"].to_numpy(dtype=float)
     n = len(y)
@@ -182,27 +197,28 @@ def _dominant_weekly_cycle(daily_series):
 
 
 def _derive_convention_impact(data):
-    totals = data["april_totals"]
-    tue_thu_rate = float(data["april_tue_thu"].set_index("day_group").loc["Tue-Thu", "avg_occupancy_rate"])
-    other_rate = float(data["april_tue_thu"].set_index("day_group").loc["Other", "avg_occupancy_rate"])
+    totals = data["event_month_totals"]
+    day_split = data["event_day_split"].set_index("day_group")
+    event_days_rate = float(day_split.loc["Event days", "avg_occupancy_rate"])
+    other_rate = float(day_split.loc["Other", "avg_occupancy_rate"])
 
     total_capacity = float(totals["total_capacity_rooms"])
     guests_per_room = float(totals["guests_per_occupied_room"])
 
-    tue_thu_occupied = tue_thu_rate * total_capacity
-    tue_thu_headroom_rooms = total_capacity - tue_thu_occupied
+    event_days_occupied = event_days_rate * total_capacity
+    event_days_headroom_rooms = total_capacity - event_days_occupied
     rooms_needed = ATTENDEES / guests_per_room
-    pct_headroom_used = rooms_needed / tue_thu_headroom_rooms
-    post_event_rate = (tue_thu_occupied + rooms_needed) / total_capacity
+    pct_headroom_used = rooms_needed / event_days_headroom_rooms
+    post_event_rate = (event_days_occupied + rooms_needed) / total_capacity
 
     period_days, rank, n_bins = _dominant_weekly_cycle(data["daily_series"])
 
     return {
         "total_capacity": total_capacity,
         "guests_per_room": guests_per_room,
-        "tue_thu_rate": tue_thu_rate,
+        "event_days_rate": event_days_rate,
         "other_rate": other_rate,
-        "tue_thu_headroom_rooms": tue_thu_headroom_rooms,
+        "event_days_headroom_rooms": event_days_headroom_rooms,
         "rooms_needed": rooms_needed,
         "pct_headroom_used": pct_headroom_used,
         "post_event_rate": post_event_rate,
@@ -210,6 +226,11 @@ def _derive_convention_impact(data):
         "cycle_rank": rank,
         "n_bins": n_bins,
     }
+
+
+def _join_names(names):
+    """['December', 'January'] -> 'December and January'."""
+    return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
 
 
 def _kpi_card(icon, label, value, sublabel, accent):
@@ -239,46 +260,56 @@ def render_capacity_utilization():
 
     energy_lo, energy_hi = energy_monthly["avg_power_kw"].min(), energy_monthly["avg_power_kw"].max()
     energy_axis_lo, energy_axis_hi = int(energy_lo) - 3, int(energy_hi) + 4  # padded so a ~2% spread reads as flat
-    apr_energy = energy_monthly[energy_monthly["month_name"] == "Apr"].iloc[0]
+    event_energy = energy_monthly[energy_monthly["month_name"] == EVENT_MONTH].iloc[0]
     energy_peak = energy_monthly.loc[energy_monthly["max_power_kw"].idxmax()]
-    apr_by_year = ", ".join(
-        f"{int(r.year)}: {r.avg_power_kw:.1f} kW" for r in data["april_energy_by_year"].itertuples()
+    event_by_year = ", ".join(
+        f"{int(r.year)}: {r.avg_power_kw:.1f} kW" for r in data["event_energy_by_year"].itertuples()
     )
     traffic_lo, traffic_hi = traffic_monthly["pct_high_congestion"].min(), traffic_monthly["pct_high_congestion"].max()
-    apr_congestion = traffic_monthly.loc[traffic_monthly["month_name"] == "Apr", "pct_high_congestion"].iloc[0]
+    event_congestion = traffic_monthly.loc[traffic_monthly["month_name"] == EVENT_MONTH, "pct_high_congestion"].iloc[0]
+
+    # Where the event month ranks on headroom, and the loosest/tightest months, so the
+    # captions and insights below follow the data instead of hardcoded month claims.
+    by_headroom = occupancy_monthly.sort_values("headroom_pct", ascending=False)
+    ranked_months = by_headroom["month_name"].astype(str).tolist()
+    looser_months = _join_names([FULL_MONTH_NAMES[m] for m in ranked_months[:ranked_months.index(EVENT_MONTH)]])
+    event_headroom = float(occupancy_monthly.loc[occupancy_monthly["month_name"] == EVENT_MONTH, "headroom_pct"].iloc[0])
+    loosest, tightest = by_headroom.iloc[0], by_headroom.iloc[-1]
+    loosest_name, tightest_name = FULL_MONTH_NAMES[str(loosest["month_name"])], FULL_MONTH_NAMES[str(tightest["month_name"])]
 
     st.title("🏢 Capacity & Utilization")
     st.write("Can SparkCity support the convention? Occupancy, energy, and traffic data for the "
-             "recommended **April 6–8, 2027 (Tuesday–Thursday)** convention window.")
+             "recommended **November 3–5, 2027** convention window.")
 
     with st.container(key="cap_kpi_row"):
         cards = [
-            ("🏨", "City Room Capacity", f"{impact['total_capacity']:,.0f}", "rooms tracked across the city, Apr 2025", "#8767b1"),
-            ("📉", "Tue–Thu Baseline (Apr)", f"{impact['tue_thu_rate']:.1%}", f"vs. {impact['other_rate']:.1%} on other April days", "#337bc0"),
-            ("🟢", "Headroom Before Event", f"{impact['tue_thu_headroom_rooms']:,.0f}", "spare rooms on a typical Apr Tue–Thu", "#2a9d8f"),
+            ("🏨", "City Room Capacity", f"{impact['total_capacity']:,.0f}", f"rooms tracked across the city, {EVENT_MONTH} 2025", "#8767b1"),
+            ("📉", f"{EVENT_DAYS_LABEL} Baseline ({EVENT_MONTH})", f"{impact['event_days_rate']:.1%}", f"vs. {impact['other_rate']:.1%} on other {EVENT_MONTH_NAME} days", "#337bc0"),
+            ("🟢", "Headroom Before Event", f"{impact['event_days_headroom_rooms']:,.0f}", f"spare rooms on a typical {EVENT_MONTH} {EVENT_DAYS_LABEL}", "#2a9d8f"),
             ("👥", "Rooms Needed (+15,000)", f"{impact['rooms_needed']:,.0f}", f"at {impact['guests_per_room']:.2f} guests/occupied room", "#e9a13f"),
-            ("✅", "Projected Occupancy", f"{impact['post_event_rate']:.1%}", f"with the convention, +{(impact['post_event_rate']-impact['tue_thu_rate'])*100:.1f} pts", "#428778"),
+            ("✅", "Projected Occupancy", f"{impact['post_event_rate']:.1%}", f"with the convention, +{(impact['post_event_rate']-impact['event_days_rate'])*100:.1f} pts", "#428778"),
         ]
         st.markdown('<div class="cap-kpi-grid">' + "".join(_kpi_card(*c) for c in cards) + '</div>', unsafe_allow_html=True)
 
-    st.markdown('<div class="cap-verdict">✅ <strong>There is sufficient capacity to hold the convention on April 6–8, 2027.</strong> '
-                'Even after absorbing 15,000 extra attendees, projected occupancy stays below the city’s ordinary '
-                'April weekend level and well under June, the tightest month of the year.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="cap-verdict">✅ <strong>There is sufficient capacity to hold the convention on November 3–5, 2027.</strong> '
+                f'Even after absorbing 15,000 extra attendees, projected occupancy stays below the city’s ordinary '
+                f'{EVENT_MONTH_NAME} level on other days and well under {tightest_name}, the tightest month of the year.</div>', unsafe_allow_html=True)
 
     st.subheader("How the convention affects capacity")
     left, right = st.columns([1.3, 1], gap="large")
     with left:
         st.markdown("**Occupancy Headroom by Month**")
         chart_df = occupancy_monthly.copy()
-        chart_df["is_april"] = chart_df["month_name"] == "Apr"
+        chart_df["is_event_month"] = chart_df["month_name"] == EVENT_MONTH
         chart = alt.Chart(chart_df).mark_bar().encode(
             x=alt.X("month_name:N", sort=MONTH_ORDER, title="Month", axis=alt.Axis(labelAngle=0)),
             y=alt.Y("headroom_pct:Q", title="Room headroom (%)"),
-            color=alt.condition(alt.datum.is_april, alt.value("#287dcc"), alt.value("#c9d6e3")),
+            color=alt.condition(alt.datum.is_event_month, alt.value("#287dcc"), alt.value("#c9d6e3")),
             tooltip=[alt.Tooltip("month_name:N", title="Month"), alt.Tooltip("headroom_pct:Q", title="Headroom %")],
         ).properties(height=280)
         st.altair_chart(chart, width="stretch")
-        st.caption("April sits mid-pack (highlighted) — comfortable headroom, not the loosest or tightest month.")
+        st.caption(f"{EVENT_MONTH_NAME} (highlighted) has more headroom than every month except {looser_months} — "
+                   f"well clear of the {tightest_name} squeeze.")
 
     with right:
         view = st.selectbox("Select a view", ["Energy Usage", "Traffic Congestion"], key="cap_secondary_view")
@@ -291,9 +322,9 @@ def render_capacity_utilization():
             ).properties(height=280)
             st.altair_chart(energy_chart, width="stretch")
             st.caption(f"Flat {energy_lo:.1f}–{energy_hi:.1f} kW across all 12 months of 2025 — the grid isn't the binding "
-                       f"constraint. April's peak load ({apr_energy['max_power_kw']:.1f} kW) is below the year's high "
-                       f"({energy_peak['max_power_kw']:.1f} kW, {energy_peak['month_name']}), and April averages hold "
-                       f"across years (avg {apr_by_year}). Y-axis zoomed to {energy_axis_lo}–{energy_axis_hi} kW.")
+                       f"constraint. {EVENT_MONTH_NAME}'s peak load ({event_energy['max_power_kw']:.1f} kW) is below the year's high "
+                       f"({energy_peak['max_power_kw']:.1f} kW, {energy_peak['month_name']}), and {EVENT_MONTH_NAME} averages hold "
+                       f"across years (avg {event_by_year}). Y-axis zoomed to {energy_axis_lo}–{energy_axis_hi} kW.")
         else:
             st.markdown("**Traffic Congestion by Month**")
             traffic_chart = alt.Chart(traffic_monthly).mark_bar(color="#e9a13f").encode(
@@ -302,14 +333,14 @@ def render_capacity_utilization():
                 tooltip=["month_name", "avg_vehicle_count", "pct_high_congestion"],
             ).properties(height=280)
             st.altair_chart(traffic_chart, width="stretch")
-            st.caption(f"April ({apr_congestion:.1f}% high-congestion) is in line with the rest of 2025 "
-                       f"({traffic_lo:.1f}–{traffic_hi:.1f}% across all 12 months) — no April-specific traffic red flag.")
+            st.caption(f"{EVENT_MONTH_NAME} ({event_congestion:.1f}% high-congestion) is in line with the rest of 2025 "
+                       f"({traffic_lo:.1f}–{traffic_hi:.1f}% across all 12 months) — no {EVENT_MONTH_NAME}-specific traffic red flag.")
 
-    st.subheader("Why Tuesday–Thursday is the right baseline")
+    st.subheader("Why Wednesday–Friday is the right baseline")
     left2, right2 = st.columns([1, 1.3], gap="large")
     with left2:
         dow_df = data["day_of_week"].copy()
-        dow_df["is_event"] = dow_df["dow"].isin([2, 3, 4])
+        dow_df["is_event"] = dow_df["dow"].isin(EVENT_DOWS)
         dow_chart = alt.Chart(dow_df).mark_bar().encode(
             x=alt.X("day_name:N", sort=["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"], title=None),
             y=alt.Y("avg_occupancy_rate:Q", title="Avg occupancy rate", axis=alt.Axis(format="%")),
@@ -317,7 +348,7 @@ def render_capacity_utilization():
             tooltip=[alt.Tooltip("day_name:N", title="Day"), alt.Tooltip("avg_occupancy_rate:Q", title="Occupancy", format=".1%")],
         ).properties(height=260)
         st.altair_chart(dow_chart, width="stretch")
-        st.caption("Full-year, every day of the week — Tue–Thu (highlighted) is consistently the lightest window.")
+        st.caption(f"Full-year, every day of the week — {EVENT_DAYS_LABEL} (highlighted) consistently runs well below the Saturday–Sunday peak.")
     with right2:
         st.markdown(f'''<div class="cap-insight-card">
 <h4>📈 A stable, predictable weekly rhythm</h4>
@@ -325,17 +356,17 @@ def render_capacity_utilization():
 after the dominant year-long seasonal trend, the single strongest periodic signal in the entire series is a
 <strong>{impact['period_days']:.1f}-day cycle</strong> &mdash; ranked <strong>#{impact['cycle_rank']} of {impact['n_bins']}</strong>
 frequency components. That's the weekly cadence: weekdays consistently run lighter than weekends, all year.</p>
-<p>Because that pattern is stable rather than random, the Tue–Thu-specific rate ({impact['tue_thu_rate']:.1%}) is a
-more reliable planning baseline for an April 6–8 event than the whole-month average &mdash; and it happens to be
+<p>Because that pattern is stable rather than random, the {EVENT_DAYS_LABEL}-specific rate ({impact['event_days_rate']:.1%}) is a
+more reliable planning baseline for a November 3–5 event than the whole-month average &mdash; and it happens to be
 the more favorable one, leaving more headroom than a weekend date in the same month would.</p>
 </div>''', unsafe_allow_html=True)
 
     st.subheader("15,000-attendee impact, step by step")
     steps = [
         ("1", "Convert attendees to rooms", f"{ATTENDEES:,} attendees ÷ {impact['guests_per_room']:.2f} observed guests per occupied room", f"≈ {impact['rooms_needed']:,.0f} rooms needed"),
-        ("2", "Compare to Tue–Thu headroom", f"{impact['rooms_needed']:,.0f} rooms needed ÷ {impact['tue_thu_headroom_rooms']:,.0f} rooms of spare capacity", f"{impact['pct_headroom_used']:.1%} of headroom used"),
-        ("3", "Project post-convention occupancy", f"({impact['tue_thu_rate']:.1%} baseline × {impact['total_capacity']:,.0f} rooms + {impact['rooms_needed']:,.0f} rooms) ÷ {impact['total_capacity']:,.0f} rooms", f"{impact['post_event_rate']:.1%} projected occupancy"),
-        ("4", "Check against known peaks", f"Projected {impact['post_event_rate']:.1%} vs. April weekend baseline {impact['other_rate']:.1%} and June's 82.6% (the tightest month of the year)", "Still below both — within normal range"),
+        ("2", f"Compare to {EVENT_DAYS_LABEL} headroom", f"{impact['rooms_needed']:,.0f} rooms needed ÷ {impact['event_days_headroom_rooms']:,.0f} rooms of spare capacity", f"{impact['pct_headroom_used']:.1%} of headroom used"),
+        ("3", "Project post-convention occupancy", f"({impact['event_days_rate']:.1%} baseline × {impact['total_capacity']:,.0f} rooms + {impact['rooms_needed']:,.0f} rooms) ÷ {impact['total_capacity']:,.0f} rooms", f"{impact['post_event_rate']:.1%} projected occupancy"),
+        ("4", "Check against known peaks", f"Projected {impact['post_event_rate']:.1%} vs. {EVENT_MONTH_NAME} baseline on other days {impact['other_rate']:.1%} and {tightest_name}'s {tightest['avg_occupancy_rate']:.1%} (the tightest month of the year)", "Still below both — within normal range"),
     ]
     step_html = "".join(
         f'''<div class="cap-step-card"><span class="cap-step-num">{n}</span>
@@ -352,18 +383,18 @@ the more favorable one, leaving more headroom than a weekend date in the same mo
         st.markdown(f'''<div class="cap-list-card">
 <h4>✔ Key Insights</h4>
 <ul>
-<li>Room/venue occupancy has a real seasonal shape — headroom ranges from ~42% in December to ~17% in June — while energy load stays nearly flat ({energy_lo:.1f}–{energy_hi:.1f} kW) in every month of the year. Occupancy, not the power grid, is the binding constraint on convention timing.</li>
-<li>April is a comfortable, mid-pack month: more headroom than peak summer, less than the winter off-season. Energy confirms it — April averages {apr_by_year} — with no load spike.</li>
-<li>Weekdays (Tue–Thu especially) run consistently lighter than weekends, all year, backed by a Fourier-confirmed weekly cycle — not a one-off pattern.</li>
-<li>A 15,000-attendee surge only consumes about 6% of the spare room capacity available on an April Tue–Thu.</li>
+<li>Room/venue occupancy has a real seasonal shape — headroom ranges from ~{loosest['headroom_pct']:.0f}% in {loosest_name} to ~{tightest['headroom_pct']:.0f}% in {tightest_name} — while energy load stays nearly flat ({energy_lo:.1f}–{energy_hi:.1f} kW) in every month of the year. Occupancy, not the power grid, is the binding constraint on convention timing.</li>
+<li>{EVENT_MONTH_NAME} is one of the roomier months: {event_headroom:.1f}% headroom, behind only {looser_months} and far above the peak-summer squeeze. Energy confirms it — {EVENT_MONTH_NAME} averages {event_by_year} — with no shift in average load.</li>
+<li>Weekdays ({EVENT_DAYS_LABEL} included) run consistently lighter than weekends, all year, backed by a Fourier-confirmed weekly cycle — not a one-off pattern.</li>
+<li>A 15,000-attendee surge only consumes about {impact['pct_headroom_used']:.0%} of the spare room capacity available on a {EVENT_MONTH_NAME} {EVENT_DAYS_LABEL}.</li>
 </ul>
 </div>''', unsafe_allow_html=True)
     with col_limits:
-        st.markdown('''<div class="cap-list-card cap-list-card-muted">
+        st.markdown(f'''<div class="cap-list-card cap-list-card-muted">
 <h4>⚠ Data Limitations</h4>
 <ul>
-<li>Monthly charts use calendar 2025 so every month is comparable with occupancy (which ends Jan 2026); <code>energy_meters</code> runs later, but only April has a second-year check here.</li>
-<li><code>traffic_sensors</code> covers all of 2025 plus a partial Jan 2026 — no April-to-April comparison for traffic yet.</li>
+<li>Monthly charts use calendar 2025 so every month is comparable with occupancy (which ends Jan 2026); <code>energy_meters</code> runs later, but only {EVENT_MONTH_NAME} has a second-year check here.</li>
+<li><code>traffic_sensors</code> covers all of 2025 plus a partial Jan 2026 — no {EVENT_MONTH_NAME}-to-{EVENT_MONTH_NAME} comparison for traffic yet.</li>
 <li>Room/guest counts are city-wide totals, not broken out by venue type (hotel vs. convention center vs. event space) — that split isn't in the current dataset.</li>
 <li>The 15,000-attendee impact assumes the historical guests-per-room ratio holds for convention visitors specifically.</li>
 </ul>
