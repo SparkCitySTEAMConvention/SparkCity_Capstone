@@ -22,6 +22,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 FISCAL_RUNS_DIR = PROJECT_ROOT / "dashboard" / "data" / "fiscal_analysis"
 OCCUPANCY_SNAPSHOT = PROJECT_ROOT / "dashboard" / "data" / "convention_monthly_inputs_2025.csv"
 SOURCE_ICON_DIR = PROJECT_ROOT / "dashboard" / "assets" / "source_icons"
+DEFAULT_EVENT_START = date(2027, 11, 3)
 NYC_2025_HOTEL_ADR = 333.71
 NYC_HOTEL_PERCENT_TAX = 0.1475
 NYC_HOTEL_FLAT_FEES = 3.50
@@ -354,7 +355,7 @@ def _render_date_explorer(daily_indexed, monthly, occupancy):
         col1, col2, col3, col4 = st.columns([1.4, 1, 1.2, 1])
         with col1:
             start = st.date_input(
-                "Event start", value=date(2027, 1, 5),
+                "Event start", value=DEFAULT_EVENT_START,
                 min_value=date(2027, 1, 1), max_value=date(2027, 12, 31),
                 key="fiscal_explorer_start",
             )

@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT / "dashboard"))
 
 from pages.convention_planner import MONTHLY_INPUT_QUERY, get_planner_engine
 from pages.fiscal_impact import (
+    DEFAULT_EVENT_START,
     FISCAL_RUNS_DIR,
     SOURCE_ICON_DIR,
     _combined_event_impact,
@@ -26,6 +27,10 @@ from pages.fiscal_impact import (
     _source_list_html,
     _verify_run_artifacts,
 )
+
+
+def test_fiscal_explorer_defaults_to_selected_convention_date():
+    assert DEFAULT_EVENT_START == date(2027, 11, 3)
 
 
 def test_fiscal_dashboard_snapshot_is_packaged_and_loadable():
