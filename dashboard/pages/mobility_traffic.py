@@ -65,8 +65,7 @@ def render_mobility_traffic():
 
     st.markdown(
         '<p class="mobility-page-description">Explore traffic volume, average speeds, congestion patterns, '
-        "road conditions, and transportation considerations for "
-        "New York Digital City convention planning.</p>",
+        "road conditions, and transportation considerations for New York Digital City convention planning.</p>",
         unsafe_allow_html=True,
     )
 
@@ -103,7 +102,7 @@ def render_mobility_traffic():
             f"""
 <div class="convention-forecast-panel">
 <div class="convention-forecast-eyebrow">CONVENTION MOBILITY FORECAST</div>
-<div class="convention-forecast-title">April 6–8, 2027</div>
+<div class="convention-forecast-title">November 3-5, 2027</div>
 <div class="convention-forecast-subtitle">Scenario forecast for 15,000 anticipated attendees</div>
 <div class="convention-forecast-metrics">
 <div class="convention-forecast-metric">
@@ -132,8 +131,8 @@ options can reduce pressure during peak periods.
 </div>
 <div class="convention-forecast-note">
 <strong>Scenario assumptions:</strong> 15,000 total attendees distributed evenly across
-three days and 2 attendees per convention-generated vehicle. Historical April
-Tuesday–Thursday sensor patterns provide the traffic baseline. This is a planning
+three days and 2 attendees per convention-generated vehicle. Historical November Wednesday–Friday 
+sensor patterns provide the traffic baseline. This is a planning
 scenario, not a measured 2027 traffic observation.
 </div>
 </div>
@@ -171,7 +170,7 @@ scenario, not a measured 2027 traffic observation.
         selected_month = st.selectbox(
             "Select Month",
             options=list(month_options.keys()),
-            index=3,
+            index=10,
         )
 
     selected_month_number = month_options[selected_month]
@@ -315,7 +314,7 @@ scenario, not a measured 2027 traffic observation.
             .mark_bar(
                 cornerRadiusEnd=6,
                 size=32,
-                color="#F00909",
+                color="#9B0404",
             )
             .encode(
                 y=alt.Y(
@@ -368,7 +367,7 @@ scenario, not a measured 2027 traffic observation.
         fourier_left, fourier_right = st.columns([1.35, 1])
 
         with fourier_left:
-            st.altair_chart(fourier_chart, use_container_width=True)
+            st.altair_chart(fourier_chart, width="stretch")
             st.caption(
                 "Higher values indicate stronger recurring patterns "
                 "in historical traffic data."
@@ -487,7 +486,7 @@ It is not a percentage of vehicles or a congestion probability.
         congestion_chart_col, congestion_text_col = st.columns([1.1, 1])
 
         with congestion_chart_col:
-            st.altair_chart(congestion_chart, use_container_width=True)
+            st.altair_chart(congestion_chart, width="stretch")
 
         high_row = congestion_df[
             congestion_df["congestion_level"] == "high"
@@ -524,110 +523,112 @@ coordination.
 
     st.divider()
 
-    st.subheader("Full-Year 2025 Transportation Risk Areas")
-
-    st.write(
-        "Using the full 2025 traffic dataset, this analysis identifies historically "
-        "congested sensor locations that may require additional transportation "
-        "planning during the April 6–8, 2027 convention. These locations already "
-        "experience recurring congestion and could face additional pressure from "
-        "convention-generated traffic."
-    )
-
-    sensor_df = pd.DataFrame(sensor_data)
-
-    if not sensor_df.empty:
-        risk_df = sensor_df.copy()
-
-        # Rank existing mobility vulnerabilities using three historical
-        # indicators: recurring high congestion, heavier traffic volume,
-        # and lower average speed. Percentile ranks keep unlike units
-        # comparable without inventing a traffic-engineering standard.
-        risk_df["congestion_risk"] = risk_df[
-            "high_congestion_percent"
-        ].rank(pct=True)
-
-        risk_df["volume_risk"] = risk_df[
-            "average_vehicle_count"
-        ].rank(pct=True)
-
-        risk_df["speed_risk"] = (
-            -risk_df["average_speed_kmh"]
-        ).rank(pct=True)
-
-        risk_df["convention_risk_score"] = (
-            risk_df["congestion_risk"] * 0.50
-            + risk_df["volume_risk"] * 0.30
-            + risk_df["speed_risk"] * 0.20
-        ) * 100
-
-        # Display the highest-risk historical locations rather than every
-        # sensor on the network so the map remains useful for planning.
-        risk_df = (
-            risk_df
-            .sort_values("convention_risk_score", ascending=False)
-            .head(25)
-            .copy()
+    with st.expander(
+        "🗺️ Full-Year 2025 Transportation Risk Areas",
+        expanded=False,
+    ):
+        st.write(
+            "Using the full 2025 traffic dataset, this analysis identifies historically "
+            "congested sensor locations that may require additional transportation "
+            "planning during the November 3–5, 2027 convention. These locations already "
+            "experience recurring congestion and could face additional pressure from "
+            "convention-generated traffic."
         )
 
-        risk_df["risk_rank"] = range(1, len(risk_df) + 1)
-        risk_df["convention_risk_score"] = (
-            risk_df["convention_risk_score"].round(1)
-        )
+        sensor_data = get_sensor_summary()
+        sensor_df = pd.DataFrame(sensor_data)
 
-        view_state = pdk.ViewState(
-            latitude=risk_df["latitude"].mean(),
-            longitude=risk_df["longitude"].mean(),
-            zoom=10,
-            pitch=0,
-        )
+        if not sensor_df.empty:
+            risk_df = sensor_df.copy()
 
-        # Heatmap emphasizes areas where transportation risk clusters.
-        heatmap_layer = pdk.Layer(
-            "HeatmapLayer",
-            data=risk_df,
-            get_position="[longitude, latitude]",
-            get_weight="convention_risk_score",
-            radius_pixels=55,
-            intensity=1,
-            threshold=0.05,
-            pickable=False,
-        )
+            # Rank existing mobility vulnerabilities using three historical
+            # indicators: recurring high congestion, heavier traffic volume,
+            # and lower average speed.
+            risk_df["congestion_risk"] = risk_df[
+                "high_congestion_percent"
+            ].rank(pct=True)
 
-        # Point layer keeps individual high-risk sensor locations available
-        # for hover details while the heatmap shows the broader pattern.
-        sensor_layer = pdk.Layer(
-            "ScatterplotLayer",
-            data=risk_df,
-            get_position="[longitude, latitude]",
-            get_radius=75,
-            get_fill_color=[37, 109, 180, 120],
-            get_line_color=[20, 43, 74, 180],
-            line_width_min_pixels=1,
-            stroked=True,
-            filled=True,
-            pickable=True,
-        )
+            risk_df["volume_risk"] = risk_df[
+                "average_vehicle_count"
+            ].rank(pct=True)
 
-        deck = pdk.Deck(
-            layers=[
-                heatmap_layer,
-                sensor_layer,
-            ],
-            initial_view_state=view_state,
-            map_style="dark",
-            tooltip=True,
-        )
+            risk_df["speed_risk"] = (
+                -risk_df["average_speed_kmh"]
+            ).rank(pct=True)
 
-        st.pydeck_chart(
-            deck,
-            use_container_width=True,
-        )
+            risk_df["convention_risk_score"] = (
+                risk_df["congestion_risk"] * 0.50
+                + risk_df["volume_risk"] * 0.30
+                + risk_df["speed_risk"] * 0.20
+            ) * 100
 
-        st.caption(
-            "Heat intensity highlights clusters of higher transportation "
-            "risk. Points identify the highest-risk sensor locations."
-        )
+            # Display the highest-risk historical locations.
+            risk_df = (
+                risk_df
+                .sort_values("convention_risk_score", ascending=False)
+                .head(25)
+                .copy()
+            )
+
+            risk_df["risk_rank"] = range(1, len(risk_df) + 1)
+
+            risk_df["convention_risk_score"] = (
+                risk_df["convention_risk_score"].round(1)
+            )
+
+            view_state = pdk.ViewState(
+                latitude=risk_df["latitude"].mean(),
+                longitude=risk_df["longitude"].mean(),
+                zoom=10,
+                pitch=0,
+            )
+
+            # Heatmap emphasizes areas where transportation risk clusters.
+            heatmap_layer = pdk.Layer(
+                "HeatmapLayer",
+                data=risk_df,
+                get_position="[longitude, latitude]",
+                get_weight="convention_risk_score",
+                radius_pixels=55,
+                intensity=1,
+                threshold=0.05,
+                pickable=False,
+            )
+
+            # Point layer keeps individual high-risk sensor locations
+            # available for hover details.
+            sensor_layer = pdk.Layer(
+                "ScatterplotLayer",
+                data=risk_df,
+                get_position="[longitude, latitude]",
+                get_radius=75,
+                get_fill_color=[37, 109, 180, 120],
+                get_line_color=[20, 43, 74, 180],
+                line_width_min_pixels=1,
+                stroked=True,
+                filled=True,
+                pickable=True,
+            )
+
+            deck = pdk.Deck(
+                layers=[
+                    heatmap_layer,
+                    sensor_layer,
+                ],
+                initial_view_state=view_state,
+                map_style="dark",
+                tooltip=True,
+            )
+
+            st.pydeck_chart(
+                deck,
+                width="stretch",
+            )
+
+            st.caption(
+                "Heat intensity highlights clusters of higher transportation "
+                "risk. Points identify the highest-risk sensor locations."
+            )  
 
     # ---------------------------------------------------------
     # Key Insights & Recommendations
@@ -645,15 +646,15 @@ coordination.
     with insights_col:
         st.markdown(
             f"""
-<div class="mobility-insight-card">
-<div class="mobility-card-title">💡 Key Insights</div>
-<p><strong>Highest traffic volume:</strong> {peak_hour_label}</p>
-<p><strong>Average traffic volume:</strong> {summary['average_vehicle_count']:.2f} vehicles</p>
-<p><strong>Average speed:</strong> {summary['average_speed_kmh']:.2f} km/h</p>
-<p><strong>High congestion:</strong> {summary['high_congestion_percent']:.2f}% of traffic observations</p>
-<p><strong>Recurring pattern:</strong> 12-hour cycle is strongest among the planner-focused Fourier patterns</p>
-</div>
-""",
+    <div class="mobility-insight-card">
+    <div class="mobility-card-title">💡 Key Insights</div>
+    <p><strong>November peak traffic:</strong> {peak_hour_label}</p>
+    <p><strong>Average traffic volume:</strong> {summary['average_vehicle_count']:.2f} vehicles</p>
+    <p><strong>Average speed:</strong> {summary['average_speed_kmh']:.2f} km/h</p>
+    <p><strong>High congestion:</strong> {summary['high_congestion_percent']:.2f}% of November traffic observations</p>
+    <p><strong>Convention impact:</strong> Approximately 2,500 additional vehicle trips per day could increase pressure during already-busy travel periods.</p>
+    </div>
+    """,
             unsafe_allow_html=True,
         )
 

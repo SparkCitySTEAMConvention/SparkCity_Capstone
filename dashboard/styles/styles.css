@@ -97,8 +97,11 @@ html {scrollbar-gutter:stable;}
 
 /* SparkCity page heading system, shared by any non-hero page title (2026-09-18). */
 .mobility-page-title {color:#F3F6F9;font-size:38px;font-weight:750;line-height:1.15;margin:4px 0 6px;}
-.mobility-page-description {color:#B8C4CF;font-size:17px;line-height:1.6;max-width:820px;margin:0 0 20px;}
-
+.mobility-page-description {
+    max-width: none;
+    width: 100%;
+    white-space: nowrap;
+}
 .mobility-kpi-card {
     display: flex;
     flex-direction: column;
@@ -136,7 +139,8 @@ html {scrollbar-gutter:stable;}
 .mobility-recommendation-card {
     border-radius: 20px;
     padding: 14px 18px;
-    min-height: 0;
+    height: 190px;
+    box-sizing: border-box;
     border: 1px solid #34495A;
     box-shadow: 0 4px 14px rgba(16, 41, 68, 0.10);
 }
@@ -600,6 +604,10 @@ h2#explore-sparkcity {font-size:34px;padding-top:4px;}
 }
 /* MCC: Key Takeaways nested under Suitability Score as a compact stacked tile. */
 .st-key-planner_takeaways {margin-top:14px;padding:10px 14px;}
+/* Space between Suitability Score and Key Takeaways */
+.planner-left-spacer {
+    height: 55px;
+}
 .st-key-planner_takeaways h5 {font-size:14px;color:#F3F6F9;margin:0 0 4px;padding-top:0;}
 /* MCC: compact factor rows and takeaways, matching the planner mockup. */
 .st-key-planner_breakdown .planner-factor-row {
@@ -735,14 +743,27 @@ h2#explore-sparkcity {font-size:34px;padding-top:4px;}
 }
 .planner-decision-intro {color:#B8C4CF;font-size:13px;line-height:1.55;margin:0 0 14px;}
 .planner-decision-grid {
-    display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:12px;
 }
+
 .planner-decision-grid article {
-    background:#182430;border:1px solid #34495A;border-radius:8px;padding:13px 15px;
+    background:#182430;
+    border:1px solid #34495A;
+    border-radius:8px;
+    padding:13px 15px;
+    min-height:140px;
+    box-sizing:border-box;
 }
 .planner-decision-grid article > span {
-    display:block;color:#8FA1B2;font-size:10px;font-weight:700;
-    letter-spacing:.8px;text-transform:uppercase;margin-bottom:3px;
+    display:block;
+    color:#8FA1B2;
+    font-size:10px;
+    font-weight:700;
+    letter-spacing:.8px;
+    text-transform:uppercase;
+    margin-bottom:3px;
 }
 .planner-decision-grid article > strong {display:block;color:#F3F6F9;font-size:16px;margin-bottom:5px;}
 .planner-decision-grid article p {color:#B8C4CF;font-size:12px;line-height:1.5;margin:0;}
@@ -782,6 +803,7 @@ h2#explore-sparkcity {font-size:34px;padding-top:4px;}
 .st-key-planner_breakdown .planner-factor-table tbody th {color:#F3F6F9;font-weight:600;}
 .st-key-planner_breakdown .planner-factor-table td:last-child {color:#6BB8FF;}
 .st-key-planner_breakdown .planner-factor-table .planner-factor-track {margin-top:6px;height:10px;min-width:70px;}
+
 /* END MCC / Convention Planner page styles */
 
 /* >>> capacity */

@@ -1,4 +1,4 @@
-"""Historical reanalysis baseline for the April 2027 convention map.
+"""Historical reanalysis baseline for the November 2027 convention map.
 
 Each displayed point is the mean of matching calendar dates across prior years.
 These values are planning projections, not meteorological forecasts.
@@ -11,6 +11,8 @@ from concurrent.futures import ThreadPoolExecutor
 from statistics import mean
 from urllib.parse import urlencode
 from urllib.request import urlopen
+from urllib.error import HTTPError
+
 
 # Roughly 7 km spacing; the source reanalysis has approximately 9 km resolution.
 MAP_POINTS = tuple(
@@ -22,29 +24,34 @@ MAP_POINTS = tuple(
     )
     for name, longitude in zip(row, (-74.03, -73.97, -73.91), strict=True)
 )
-HISTORY_YEARS = tuple(range(2021, 2027))
-EVENT_DAYS = (6, 7, 8)
+HISTORY_YEARS = tuple(range(2021, 2026))
+EVENT_DAYS = (3, 4, 5)
 
 
 def _archive_year(year: int) -> list[dict]:
-    """Load matching April days for all map points in one archive request."""
+    """Load matching November days for all map points in one archive request."""
     params = urlencode(
         {
             "latitude": ",".join(str(lat) for _, lat, _ in MAP_POINTS),
             "longitude": ",".join(str(lon) for _, _, lon in MAP_POINTS),
-            "start_date": f"{year}-04-06",
-            "end_date": f"{year}-04-08",
+            "start_date": f"{year}-11-03",
+            "end_date": f"{year}-11-05",
             "daily": "temperature_2m_mean,precipitation_sum",
-            "timezone": "America/New_York",
+            "timezone": ",".join("America/New_York" for _ in MAP_POINTS),  
             "temperature_unit": "fahrenheit",
             "precipitation_unit": "mm",
         }
     )
-    with urlopen(
-        f"https://archive-api.open-meteo.com/v1/archive?{params}",
-        timeout=15,
-    ) as response:
-        results = json.load(response)
+    url = f"https://archive-api.open-meteo.com/v1/archive?{params}"
+
+    try:
+        with urlopen(url, timeout=15) as response:
+            results = json.load(response)
+    except HTTPError as exc:
+        error_body = exc.read().decode("utf-8")
+        raise RuntimeError(
+            f"Open-Meteo request failed for {year}: {error_body}"
+        ) from exc
 
     if not isinstance(results, list) or len(results) != len(MAP_POINTS):
         raise ValueError(f"Unexpected archive response for {year}")
@@ -54,7 +61,7 @@ def _archive_year(year: int) -> list[dict]:
         MAP_POINTS, results, strict=True
     ):
         daily = result["daily"]
-        expected_dates = [f"{year}-04-{day:02d}" for day in EVENT_DAYS]
+        expected_dates = [f"{year}-11-{day:02d}" for day in EVENT_DAYS]
         if daily["time"] != expected_dates:
             raise ValueError(f"Incomplete archive dates for {year}, {name}")
         temperatures = daily["temperature_2m_mean"]
@@ -95,7 +102,10 @@ def summarize_projection(samples: list[dict], years: tuple[int, ...]) -> list[di
         for name, latitude, longitude in MAP_POINTS:
             readings = by_point.get((day, name), [])
             if sorted(row["year"] for row in readings) != sorted(years):
-                raise ValueError(f"Incomplete historical coverage for April {day}, {name}")
+                raise ValueError(
+                    "Incomplete historical coverage for "
+                    f"November {day}, {name}"
+                )
             temperatures = [row["temperature_f"] for row in readings]
             rainfall = [row["precipitation_mm"] for row in readings]
             projections.append(
@@ -117,7 +127,7 @@ def summarize_projection(samples: list[dict], years: tuple[int, ...]) -> list[di
 
 
 def load_convention_projection() -> list[dict]:
-    """Fetch 2021–2026 matching dates and compute an April 2027 baseline."""
+    """Fetch 2021–2026 matching dates and compute a November 2027 baseline."""
     with ThreadPoolExecutor(max_workers=3) as pool:
         per_year = list(pool.map(_archive_year, HISTORY_YEARS))
     samples = [sample for year_rows in per_year for sample in year_rows]

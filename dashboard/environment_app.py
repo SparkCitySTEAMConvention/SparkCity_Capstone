@@ -56,7 +56,7 @@ def get_air_monitoring_status(year: int) -> dict[str, int]:
 
 @st.cache_data(ttl=300, show_spinner="Loading convention history from S2...")
 def get_convention_history() -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Fetch April 6–8 weather and air history without writing to S2."""
+    """Fetch November 3–5 weather and air history without writing to S2."""
     load_dotenv(ROOT / "secrets" / ".env", override=False)
 
     with connect_database() as connection:
@@ -71,13 +71,13 @@ def get_convention_history() -> tuple[pd.DataFrame, pd.DataFrame]:
 
 @st.cache_data(ttl=900, show_spinner="Loading current weather...")
 def get_current_weather_points() -> list[dict]:
-    """Cache current modeled conditions for the SparkCity map."""
+    """Cache current modeled conditions for the New York City Digital City map."""
     return load_current_weather_points()
 
 
 @st.cache_data(ttl=900, show_spinner="Loading modeled air quality...")
 def get_current_air_quality() -> dict:
-    """Cache the current modeled US AQI for SparkCity Center."""
+    """Cache the current modeled US AQI for New York City Digital City."""
     return load_current_air_quality()
 
 
@@ -182,15 +182,28 @@ def _render_environment_content() -> None:
             font-size: 0.95rem;
             line-height: 1.45;
           }
+          .environment-date-banner .alternative {
+            margin: 10px 0 0;
+            padding-top: 10px;
+            border-top: 1px solid #c9dfd2;
+            color: #405c52;
+            font-size: 0.95rem;
+            line-height: 1.45;
+          }
         </style>
         <section class="environment-date-banner"
                  aria-label="Confirmed convention dates">
-          <p class="eyebrow">CONFIRMED CONVENTION DATES</p>
-          <h2>April 6–8, 2027</h2>
+          <p class="eyebrow">PRIMARY PLANNING WINDOW</p>
+          <h2>November 3–5, 2027</h2>
           <p class="context">
             Environment planning outlook based on historical observations.
-            This is not an April 2027 forecast.
+            This is not a November 2027 forecast.
             Measurement units await team confirmation.
+          </p>
+          <p class="alternative">
+            <strong>Alternate window:</strong> October 19–21, 2027,
+            if planners choose to avoid possible Election Day-related
+            impacts around November 2.
           </p>
         </section>
         """
@@ -223,7 +236,7 @@ def _render_environment_content() -> None:
                         day_columns, daily_weather.itertuples(), strict=False
                     ):
                         column.metric(
-                            f"April {row.day}",
+                            f"November {row.day}",
                             f"{row.average_temperature:.1f}",
                         )
 
@@ -262,7 +275,7 @@ def _render_environment_content() -> None:
                         day_columns, air_history.itertuples(), strict=False
                     ):
                         column.metric(
-                            f"April {row.day} PM2.5",
+                            f"November {row.day} PM2.5",
                             f"{row.average_pm25:.2f}",
                         )
 
@@ -271,7 +284,7 @@ def _render_environment_content() -> None:
                     )
                     st.caption(
                         f"Based on {int(air_history['readings'].sum()):,} "
-                        f"readings from {years}. No April 6–8, 2026 air "
+                        f"readings from {years}. No November 3–5, 2026 air "
                         "readings are available; these are not 2027 predictions."
                     )
                     st.markdown(
@@ -293,7 +306,7 @@ def _render_environment_content() -> None:
     with why_column:
         st.markdown("**Why it matters**")
         st.write(
-            "Historical April 6–8 weather readings included precipitation. "
+            "Historical November 3–5 weather readings included precipitation. "
             "Matching air quality readings are available for 2025 only, "
             "so the air data gives limited planning context."
         )
@@ -306,9 +319,9 @@ def _render_environment_content() -> None:
             "finalizing outdoor activities."
         )
 
-    st.subheader("Projected weather map · April 6–8, 2027")
+    st.subheader("Projected weather map · November 3–5, 2027")
     st.caption(
-        "Planning projection from 2021–2026 matching dates, using Open-Meteo "
+        "Planning projection from 2021–2025 matching dates, using Open-Meteo "
         "historical reanalysis across nine map locations. This is not a "
         "2027 weather forecast."
     )
@@ -316,8 +329,8 @@ def _render_environment_content() -> None:
     with map_day_column:
         projection_day = st.selectbox(
             "Event day",
-            [6, 7, 8],
-            format_func=lambda day: f"April {day}",
+            [3, 4, 5],
+            format_func=lambda day: f"November {day}",
             key="environment_projection_day",
         )
     with map_layer_column:
@@ -332,7 +345,7 @@ def _render_environment_content() -> None:
     except Exception:
         st.warning(
             "The projected weather map is temporarily unavailable. "
-            "Historical S2 planning details above are still available."
+            "Historical database planning details above are still available."
         )
     else:
         map_data = []
@@ -374,23 +387,23 @@ def _render_environment_content() -> None:
                         pitch=0,
                     ),
                     map_style="dark",
-                    tooltip={
+                    tooltip={  # type: ignore[arg-type]
                         "html": (
-                            "<b>{location} · April {day}, 2027 baseline</b><br/>"
+                            "<b>{location} · November {day}, 2027 baseline</b><br/>"
                             "Mean temperature: {temperature_f} °F "
-                            "(past range {temperature_min_f}–{temperature_max_f} °F)"
+                            "(past range {temperature_min_f}-{temperature_max_f} °F)"
                             "<br/>Mean daily precipitation: {precipitation_mm} mm "
-                            "(past range {precipitation_min_mm}–"
+                            "(past range {precipitation_min_mm}-"
                             "{precipitation_max_mm} mm)"
                         ),
                         "style": {"color": "white"},
                     },
-                ),
-                use_container_width=True,
+                width="stretch",
                 height=300,
+                 )
             )
             st.caption(
-                "Colors show six-year historical averages for the selected "
+                "Colors show five-year historical averages for the selected "
                 "calendar day. Temperature: blue → green → orange as values "
                 "rise. Precipitation: gray → light blue → dark blue/purple as "
                 "daily totals rise. Hover for the past range. Nearby circles "
@@ -636,17 +649,23 @@ def _render_environment_content() -> None:
                         gridColor="#34495A",
                     )
                 )
-                st.altair_chart(air_chart, use_container_width=True, theme=None)
+                st.altair_chart(air_chart, width="stretch", theme=None)
                 st.caption(
                     f"{int(air['air_readings'].sum()):,} air quality readings in {year}. "
                     "PM2.5 units await team confirmation."
                 )
-                april_air = air.loc[air["month"] == 4, "average_pm25"]
-                july_air = air.loc[air["month"] == 7, "average_pm25"]
-                if not april_air.empty and not july_air.empty:
+                october_air = air.loc[air["month"] == 10, "average_pm25"]
+                november_air = air.loc[air["month"] == 11, "average_pm25"]
+                if not october_air.empty and not november_air.empty:
                     left, right = st.columns(2)
-                    left.metric("April average PM2.5", f"{april_air.iloc[0]:.2f}")
-                    right.metric("July average PM2.5", f"{july_air.iloc[0]:.2f}")
+                    left.metric(
+                        "October average PM2.5",
+                        f"{october_air.iloc[0]:.2f}",
+                    )
+                    right.metric(
+                        "November average PM2.5",
+                        f"{november_air.iloc[0]:.2f}",
+                    )
 
     with weather_column:
         with st.container(border=True):
@@ -695,7 +714,7 @@ def _render_environment_content() -> None:
                 )
                 st.altair_chart(
                     weather_chart,
-                    use_container_width=True,
+                    width="stretch",
                     theme=None,
                 )
                 st.caption(
@@ -704,22 +723,22 @@ def _render_environment_content() -> None:
                     "team confirmation."
                 )
 
-                april_weather = weather.loc[
-                    weather["month"] == 4, "average_temperature"
+                october_weather = weather.loc[
+                    weather["month"] == 10, "average_temperature"
                 ]
-                july_weather = weather.loc[
-                    weather["month"] == 7, "average_temperature"
+                november_weather = weather.loc[
+                    weather["month"] == 11, "average_temperature"
                 ]
 
-                if not april_weather.empty and not july_weather.empty:
+                if not october_weather.empty and not november_weather.empty:
                     left, right = st.columns(2)
                     left.metric(
-                        "April average temperature",
-                        f"{april_weather.iloc[0]:.2f}",
+                        "October average temperature",
+                        f"{october_weather.iloc[0]:.2f}",
                     )
                     right.metric(
-                        "July average temperature",
-                        f"{july_weather.iloc[0]:.2f}",
+                        "November average temperature",
+                        f"{november_weather.iloc[0]:.2f}",
                     )
 
     # Bottom row: monitoring indicator and data-driven insights
@@ -783,52 +802,53 @@ def _render_environment_content() -> None:
                 )
 
     with insights_column:
-        april = monthly.loc[monthly["month"] == 4]
-        july = monthly.loc[monthly["month"] == 7]
+        october = monthly.loc[monthly["month"] == 10]
+        november = monthly.loc[monthly["month"] == 11]
         insight_lines = []
 
-        if april.empty or july.empty:
+        if october.empty or november.empty:
             insight_lines.append(
-                "<p>An April–July comparison is unavailable for this year. "
-                "Select 2025 for the complete comparison.</p>"
+                "<p>An October–November comparison is unavailable for this "
+                "year. Select 2025 for the complete comparison.</p>"
             )
         else:
-            april = april.iloc[0]
-            july = july.iloc[0]
+            october = october.iloc[0]
+            november = november.iloc[0]
 
-            if pd.notna(april["average_pm25"]) and pd.notna(
-                july["average_pm25"]
+            if pd.notna(october["average_pm25"]) and pd.notna(
+                november["average_pm25"]
             ):
                 direction = (
                     "lower"
-                    if july["average_pm25"] < april["average_pm25"]
+                    if november["average_pm25"] < october["average_pm25"]
                     else "higher"
                 )
                 insight_lines.append(
-                    f"<p>July average PM2.5 was <strong>{direction}</strong> "
-                    f"than April: {july['average_pm25']:.2f} "
-                    f"versus {april['average_pm25']:.2f}.</p>"
+                    f"<p>November average PM2.5 was "
+                    f"<strong>{direction}</strong> than October: "
+                    f"{november['average_pm25']:.2f} versus "
+                    f"{october['average_pm25']:.2f}.</p>"
                 )
             else:
                 insight_lines.append(
-                    "<p>The April–July PM2.5 comparison is "
+                    "<p>The October–November PM2.5 comparison is "
                     f"unavailable for {year}.</p>"
                 )
 
-            if pd.notna(april["average_temperature"]) and pd.notna(
-                july["average_temperature"]
+            if pd.notna(october["average_temperature"]) and pd.notna(
+                november["average_temperature"]
             ):
                 direction = (
                     "lower"
-                    if july["average_temperature"]
-                    < april["average_temperature"]
+                    if november["average_temperature"]
+                    < october["average_temperature"]
                     else "higher"
                 )
                 insight_lines.append(
-                    "<p>July average weather temperature was "
-                    f"<strong>{direction}</strong> than April: "
-                    f"{july['average_temperature']:.2f} versus "
-                    f"{april['average_temperature']:.2f}.</p>"
+                    "<p>November average weather temperature was "
+                    f"<strong>{direction}</strong> than October: "
+                    f"{november['average_temperature']:.2f} versus "
+                    f"{october['average_temperature']:.2f}.</p>"
                 )
 
         st.html(
@@ -895,7 +915,7 @@ def _render_environment_content() -> None:
         "Interactive map and weather layers: Windy.com. "
         "Temperature and wind are forecasts; rain radar shows recent "
         "conditions. This map is separate from S2 historical data and "
-        "is not an April 2027 forecast."
+        "is not a November 2027 forecast."
     )
 
 

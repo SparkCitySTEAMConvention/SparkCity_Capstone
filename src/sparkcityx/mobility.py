@@ -375,9 +375,9 @@ def get_convention_mobility_outlook() -> dict[str, Any]:
     """
     Return historical mobility conditions for convention planning.
 
-    The recommended convention is April 6-8, 2027, which falls
-    Tuesday through Thursday. This query uses observed April
-    Tuesday-Thursday traffic as the historical planning baseline.
+    The recommended convention is November 3-5, 2027, which falls
+    Wednesday through Friday. This query uses observed November
+    Wednesday-Friday traffic as the historical planning baseline.
     """
 
     summary_query = """
@@ -390,9 +390,9 @@ def get_convention_mobility_outlook() -> dict[str, Any]:
                 2
             )
         FROM sparkcity.traffic_sensors
-        WHERE timestamp >= '2025-04-01'
-            AND timestamp < '2025-05-01'
-            AND EXTRACT(ISODOW FROM timestamp) BETWEEN 2 AND 4
+        WHERE timestamp >= '2025-11-01'
+            AND timestamp < '2025-12-01'
+            AND EXTRACT(ISODOW FROM timestamp) BETWEEN 3 AND 5;
     """
 
     peak_query = """
@@ -400,8 +400,8 @@ def get_convention_mobility_outlook() -> dict[str, Any]:
             EXTRACT(HOUR FROM timestamp)::integer AS hour,
             ROUND(AVG(vehicle_count)::numeric, 2) AS average_vehicle_count
         FROM sparkcity.traffic_sensors
-        WHERE EXTRACT(MONTH FROM timestamp) = 4
-          AND EXTRACT(ISODOW FROM timestamp) BETWEEN 2 AND 4
+        WHERE EXTRACT(MONTH FROM timestamp) = 11
+          AND EXTRACT(ISODOW FROM timestamp) BETWEEN 3 AND 5
         GROUP BY EXTRACT(HOUR FROM timestamp)
         ORDER BY average_vehicle_count DESC
         LIMIT 1;
@@ -432,12 +432,12 @@ def get_convention_mobility_outlook() -> dict[str, Any]:
         outlook = "Elevated"
 
     return {
-        "convention_dates": "April 6–8, 2027",
+        "convention_dates": "November 3–5, 2027",
         "average_vehicle_count": float(summary_row[0]),
         "average_speed_kmh": float(summary_row[1]),
         "high_congestion_percent": high_congestion_percent,
         "peak_hour": int(peak_row[0]),
         "peak_hour_average_vehicle_count": float(peak_row[1]),
         "mobility_outlook": outlook,
-        "basis": "Historical April Tuesday–Thursday traffic patterns",
+        "basis": "Historical November Wednesday–Friday traffic patterns",
     }

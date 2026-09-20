@@ -113,7 +113,7 @@ def load_air_monitoring_status(
 def load_convention_weather_history(
     connection: Connection,
 ) -> pd.DataFrame:
-    """Return April 6–8 weather observations from 2025 and 2026."""
+    """Return November 3–5 weather observations from 2025 and 2026."""
     with connection.cursor() as cursor:
         cursor.execute(
             """
@@ -126,10 +126,10 @@ def load_convention_weather_history(
                    100.0 * AVG((precipitation > 0)::int)
                        AS percent_readings_with_precipitation
             FROM sparkcity.weather_data
-            WHERE (timestamp >= DATE '2025-04-06'
-                   AND timestamp < DATE '2025-04-09')
-               OR (timestamp >= DATE '2026-04-06'
-                   AND timestamp < DATE '2026-04-09')
+            WHERE (timestamp >= DATE '2025-11-03'
+                   AND timestamp < DATE '2025-11-06')
+               OR (timestamp >= DATE '2026-11-03'
+                   AND timestamp < DATE '2026-11-06')
             GROUP BY 1, 2
             ORDER BY 1, 2
             """
@@ -153,7 +153,7 @@ def load_convention_weather_history(
 def load_convention_weather_history(
     connection: Connection,
 ) -> pd.DataFrame:
-    """Return April 6–8 weather observations from 2025 and 2026."""
+    """Return November 3–5 weather observations from 2025 and 2026."""
     with connection.cursor() as cursor:
         cursor.execute(
             """
@@ -166,10 +166,10 @@ def load_convention_weather_history(
                    100.0 * AVG((precipitation > 0)::int)
                        AS percent_readings_with_precipitation
             FROM sparkcity.weather_data
-            WHERE (timestamp >= DATE '2025-04-06'
-                   AND timestamp < DATE '2025-04-09')
-               OR (timestamp >= DATE '2026-04-06'
-                   AND timestamp < DATE '2026-04-09')
+            WHERE (timestamp >= DATE '2025-11-03'
+                   AND timestamp < DATE '2025-11-06')
+               OR (timestamp >= DATE '2026-11-03'
+                   AND timestamp < DATE '2026-11-06')
             GROUP BY 1, 2
             ORDER BY 1, 2
             """
@@ -193,7 +193,7 @@ def load_convention_weather_history(
 def load_convention_air_history(
     connection: Connection,
 ) -> pd.DataFrame:
-    """Return available April 6–8 air quality observations."""
+    """Return available November 3–5 air quality observations."""
     with connection.cursor() as cursor:
         cursor.execute(
             """
@@ -205,10 +205,10 @@ def load_convention_air_history(
                    AVG(no2) AS average_no2,
                    AVG(co) AS average_co
             FROM sparkcity.air_quality
-            WHERE (timestamp >= DATE '2025-04-06'
-                   AND timestamp < DATE '2025-04-09')
-               OR (timestamp >= DATE '2026-04-06'
-                   AND timestamp < DATE '2026-04-09')
+            WHERE (timestamp >= DATE '2025-11-03'
+                   AND timestamp < DATE '2025-11-06')
+               OR (timestamp >= DATE '2026-11-03'
+                   AND timestamp < DATE '2026-11-06')
             GROUP BY 1, 2
             ORDER BY 1, 2
             """

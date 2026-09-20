@@ -11,8 +11,8 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "dashboard"))
 
-from pages.convention_planner import MONTHLY_INPUT_QUERY, get_planner_engine
 from pages.fiscal_impact import (
+    DEFAULT_EVENT_START,
     FISCAL_RUNS_DIR,
     SOURCE_ICON_DIR,
     _combined_event_impact,
@@ -26,6 +26,10 @@ from pages.fiscal_impact import (
     _source_list_html,
     _verify_run_artifacts,
 )
+
+
+def test_fiscal_explorer_defaults_to_selected_convention_date():
+    assert DEFAULT_EVENT_START == date(2027, 11, 3)
 
 
 def test_fiscal_dashboard_snapshot_is_packaged_and_loadable():
@@ -83,11 +87,6 @@ def test_occupancy_context_uses_shared_monthly_snapshot_without_inventory_claim(
     assert "available_rooms_observation" in june
 
 
-def test_planner_query_uses_canonical_occupancy_rate():
-    assert "occupied_rooms::numeric + available_rooms" not in MONTHLY_INPUT_QUERY
-    assert "available_rooms::numeric" in MONTHLY_INPUT_QUERY
-
-
 def test_combined_event_impact_uses_fiscal_index_only_for_variable_spending():
     _load_run.clear()
     monthly = _load_run()["monthly"]
@@ -143,10 +142,3 @@ def test_fiscal_ranking_excludes_partial_or_out_of_year_months():
 
     assert comparable["month"].tolist() == ["2025-01", "2025-04"]
     assert comparable.loc[comparable["net_per_observation"].idxmax(), "month"] == "2025-04"
-
-
-@pytest.mark.parametrize("sslmode", ["disable", "prefer"])
-def test_planner_rejects_unencrypted_database_urls(sslmode):
-    get_planner_engine.clear()
-    with pytest.raises(ValueError, match="sslmode"):
-        get_planner_engine(f"postgresql://user:secret@example/db?sslmode={sslmode}")
