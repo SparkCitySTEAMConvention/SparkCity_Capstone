@@ -475,6 +475,7 @@ h2#explore-sparkcity {font-size:34px;padding-top:4px;}
 .fiscal-takeaway-grid {grid-template-columns:1fr;}
 .fiscal-impact-breakdown {grid-template-columns:repeat(2,minmax(0,1fr));}.fiscal-impact-breakdown > div:nth-child(2) {border-right:none;}.fiscal-spend-bar {grid-column:1/-1;}
 }
+
 /* >>> convention_planner */
 /* BEGIN MCC / Convention Planner page styles
    Team merge note: keep this section separate from shared and overview.
@@ -583,6 +584,119 @@ h2#explore-sparkcity {font-size:34px;padding-top:4px;}
 .planner-banner .planner-eyebrow {color:#526d88;}
 .planner-banner p,.planner-banner-meta {color:#405c78;}
 .planner-banner-meta span {color:#62758a;}
+/* Ranked-period summary echoes the planner banner while keeping each time scale distinct. */
+.planner-leaders-banner {
+    background:#eaf1f8;color:#223b57;border:1px solid #d6e3f0;
+    border-left:4px solid #287dcc;border-radius:10px;
+    padding:16px 20px;margin:0 0 10px;box-shadow:none;
+}
+.planner-leaders-heading {
+    display:flex;justify-content:space-between;align-items:center;gap:24px;
+    margin-bottom:14px;
+}
+.planner-leaders-heading .planner-eyebrow {
+    color:#526d88;font-size:11px;font-weight:700;letter-spacing:1.7px;
+}
+.planner-leaders-heading h2 {
+    color:#223b57;font-size:clamp(19px,1.6vw,25px);line-height:1.2;
+    margin:5px 0 4px;padding:0;
+}
+.planner-leaders-heading p {color:#405c78;font-size:13px;margin:0;}
+.planner-leaders-meta {
+    flex-shrink:0;text-align:right;color:#405c78;font-size:13px;line-height:1.7;
+}
+.planner-leaders-meta span {color:#62758a;font-size:12px;}
+.planner-leaders-grid {
+    display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;
+}
+.planner-leader-card {
+    background:#ffffff;border:1px solid #d6e3f0;border-top:4px solid #287dcc;
+    border-radius:8px;padding:13px 15px;
+}
+.planner-leader-card.week {border-top-color:#49ae83;}
+.planner-leader-card.day {border-top-color:#e5ad35;}
+.planner-leader-card > span {
+    display:block;color:#62758a;font-size:11px;font-weight:700;
+    letter-spacing:.8px;text-transform:uppercase;margin-bottom:4px;
+}
+.planner-leader-card > strong {
+    display:block;color:#223b57;font-size:20px;line-height:1.25;margin-bottom:7px;
+}
+.planner-leader-card > div {color:#526d88;font-size:12px;}
+.planner-leader-card b {color:#236db2;font-size:16px;margin-left:3px;}
+.planner-leaders-note {
+    color:#405c78;font-size:12px;line-height:1.5;margin:12px 0 0;
+    padding-top:10px;border-top:1px solid #d6e3f0;
+}
+.planner-decision-panel {
+    background:#f7fafc;border:1px solid #d6e3f0;border-left:4px solid #49ae83;
+    border-radius:10px;padding:18px 20px;margin:16px 0 20px;color:#223b57;
+}
+.planner-decision-panel .planner-eyebrow {
+    color:#397763;font-size:11px;font-weight:700;letter-spacing:1.5px;
+}
+.planner-window-hero {
+    display:grid;grid-template-columns:170px minmax(0,1fr);gap:22px;align-items:stretch;
+    margin-bottom:14px;
+}
+.planner-date-tile {
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    min-height:150px;background:linear-gradient(145deg,#176b58,#49ae83);
+    border-radius:10px;color:#ffffff;text-align:center;box-shadow:0 8px 20px #176b5826;
+}
+.planner-date-tile span {font-size:13px;font-weight:800;letter-spacing:2.4px;}
+.planner-date-tile strong {font-size:38px;line-height:1.15;margin:5px 0;letter-spacing:-1px;}
+.planner-date-tile small {font-size:10px;font-weight:700;letter-spacing:1px;color:#dcf6ec;}
+.planner-window-copy {padding:4px 0;}
+.planner-score-chips {display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;}
+.planner-score-chips > div {
+    display:grid;grid-template-columns:auto auto;column-gap:7px;align-items:baseline;
+    min-width:104px;background:#ffffff;border:1px solid #dce5ef;border-radius:7px;
+    padding:7px 10px;
+}
+.planner-score-chips span {grid-column:1/-1;color:#62758a;font-size:9px;font-weight:800;letter-spacing:1px;}
+.planner-score-chips strong {color:#176b58;font-size:19px;line-height:1;}
+.planner-score-chips small {color:#62758a;font-size:10px;}
+.planner-decision-heading {
+    display:flex;justify-content:space-between;align-items:flex-start;gap:24px;
+}
+.planner-decision-badge {
+    flex-shrink:0;background:#eaf7f2;border:1px solid #bfe2d4;border-radius:8px;
+    color:#397763;font-size:11px;font-weight:800;letter-spacing:1px;
+    line-height:1.35;padding:9px 13px;text-align:center;
+}
+.planner-decision-badge span {color:#526d88;font-size:10px;font-weight:700;}
+.planner-decision-panel h2 {
+    color:#223b57;font-size:clamp(19px,1.6vw,25px);margin:5px 0 6px;padding:0;
+}
+.planner-decision-intro {color:#405c78;font-size:13px;line-height:1.55;margin:0 0 14px;}
+.planner-decision-grid {
+    display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;
+}
+.planner-decision-grid article {
+    background:#ffffff;border:1px solid #dce5ef;border-radius:8px;padding:13px 15px;
+}
+.planner-decision-grid article > span {
+    display:block;color:#62758a;font-size:10px;font-weight:700;
+    letter-spacing:.8px;text-transform:uppercase;margin-bottom:3px;
+}
+.planner-decision-grid article > strong {display:block;color:#223b57;font-size:16px;margin-bottom:5px;}
+.planner-decision-grid article p {color:#526d88;font-size:12px;line-height:1.5;margin:0;}
+.planner-decision-verdict {
+    color:#29485f;background:#eaf7f2;border-radius:7px;font-size:12px;
+    line-height:1.5;margin:12px 0 0;padding:10px 12px;
+}
+@media(max-width:800px) {
+    .planner-leaders-heading {flex-direction:column;align-items:flex-start;gap:6px;}
+    .planner-leaders-meta {text-align:left;}
+}
+@media(max-width:620px) {
+    .planner-leaders-grid {grid-template-columns:1fr;}
+    .planner-decision-grid {grid-template-columns:1fr;}
+    .planner-decision-heading {flex-direction:column;gap:8px;}
+    .planner-window-hero {grid-template-columns:1fr;gap:14px;}
+    .planner-date-tile {min-height:125px;}
+}
 /* MCC: Proposed Conference Window, styled to match the banner directly above it. */
 .st-key-planner_window {
     background:#eaf1f8;color:#223b57;border:1px solid #d6e3f0;
@@ -605,6 +719,7 @@ h2#explore-sparkcity {font-size:34px;padding-top:4px;}
 .st-key-planner_breakdown .planner-factor-table td:last-child {color:#236db2;}
 .st-key-planner_breakdown .planner-factor-table .planner-factor-track {margin-top:6px;height:10px;min-width:70px;}
 /* END MCC / Convention Planner page styles */
+
 /* >>> capacity */
 .cap-kpi-grid {display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px;margin:6px 0 20px;}
 .cap-kpi-card {background:white;border:1px solid #dce5ef;border-top:3px solid var(--accent);border-radius:12px;padding:16px 16px 14px;box-shadow:0 4px 14px #10294408;}
