@@ -345,8 +345,8 @@ scenario, not a measured {EVENT_START_DATE.year} traffic observation.
                     sort=cycle_order,
                     title="Recurring Cycle",
                     axis=alt.Axis(
-                        labelFontSize=16,
-                        titleFontSize=16,
+                        labelFontSize=18,
+                        titleFontSize=18,
                         labelPadding=12,
                         titlePadding=18,
                     ),
@@ -356,8 +356,8 @@ scenario, not a measured {EVENT_START_DATE.year} traffic observation.
                     title="Pattern Strength (relative)",
                     scale=alt.Scale(domain=[0, 105]),
                     axis=alt.Axis(
-                        labelFontSize=16,
-                        titleFontSize=16,
+                        labelFontSize=18,
+                        titleFontSize=18,
                         labelPadding=8,
                         titlePadding=16,
                     ),
@@ -454,8 +454,8 @@ It is not a percentage of vehicles or a congestion probability.
                     sort=congestion_order,
                     title="Congestion Level",
                     axis=alt.Axis(
-                        labelFontSize=16,
-                        titleFontSize=16,
+                        labelFontSize=18,
+                        titleFontSize=18,
                         labelPadding=12,
                         titlePadding=18,
                         labelExpr="upper(datum.label)",
@@ -466,8 +466,8 @@ It is not a percentage of vehicles or a congestion probability.
                     title="Percentage of Traffic Observations",
                     scale=alt.Scale(domain=[0, 45]),
                     axis=alt.Axis(
-                        labelFontSize=16,
-                        titleFontSize=16,
+                        labelFontSize=18,
+                        titleFontSize=18,
                         labelPadding=8,
                         titlePadding=16,
                         format=".0f",
