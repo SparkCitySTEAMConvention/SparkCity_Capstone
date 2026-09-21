@@ -36,6 +36,24 @@ LIGHT_PALETTE = {
     "#20373D": "#EAF5F1",
     "#1E332F": "#EAF5F1",
     "#36352C": "#FDF3E2",
+    "#383429": "#FFF8E8",
+    "#1F383A": "#E8F5F1",
+    "#213738": "#DDEFEA",
+    "#132B3A": "#E8F3FA",
+    "#17283A": "#F2F7FB",
+    "#332815": "#FFF4D8",
+    "#2C271B": "#FFF9EA",
+    "#332E25": "#FFF7E8",
+    "#EAC985": "#6B4E12",
+    "#FFCD70": "#7A4C00",
+    "#9FD0C5": "#2F6F61",
+    "#7FD1A8": "#176B58",
+    "#A0CFB4": "#276948",
+    "#6BB8FF": "#1769AA",
+    "#E5CC8A": "#6B4E12",
+    "#7DD3FC": "#075985",
+    "#FBBF24": "#7C4A03",
+    "#F0B573": "#7A4305",
 }
 
 
@@ -116,6 +134,7 @@ def render_theme_overrides():
         [role="option"] {color:#172B46!important;}
         [role="option"]:hover {background:#EAF1F8!important;}
         .stButton button,.stDownloadButton button {color:#172B46;}
+        .st-key-overview_plan button {background:#1769AA!important;color:#FFFFFF!important;}
         :is(a,button,input,textarea,[role="radio"],[role="checkbox"],[role="option"]):focus-visible {
             outline:3px solid #1769AA!important;outline-offset:3px!important;
         }
