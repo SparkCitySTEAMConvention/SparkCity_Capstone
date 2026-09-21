@@ -37,7 +37,7 @@ html {scrollbar-gutter:stable;}
 .st-key-sparkcity_navigation [role="radiogroup"] label:has(input:checked) {background:#246db4;border-color:#65a9ed;}
 .st-key-sparkcity_navigation [role="radiogroup"] label:focus-within {outline:2px solid #b9ddff;outline-offset:2px;}
 .st-key-accessibility_light_mode {position:absolute;right:20px;top:12px;z-index:3;}
-.st-key-accessibility_light_mode [data-testid="stWidgetLabel"] p {color:#e5eefb!important;font-size:12px;font-weight:700;}
+.st-key-accessibility_light_mode [data-testid="stWidgetLabel"] p {color:#e5eefb!important;font-size:18px!important;font-weight:700;}
 .st-key-accessibility_light_mode [data-baseweb="checkbox"] {outline-offset:3px;}
 @media(max-width:800px) {.sparkcity-brand small {display:none;}}
 @media(min-width:900px) {
