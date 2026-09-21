@@ -421,99 +421,37 @@ def _render_environment_content() -> None:
             "finalizing outdoor activities."
         )
 
-    st.subheader("Projected weather map · November 3–5, 2027")
-    st.caption(
-        "Planning projection from 2021–2026 matching dates, using Open-Meteo "
-        "historical reanalysis across nine map locations. This is not a "
-        "2027 weather forecast."
+    st.subheader("Interactive weather map")
+    map_layers = {
+        "🌡️ Temperature forecast": "temp",
+        "🌧️ Rain radar": "radar",
+        "💨 Wind forecast": "wind",
+        "☁️ Clouds": "clouds",
+    }
+    selected_layer = st.selectbox(
+        "Map layer",
+        list(map_layers),
+        key="environment_map_layer",
     )
-    map_day_column, map_layer_column = st.columns(2, gap="small")
-    with map_day_column:
-        projection_day = st.selectbox(
-            "Event day",
-            [3, 4, 5],
-            format_func=lambda day: f"November {day}",
-            key="environment_projection_day",
-        )
-    with map_layer_column:
-        projection_layer = st.selectbox(
-            "Projected layer",
-            ["Temperature", "Precipitation"],
-            key="environment_projection_layer",
-        )
-
-    try:
-        projection = get_convention_projection()
-    except Exception:
-        st.warning(
-            "The projected weather map is temporarily unavailable. "
-            "Historical database planning details above are still available."
-        )
-    else:
-        map_data = []
-        for point in projection:
-            if point["day"] != projection_day:
-                continue
-            metric = (
-                point["temperature_f"]
-                if projection_layer == "Temperature"
-                else point["precipitation_mm"]
-            )
-            map_data.append(
-                {
-                    **point,
-                    "marker_color": projection_marker_color(
-                        metric, projection_layer
-                    ),
-                }
-            )
-        if map_data:
-            map_layer = pdk.Layer(
-                "ScatterplotLayer",
-                data=map_data,
-                get_position="[lon, lat]",
-                get_fill_color="marker_color",
-                get_radius=3700,
-                pickable=True,
-                stroked=True,
-                get_line_color=[255, 255, 255],
-                line_width_min_pixels=1,
-            )
-            st.pydeck_chart(
-                pdk.Deck(
-                    layers=[map_layer],
-                    initial_view_state=pdk.ViewState(
-                        latitude=40.76,
-                        longitude=-73.97,
-                        zoom=10.6,
-                        pitch=0,
-                    ),
-                    map_style="dark",
-                    tooltip={  # type: ignore[arg-type]
-                        "html": (
-                            "<b>{location} · November {day}, 2027 baseline</b><br/>"
-                            "Mean temperature: {temperature_f} °F "
-                            "(past range {temperature_min_f}-{temperature_max_f} °F)"
-                            "<br/>Mean daily precipitation: {precipitation_mm} mm "
-                            "(past range {precipitation_min_mm}-"
-                            "{precipitation_max_mm} mm)"
-                        ),
-                        "style": {"color": "white"},
-                    },
-                width="stretch",
-                height=300,
-                 )
-            )
-            st.caption(
-                "Colors show five-year historical averages for the selected "
-                "calendar day. Temperature: blue → green → orange as values "
-                "rise. Precipitation: gray → light blue → dark blue/purple as "
-                "daily totals rise. Hover for the past range. Nearby circles "
-                "may share a source model grid cell (roughly 9 km), so local "
-                "detail is limited. Rainfall totals are not the chance of "
-                "rain in 2027. [Source: Open-Meteo Historical Weather API]"
-                "(https://open-meteo.com/en/docs/historical-weather-api)."
-            )
+    map_params = urlencode(
+        {
+            "lat": 40.76,
+            "lon": -73.97,
+            "zoom": 9,
+            "level": "surface",
+            "overlay": map_layers[selected_layer],
+        }
+    )
+    st.iframe(
+        f"https://embed.windy.com/embed2.html?{map_params}",
+        height=420,
+    )
+    st.caption(
+        "Interactive map and weather layers: Windy.com. "
+        "Temperature and wind are forecasts; rain radar shows recent "
+        "conditions. This map is separate from historical observations and "
+        "is not a November 2027 forecast."
+    )
 
     current_points = []
     try:
@@ -988,37 +926,99 @@ def _render_environment_content() -> None:
         )
 
 
-    st.subheader("Interactive weather map")
-    map_layers = {
-        "🌡️ Temperature forecast": "temp",
-        "🌧️ Rain radar": "radar",
-        "💨 Wind forecast": "wind",
-        "☁️ Clouds": "clouds",
-    }
-    selected_layer = st.selectbox(
-        "Map layer",
-        list(map_layers),
-        key="environment_map_layer",
-    )
-    map_params = urlencode(
-        {
-            "lat": 40.76,
-            "lon": -73.97,
-            "zoom": 9,
-            "level": "surface",
-            "overlay": map_layers[selected_layer],
-        }
-    )
-    st.iframe(
-        f"https://embed.windy.com/embed2.html?{map_params}",
-        height=420,
-    )
+    st.subheader("Projected weather map · November 3–5, 2027")
     st.caption(
-        "Interactive map and weather layers: Windy.com. "
-        "Temperature and wind are forecasts; rain radar shows recent "
-        "conditions. This map is separate from historical observations and "
-        "is not a November 2027 forecast."
+        "Planning projection from 2021–2026 matching dates, using Open-Meteo "
+        "historical reanalysis across nine map locations. This is not a "
+        "2027 weather forecast."
     )
+    map_day_column, map_layer_column = st.columns(2, gap="small")
+    with map_day_column:
+        projection_day = st.selectbox(
+            "Event day",
+            [3, 4, 5],
+            format_func=lambda day: f"November {day}",
+            key="environment_projection_day",
+        )
+    with map_layer_column:
+        projection_layer = st.selectbox(
+            "Projected layer",
+            ["Temperature", "Precipitation"],
+            key="environment_projection_layer",
+        )
+
+    try:
+        projection = get_convention_projection()
+    except Exception:
+        st.warning(
+            "The projected weather map is temporarily unavailable. "
+            "Historical database planning details above are still available."
+        )
+    else:
+        map_data = []
+        for point in projection:
+            if point["day"] != projection_day:
+                continue
+            metric = (
+                point["temperature_f"]
+                if projection_layer == "Temperature"
+                else point["precipitation_mm"]
+            )
+            map_data.append(
+                {
+                    **point,
+                    "marker_color": projection_marker_color(
+                        metric, projection_layer
+                    ),
+                }
+            )
+        if map_data:
+            map_layer = pdk.Layer(
+                "ScatterplotLayer",
+                data=map_data,
+                get_position="[lon, lat]",
+                get_fill_color="marker_color",
+                get_radius=3700,
+                pickable=True,
+                stroked=True,
+                get_line_color=[255, 255, 255],
+                line_width_min_pixels=1,
+            )
+            st.pydeck_chart(
+                pdk.Deck(
+                    layers=[map_layer],
+                    initial_view_state=pdk.ViewState(
+                        latitude=40.76,
+                        longitude=-73.97,
+                        zoom=10.6,
+                        pitch=0,
+                    ),
+                    map_style="dark",
+                    tooltip={  # type: ignore[arg-type]
+                        "html": (
+                            "<b>{location} · November {day}, 2027 baseline</b><br/>"
+                            "Mean temperature: {temperature_f} °F "
+                            "(past range {temperature_min_f}-{temperature_max_f} °F)"
+                            "<br/>Mean daily precipitation: {precipitation_mm} mm "
+                            "(past range {precipitation_min_mm}-"
+                            "{precipitation_max_mm} mm)"
+                        ),
+                        "style": {"color": "white"},
+                    },
+                width="stretch",
+                height=300,
+                 )
+            )
+            st.caption(
+                "Colors show six-year historical averages for the selected "
+                "calendar day. Temperature: blue → green → orange as values "
+                "rise. Precipitation: gray → light blue → dark blue/purple as "
+                "daily totals rise. Hover for the past range. Nearby circles "
+                "may share a source model grid cell (roughly 9 km), so local "
+                "detail is limited. Rainfall totals are not the chance of "
+                "rain in 2027. [Source: Open-Meteo Historical Weather API]"
+                "(https://open-meteo.com/en/docs/historical-weather-api)."
+            )
 
 
 
