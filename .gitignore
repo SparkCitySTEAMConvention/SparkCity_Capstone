@@ -1,3 +1,10 @@
+
+.streamlit/secrets.toml
+
+# Local secrets (never commit credentials)
+secrets/
+.env
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -209,3 +216,14 @@ __marimo__/
 data/raw/*.csv
 data/raw/*.json
 data/raw/*.parquet
+
+# macOS system files
+.DS_Store
+
+# Generated processed datasets
+data/processed/
+
+# Generated feature-engineered datasets
+data/features/
+.agents/
+.claude/

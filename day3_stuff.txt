@@ -84,8 +84,8 @@ def load_cleaned_datasets():
             'air_quality': f"{raw_data_dir}/air_quality.json",
             'weather': f"{raw_data_dir}/weather_data.parquet",
             'energy': f"{raw_data_dir}/energy_meters.csv",
-            'occupancy': f"{raw_data_dir}/occupancy_data.csv"
-            'fiscal': f{raw_data_dir}/fiscal_data.csv"
+            'occupancy': f"{raw_data_dir}/occupancy_data.csv",
+            'fiscal': f"{raw_data_dir}/fiscal_data.csv"
         }
 
         for name, file_path in file_mappings.items():
@@ -520,7 +520,7 @@ def prepare_correlation_dataset(datasets):
                                          .agg(
                                              F.avg("expense_rate").alias("avg_expense_rate"),
                                              F.avg("revenue_rate").alias("avg_revenue_rate"),
-                                             F.count("*").alias("occupancy_readings")
+                                             F.count("*").alias("fiscal_readings")
                                          )
 
         combined_df = combined_df.join(fiscal_hourly, "hour_timestamp", "outer")

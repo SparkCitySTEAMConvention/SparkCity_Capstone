@@ -1,0 +1,20 @@
+[client]
+# This app uses its own custom navigation (a radio control in the shared header),
+# not Streamlit's built-in multi-page routing. Without this, Streamlit's automatic
+# discovery of dashboard/pages/*.py (used here purely as a plain Python package for
+# code organization) adds an unwanted sidebar and reserves its width on every page.
+showSidebarNavigation = false
+
+# MCC: added this [theme] block app-wide (not page-specific) to fix red input/slider
+# borders and dark-mode-black tables/dropdowns caused by Streamlit's default theme,
+# which otherwise follows the viewer's OS/browser dark mode and uses red (#ff4b4b)
+# as its default accent color. Flagging with this comment for merge conflicts since
+# it's a new top-level config section, not a change to an existing one.
+[theme]
+# Dark-theme experiment (2026-09-19). OLD: base "light", primaryColor "#287dcc", backgroundColor "#ffffff",
+# secondaryBackgroundColor "#f4f7fb", textColor "#172b46".
+base = "dark"
+primaryColor = "#3B9EFF"
+backgroundColor = "#101820"
+secondaryBackgroundColor = "#182430"
+textColor = "#F3F6F9"

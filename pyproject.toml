@@ -6,12 +6,30 @@ readme = "README.md"
 authors = [
     { name = "pknight", email = "paul.knight@delmarvacomputer.com" }
 ]
-requires-python = ">=3.13"
+requires-python = ">=3.13,<3.15"
 dependencies = [
+    "altair>=5,<7",
     "fastparquet>=2026.5.0",
-    "pandas>=3.0.5",
+    "matplotlib>=3.11.2",
+    "pandas>=2.2,<3",
+    "psycopg2-binary>=2.9.13",
+    "psycopg[binary]>=3.2,<4",
     "pyarrow>=25.0.1",
-    "spark>=0.4.1",
+    "pydeck>=0.9,<1",
+    "pyspark>=4.2,<4.3",
+    "python-dotenv>=1.1,<2",
+    "seaborn>=0.13.2",
+    "sqlalchemy>=2.0.54",
+    "streamlit>=1.64,<2",
+    "watchdog>=6.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=7.3.0",
+    "matplotlib>=3.11.2",
+    "pytest>=8.3,<10",
+    "seaborn>=0.13.2",
 ]
 
 [project.scripts]
