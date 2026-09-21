@@ -8,7 +8,7 @@ from pathlib import Path
 import streamlit as st
 from PIL import Image
 
-from components.shared import STYLES_PATH, open_page, read_css
+from components.shared import STYLES_PATH, light_mode_enabled, open_page, read_css
 from components.planner_scores import load_scores
 from components.convention_config import (
     RECOMMENDED_MONTH,
@@ -19,14 +19,16 @@ from components.convention_config import (
 
 ASSETS_DIR = Path(__file__).resolve().parents[1] / "assets"
 HERO_IMAGE_PATH = ASSETS_DIR / "updated_hero.png"  # hero background swapped from city.png (2026-09-19); city.png itself is untouched
+DAYLIGHT_HERO_IMAGE_PATH = ASSETS_DIR / "updated_hero_daylight.png"
 DOMAIN_IMAGE_DIR = ASSETS_DIR / "domains"
 DOMAIN_IMAGE_MAX_WIDTH = 480  # card image area is ~110px tall; source photos are far larger
 
 
-@lru_cache(maxsize=1)
-def _hero_image_data_uri():
+@lru_cache(maxsize=2)
+def _hero_image_data_uri(light_mode=False):
     """Local asset only; never reads from outside the project."""
-    encoded = base64.b64encode(HERO_IMAGE_PATH.read_bytes()).decode("ascii")
+    path = DAYLIGHT_HERO_IMAGE_PATH if light_mode else HERO_IMAGE_PATH
+    encoded = base64.b64encode(path.read_bytes()).decode("ascii")
     return f"data:image/png;base64,{encoded}"
 
 
@@ -76,8 +78,10 @@ def render_overview(load_data=None):
     # Resting box-shadow scaled back down (2026-09-17) from a bright neon-style glow
     # to a subtle neutral depth shadow, per request; border color (not the shadow)
     # now carries each card's accent identity.
+    light_mode = light_mode_enabled()
+    card_background = "#FFFFFF" if light_mode else "#182430"
     card_wrapper_css = "".join(
-        f".st-key-domain_card_{i} {{border:1.5px solid {c['accent']};border-radius:20px;overflow:hidden;background:#182430;"
+        f".st-key-domain_card_{i} {{border:1.5px solid {c['accent']};border-radius:20px;overflow:hidden;background:{card_background};"
         f"box-shadow:0 4px 14px rgba(16,41,68,.10);"
         f"transition:transform .2s ease, box-shadow .2s ease, border-color .2s ease;}}\n"
         f".st-key-domain_card_{i}:hover {{transform:translateY(-5px);box-shadow:0 14px 30px rgba(16,41,68,.2);"
@@ -89,7 +93,7 @@ def render_overview(load_data=None):
         # button selector below. Parent's overflow:hidden + border-radius already clips
         # this into the matching rounded bottom corners, so no radius needed here.
         f".st-key-domain_card_{i} [data-testid='stElementContainer']:has(button),"
-        f".st-key-domain_card_{i} button {{background:color-mix(in srgb,{c['accent']} 24%,#182430) !important;}}\n"
+        f".st-key-domain_card_{i} button {{background:color-mix(in srgb,{c['accent']} 24%,{card_background}) !important;}}\n"
         for i, c in enumerate(DOMAINS)
     )
     # The hero rule needs the runtime hero image data URI, so it can't live in the
@@ -118,7 +122,7 @@ def render_overview(load_data=None):
         # nothing about what's styled, only which gap this element consumes.
         st.markdown(f'''<style>
 {read_css(STYLES_PATH, section="overview")}
-.st-key-overview_hero {{position:relative;margin-top:0;background:linear-gradient(90deg,rgba(6,14,30,.90) 0%,rgba(6,14,30,.78) 26%,rgba(6,14,30,.42) 50%,rgba(6,14,30,.12) 70%,rgba(6,14,30,0) 85%),url('{_hero_image_data_uri()}');background-size:cover;background-position:center;background-repeat:no-repeat;border-radius:18px;padding:36px 56px;min-height:340px;margin-bottom:6px;color:white;overflow:hidden;}}
+.st-key-overview_hero {{position:relative;margin-top:0;background:linear-gradient(90deg,rgba(6,14,30,.90) 0%,rgba(6,14,30,.78) 26%,rgba(6,14,30,.42) 50%,rgba(6,14,30,.12) 70%,rgba(6,14,30,0) 85%),url('{_hero_image_data_uri(light_mode)}');background-size:cover;background-position:center;background-repeat:no-repeat;border-radius:18px;padding:36px 56px;min-height:340px;margin-bottom:6px;color:white;overflow:hidden;}}
 {card_wrapper_css}
 </style>''', unsafe_allow_html=True)
         intro, mission = st.columns([1.8, 1], gap="large")

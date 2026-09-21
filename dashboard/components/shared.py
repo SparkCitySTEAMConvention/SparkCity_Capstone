@@ -24,6 +24,52 @@ DESTINATIONS = {
     # "Sustainability" intentionally removed (2026-09-17) — no page was ever routed to it.
 }
 
+LIGHT_PALETTE = {
+    "#101820": "#F4F7FB",
+    "#F3F6F9": "#172B46",
+    "#182430": "#FFFFFF",
+    "#34495A": "#D6E0EA",
+    "#B8C4CF": "#526A82",
+    "#8FA1B2": "#62758A",
+    "#223342": "#EAF1F8",
+    "#1E2D3A": "#F7FAFC",
+    "#20373D": "#EAF5F1",
+    "#1E332F": "#EAF5F1",
+    "#36352C": "#FDF3E2",
+    "#383429": "#FFF8E8",
+    "#1F383A": "#E8F5F1",
+    "#213738": "#DDEFEA",
+    "#132B3A": "#E8F3FA",
+    "#17283A": "#F2F7FB",
+    "#332815": "#FFF4D8",
+    "#2C271B": "#FFF9EA",
+    "#332E25": "#FFF7E8",
+    "#EAC985": "#6B4E12",
+    "#FFCD70": "#7A4C00",
+    "#9FD0C5": "#2F6F61",
+    "#7FD1A8": "#176B58",
+    "#A0CFB4": "#276948",
+    "#6BB8FF": "#1769AA",
+    "#E5CC8A": "#6B4E12",
+    "#7DD3FC": "#075985",
+    "#FBBF24": "#7C4A03",
+    "#F0B573": "#7A4305",
+}
+
+
+def light_mode_enabled():
+    """Return the session-scoped accessibility theme preference."""
+    return bool(st.session_state.get("accessibility_light_mode", False))
+
+
+def apply_accessible_palette(css):
+    """Translate the shared dark design tokens while preserving accent colors."""
+    if not light_mode_enabled():
+        return css
+    for dark, light in LIGHT_PALETTE.items():
+        css = css.replace(dark, light)
+    return css
+
 
 def read_css(path=STYLES_PATH, section=None):
     """Read a CSS file (or one of its "/* >>> name */"-delimited sections) as text.
@@ -47,7 +93,7 @@ def read_css(path=STYLES_PATH, section=None):
         start = text.index(marker) + len(marker)
         end = text.find("/* >>> ", start)
         text = text[start:] if end == -1 else text[start:end]
-    return text
+    return apply_accessible_palette(text)
 
 
 def load_css(path=STYLES_PATH, section=None):
@@ -72,6 +118,34 @@ def open_page(destination):
     st.session_state["dashboard_destination"] = destination
 
 
+def render_theme_overrides():
+    """Apply runtime widget colors after destination styles have rendered."""
+    if not light_mode_enabled():
+        return
+    st.markdown(
+        """<style>
+        .stApp,[data-testid="stAppViewContainer"] {background:#F4F7FB;color:#172B46;}
+        [data-testid="stMainBlockContainer"] {color:#172B46;}
+        [data-testid="stWidgetLabel"] p {color:#223B57;}
+        [data-baseweb="input"] input,
+        [data-baseweb="select"] > div,
+        [data-baseweb="textarea"] textarea {background:#FFFFFF!important;color:#172B46!important;}
+        [data-baseweb="popover"],[role="listbox"] {background:#FFFFFF!important;color:#172B46!important;}
+        [role="option"] {color:#172B46!important;}
+        [role="option"]:hover {background:#EAF1F8!important;}
+        .stButton button,.stDownloadButton button {color:#172B46;}
+        .st-key-overview_plan button {background:#1769AA!important;color:#FFFFFF!important;}
+        :is(a,button,input,textarea,[role="radio"],[role="checkbox"],[role="option"]):focus-visible {
+            outline:3px solid #1769AA!important;outline-offset:3px!important;
+        }
+        .st-key-sparkcity_navigation [data-testid="stWidgetLabel"] p {color:#E5EEFB!important;}
+        .st-key-overview_hero,.st-key-overview_hero h1,.st-key-overview_hero h3,
+        .st-key-overview_hero p {color:white;}
+        </style>""",
+        unsafe_allow_html=True,
+    )
+
+
 def render_navigation():
     # Shared/frozen contract: navigation, page width, palette, headers and existing
     # common card styles. Teammates should reuse them rather than redesign them.
@@ -92,6 +166,11 @@ def render_navigation():
         # One shared brand block on every page/destination; only the active nav
         # item (below) changes. Do not fork this per destination again.
         st.markdown('<div class="sparkcity-brand"><div><strong>New York Digital City</strong><br><small>Data for a Brighter Tomorrow</small></div><small>Smarter Data.<br>Stronger Communities.</small></div>', unsafe_allow_html=True)
+        st.toggle(
+            "Light mode",
+            key="accessibility_light_mode",
+            help="Use a brighter, high-contrast dashboard palette and daylight city scene.",
+        )
         return st.radio(
             "New York Digital City Navigation", list(DESTINATIONS),
             format_func=DESTINATIONS.get, horizontal=True,
