@@ -133,12 +133,12 @@ def _render_environment_content() -> None:
         }
         .st-key-environment-page [data-testid="stMetricLabel"] p,
         .st-key-environment-page [data-testid="stCaptionContainer"] p {
-            font-size: 0.95rem !important;
+            font-size: 1.125rem !important;
             line-height: 1.45 !important;
         }
         .environment-page-title {
             color: #F3F6F9;
-            font-size: 2.25rem;
+            font-size: 2.5313rem !important;
             font-weight: 700;
             line-height: 1.2;
             margin: 0 0 6px;
@@ -161,7 +161,7 @@ def _render_environment_content() -> None:
         }
         .environment-action-card .card-label {
             margin: 0 0 10px;
-            font-size: 0.78rem;
+            font-size: 1.125rem !important;
             font-weight: 800;
             letter-spacing: 0.08em;
         }
@@ -169,7 +169,7 @@ def _render_environment_content() -> None:
         .environment-action-card.air .card-label { color: #FBBF24; }
         .environment-action-card .action-row {
             display: grid;
-            grid-template-columns: 72px 1fr;
+            grid-template-columns: 84px 1fr;
             gap: 10px;
             padding: 8px 0;
             border-top: 1px solid rgba(184, 196, 207, 0.18);
@@ -180,13 +180,13 @@ def _render_environment_content() -> None:
         }
         .environment-action-card .action-key {
             color: #B8C4CF;
-            font-size: 0.78rem;
+            font-size: 1.125rem !important;
             font-weight: 800;
             letter-spacing: 0.05em;
         }
         .environment-action-card .action-copy {
             color: #F3F6F9;
-            font-size: 0.92rem;
+            font-size: 1.125rem !important;
             line-height: 1.4;
         }
         </style>
@@ -212,20 +212,20 @@ def _render_environment_content() -> None:
           .environment-date-banner .eyebrow {
             margin: 0 0 6px;
             color: #7FD1A8;
-            font-size: 0.85rem;
+            font-size: 1.125rem !important;
             font-weight: 700;
             letter-spacing: 0.09em;
           }
           .environment-date-banner h2 {
             margin: 0 0 6px;
             color: #F3F6F9;
-            font-size: 1.7rem;
+            font-size: 1.9125rem !important;
             line-height: 1.2;
           }
           .environment-date-banner .context {
             margin: 0;
             color: #B8C4CF;
-            font-size: 0.95rem;
+            font-size: 1.125rem !important;
             line-height: 1.45;
           }
           .environment-date-banner .alternative {
@@ -233,7 +233,7 @@ def _render_environment_content() -> None:
             padding-top: 10px;
             border-top: 1px solid #c9dfd2;
             color: #405c52;
-            font-size: 0.95rem;
+            font-size: 1.125rem !important;
             line-height: 1.45;
           }
         </style>
@@ -945,12 +945,12 @@ def _render_environment_content() -> None:
               .environment-insights-card h3 {
                 margin: 0 0 12px;
                 color: #F0B573;
-                font-size: 1.3rem;
+                font-size: 1.4625rem !important;
                 line-height: 1.25;
               }
               .environment-insights-card p {
                 margin: 0 0 10px;
-                font-size: 1rem;
+                font-size: 1.125rem !important;
                 line-height: 1.5;
               }
               .environment-insights-card p:last-child { margin-bottom: 0; }
