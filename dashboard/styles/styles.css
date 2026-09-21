@@ -36,6 +36,9 @@ html {scrollbar-gutter:stable;}
 .st-key-sparkcity_navigation [role="radiogroup"] label p {color:#e5eefb;font-size:16px;white-space:nowrap;}
 .st-key-sparkcity_navigation [role="radiogroup"] label:has(input:checked) {background:#246db4;border-color:#65a9ed;}
 .st-key-sparkcity_navigation [role="radiogroup"] label:focus-within {outline:2px solid #b9ddff;outline-offset:2px;}
+.st-key-accessibility_light_mode {position:absolute;right:20px;top:12px;z-index:3;}
+.st-key-accessibility_light_mode [data-testid="stWidgetLabel"] p {color:#e5eefb!important;font-size:12px;font-weight:700;}
+.st-key-accessibility_light_mode [data-baseweb="checkbox"] {outline-offset:3px;}
 @media(max-width:800px) {.sparkcity-brand small {display:none;}}
 @media(min-width:900px) {
 /* Overview desktop navbar min-height 76px->140px + justify-content:center (2026-09-19): the visible header is now 140px on every destination (the five city headers are 140px) so it no longer changes height on navigation; contents just stay vertically centered, nothing enlarged. */

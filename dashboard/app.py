@@ -12,7 +12,7 @@ load_dotenv(PROJECT_ROOT / "secrets" / ".env")
 
 st.set_page_config(page_title="New York Digital City | Convention Planning", page_icon="🏙️", layout="wide")
 
-from components.shared import render_navigation
+from components.shared import render_navigation, render_theme_overrides
 
 destination = render_navigation()
 
@@ -68,3 +68,5 @@ with st.container(key="sparkcity_page_content"):
             render_fiscal_impact()
         else:
             render_pending(destination)
+
+render_theme_overrides()
