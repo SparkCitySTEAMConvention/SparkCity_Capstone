@@ -14,6 +14,7 @@ import streamlit as st
 from dotenv import load_dotenv
 
 from sparkcityx.current_air_quality import load_current_air_quality
+from components.shared import apply_accessible_palette, light_mode_enabled
 from components.weather_scene import render_weather_scene
 from sparkcityx.current_weather import load_current_weather_points
 from sparkcityx.convention_projection import load_convention_projection
@@ -28,6 +29,28 @@ from sparkcityx.environment_data import (
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def _themed_html(markup: str) -> None:
+    """Render Environment HTML through the shared accessibility palette."""
+    st.html(apply_accessible_palette(markup))
+
+
+def _environment_chart_colors() -> dict[str, str]:
+    """Keep Altair surfaces and labels synchronized with the selected theme."""
+    if light_mode_enabled():
+        return {
+            "background": "#FFFFFF",
+            "label": "#526A82",
+            "title": "#172B46",
+            "grid": "#D6E0EA",
+        }
+    return {
+        "background": "#182430",
+        "label": "#B8C4CF",
+        "title": "#F3F6F9",
+        "grid": "#34495A",
+    }
 
 
 @st.cache_data(ttl=300, show_spinner="Loading Environment data...")
@@ -124,8 +147,9 @@ def render_environment_page() -> None:
 
 def _render_environment_content() -> None:
     """Render the Environment section for the team dashboard."""
+    chart_colors = _environment_chart_colors()
     st.markdown(
-        """
+        apply_accessible_palette("""
         <style>
         .st-key-environment-page [data-testid="stMetricLabel"],
         .st-key-environment-page [data-testid="stMetricValue"] {
@@ -133,12 +157,12 @@ def _render_environment_content() -> None:
         }
         .st-key-environment-page [data-testid="stMetricLabel"] p,
         .st-key-environment-page [data-testid="stCaptionContainer"] p {
-            font-size: 0.95rem !important;
+            font-size: 1.125rem !important;
             line-height: 1.45 !important;
         }
         .environment-page-title {
             color: #F3F6F9;
-            font-size: 2.25rem;
+            font-size: 2.5313rem !important;
             font-weight: 700;
             line-height: 1.2;
             margin: 0 0 6px;
@@ -161,7 +185,7 @@ def _render_environment_content() -> None:
         }
         .environment-action-card .card-label {
             margin: 0 0 10px;
-            font-size: 0.78rem;
+            font-size: 1.125rem !important;
             font-weight: 800;
             letter-spacing: 0.08em;
         }
@@ -169,7 +193,7 @@ def _render_environment_content() -> None:
         .environment-action-card.air .card-label { color: #FBBF24; }
         .environment-action-card .action-row {
             display: grid;
-            grid-template-columns: 72px 1fr;
+            grid-template-columns: 84px 1fr;
             gap: 10px;
             padding: 8px 0;
             border-top: 1px solid rgba(184, 196, 207, 0.18);
@@ -180,17 +204,17 @@ def _render_environment_content() -> None:
         }
         .environment-action-card .action-key {
             color: #B8C4CF;
-            font-size: 0.78rem;
+            font-size: 1.125rem !important;
             font-weight: 800;
             letter-spacing: 0.05em;
         }
         .environment-action-card .action-copy {
             color: #F3F6F9;
-            font-size: 0.92rem;
+            font-size: 1.125rem !important;
             line-height: 1.4;
         }
         </style>
-        """,
+        """),
         unsafe_allow_html=True,
     )
     st.markdown('<div class="environment-page-title">Environment</div>', unsafe_allow_html=True)
@@ -198,7 +222,7 @@ def _render_environment_content() -> None:
         "Current modeled weather and historical environmental observations"
     )
 
-    st.html(
+    _themed_html(
         """
         <style>
           .environment-date-banner {
@@ -212,20 +236,20 @@ def _render_environment_content() -> None:
           .environment-date-banner .eyebrow {
             margin: 0 0 6px;
             color: #7FD1A8;
-            font-size: 0.85rem;
+            font-size: 1.125rem !important;
             font-weight: 700;
             letter-spacing: 0.09em;
           }
           .environment-date-banner h2 {
             margin: 0 0 6px;
             color: #F3F6F9;
-            font-size: 1.7rem;
+            font-size: 1.9125rem !important;
             line-height: 1.2;
           }
           .environment-date-banner .context {
             margin: 0;
             color: #B8C4CF;
-            font-size: 0.95rem;
+            font-size: 1.125rem !important;
             line-height: 1.45;
           }
           .environment-date-banner .alternative {
@@ -233,7 +257,7 @@ def _render_environment_content() -> None:
             padding-top: 10px;
             border-top: 1px solid #c9dfd2;
             color: #405c52;
-            font-size: 0.95rem;
+            font-size: 1.125rem !important;
             line-height: 1.45;
           }
         </style>
@@ -290,7 +314,7 @@ def _render_environment_content() -> None:
                         f"Based on {len(weather_history)} matching days "
                         f"from {weather_history['year'].nunique()} historical years."
                     )
-                    st.html(
+                    _themed_html(
                         """
                         <section class="environment-action-card weather"
                                  aria-label="Weather readiness actions">
@@ -349,7 +373,7 @@ def _render_environment_content() -> None:
                         f"readings from {years}. No November 3–5, 2026 air "
                         "readings are available; these are not 2027 predictions."
                     )
-                    st.html(
+                    _themed_html(
                         """
                         <section class="environment-action-card air"
                                  aria-label="Air quality readiness actions">
@@ -719,12 +743,12 @@ def _render_environment_content() -> None:
                 air_chart = (
                     air_chart
                     .properties(height=190)
-                    .configure(background="#182430")
+                    .configure(background=chart_colors["background"])
                     .configure_view(stroke=None)
                     .configure_axis(
-                        labelColor="#B8C4CF",
-                        titleColor="#F3F6F9",
-                        gridColor="#34495A",
+                        labelColor=chart_colors["label"],
+                        titleColor=chart_colors["title"],
+                        gridColor=chart_colors["grid"],
                     )
                 )
                 st.altair_chart(air_chart, width="stretch", theme=None)
@@ -782,12 +806,12 @@ def _render_environment_content() -> None:
                 weather_chart = (
                     weather_chart
                     .properties(height=190)
-                    .configure(background="#182430")
+                    .configure(background=chart_colors["background"])
                     .configure_view(stroke=None)
                     .configure_axis(
-                        labelColor="#B8C4CF",
-                        titleColor="#F3F6F9",
-                        gridColor="#34495A",
+                        labelColor=chart_colors["label"],
+                        titleColor=chart_colors["title"],
+                        gridColor=chart_colors["grid"],
                     )
                 )
                 st.altair_chart(
@@ -929,7 +953,7 @@ def _render_environment_content() -> None:
                     f"{october['average_temperature']:.2f}.</p>"
                 )
 
-        st.html(
+        _themed_html(
             """
             <style>
               .environment-insights-card {
@@ -945,12 +969,12 @@ def _render_environment_content() -> None:
               .environment-insights-card h3 {
                 margin: 0 0 12px;
                 color: #F0B573;
-                font-size: 1.3rem;
+                font-size: 1.4625rem !important;
                 line-height: 1.25;
               }
               .environment-insights-card p {
                 margin: 0 0 10px;
-                font-size: 1rem;
+                font-size: 1.125rem !important;
                 line-height: 1.5;
               }
               .environment-insights-card p:last-child { margin-bottom: 0; }
