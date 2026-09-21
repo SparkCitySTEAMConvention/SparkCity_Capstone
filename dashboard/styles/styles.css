@@ -893,3 +893,22 @@ h2#explore-sparkcity {font-size:38px !important;padding-top:4px;}
 @media(min-width:900px) {
 .st-key-sparkcity_navigation {background:linear-gradient(rgba(16,31,57,.7),rgba(16,31,57,.7)),url('__NAV_LINEART__') center bottom -103px/auto 378px no-repeat,#101f39;}
 }
+
+/* ================================
+   LARGE SCREEN / DEMO DISPLAY
+   ================================ */
+
+@media (min-width: 1600px) {
+    body {font-size: 18px;}
+    h1 {font-size: 2.6rem;}
+    h2 {font-size: 2rem;}
+    h3 {font-size: 1.5rem;}
+    p, label, select, input, button {font-size: 1.1rem;}
+
+    .main-content {
+        width: 95%;
+        max-width: none;
+        padding-left: 50px;
+        padding-right: 50px;
+    }
+}
