@@ -173,7 +173,8 @@ html {scrollbar-gutter:stable;}
 .mobility-recommendation-card {
     border-radius: 20px;
     padding: 14px 18px;
-    height: 190px;
+    min-height: 250px;
+    height: auto;
     box-sizing: border-box;
     border: 1px solid #34495A;
     box-shadow: 0 4px 14px rgba(16, 41, 68, 0.10);
