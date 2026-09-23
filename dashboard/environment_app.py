@@ -421,37 +421,41 @@ def _render_environment_content() -> None:
             "finalizing outdoor activities."
         )
 
-    st.subheader("Interactive weather map")
-    map_layers = {
-        "🌡️ Temperature forecast": "temp",
-        "🌧️ Rain radar": "radar",
-        "💨 Wind forecast": "wind",
-        "☁️ Clouds": "clouds",
-    }
-    selected_layer = st.selectbox(
-        "Map layer",
-        list(map_layers),
-        key="environment_map_layer",
-    )
-    map_params = urlencode(
-        {
-            "lat": 40.76,
-            "lon": -73.97,
-            "zoom": 9,
-            "level": "surface",
-            "overlay": map_layers[selected_layer],
+    with st.expander("Interactive Weather Map — Internet Required", expanded=False):
+        map_layers = {
+            "🌡️ Temperature forecast": "temp",
+            "🌧️ Rain radar": "radar",
+            "💨 Wind forecast": "wind",
+            "☁️ Clouds": "clouds",
         }
-    )
-    st.iframe(
-        f"https://embed.windy.com/embed2.html?{map_params}",
-        height=420,
-    )
-    st.caption(
-        "Interactive map and weather layers: Windy.com. "
-        "Temperature and wind are forecasts; rain radar shows recent "
-        "conditions. This map is separate from historical observations and "
-        "is not a November 2027 forecast."
-    )
+
+        selected_layer = st.selectbox(
+            "Map layer",
+            list(map_layers),
+            key="environment_map_layer",
+        )
+
+        map_params = urlencode(
+            {
+                "lat": 40.76,
+                "lon": -73.97,
+                "zoom": 9,
+                "level": "surface",
+                "overlay": map_layers[selected_layer],
+            }
+        )
+
+        st.iframe(
+            f"https://embed.windy.com/embed2.html?{map_params}",
+            height=420,
+        )
+
+        st.caption(
+            "Interactive map and weather layers: Windy.com. "
+            "Temperature and wind are forecasts; rain radar shows recent "
+            "conditions. This map is separate from historical observations and "
+            "is not a November 2027 forecast."
+        )
 
     current_points = []
     try:
