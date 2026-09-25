@@ -1,7 +1,8 @@
 ![SparkCity dashboard overview](docs/images/sparkcity-capstone.png)
 
 # SparkCity
-an apache spark project.
+
+SparkCity is a PySpark-based smart city IoT analytics application. It ingests traffic, air quality, weather, energy, and occupancy sensor data, runs data quality checks, and persists results to PostgreSQL via a Dockerized Spark cluster, with a Streamlit dashboard delivering real-time city operations insights.
 
 For local installation, database configuration, and instructions for running the application, see [SETUP.md](SETUP.md).
 
