@@ -624,8 +624,8 @@ def render_fiscal_impact():
             "- Capacity, traffic, air-quality, and weather findings from their owning team analyses"
         )
 
-    st.markdown(
-        f'<div class="fiscal-footer">Source: notebooks/Hakeem_fiscal_analysis.ipynb, run <code>{escape(run_dir.name)}</code> · '
-        f"docs/fiscal_analysis.md · claim scope: {escape(manifest.get('claim_scope', ''))}</div>",
-        unsafe_allow_html=True,
-    )
+    # st.markdown(
+    #     f'<div class="fiscal-footer">Source: notebooks/Hakeem_fiscal_analysis.ipynb, run <code>{escape(run_dir.name)}</code> · '
+    #     f"docs/fiscal_analysis.md · claim scope: {escape(manifest.get('claim_scope', ''))}</div>",
+    #     unsafe_allow_html=True,
+    # )

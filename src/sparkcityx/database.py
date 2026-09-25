@@ -35,11 +35,25 @@ def get_database_url(database_url: str | None = None) -> str:
         raise ValueError("DATABASE_URL must use the postgresql:// URL format")
     if "USERNAME" in url or "PASSWORD" in url:
         raise ValueError("DATABASE_URL still contains placeholder credentials")
-    sslmode = conninfo_to_dict(url).get("sslmode")
-    if sslmode not in {"require", "verify-ca", "verify-full"}:
-        raise ValueError(
-            "DATABASE_URL must set sslmode=require, verify-ca, or verify-full"
-        )
+    # sslmode = conninfo_to_dict(url).get("sslmode")
+    # if sslmode not in {"require", "verify-ca", "verify-full"}:
+    #     raise ValueError(
+    #         "DATABASE_URL must set sslmode=require, verify-ca, or verify-full"
+    #     )
+
+    # this is to connect to the db locally
+    connection_info = conninfo_to_dict(url)
+    host = connection_info.get("host")
+    sslmode = connection_info.get("sslmode")
+
+    # Offline demo support:
+    # Local PostgreSQL may run without SSL.
+    if host not in {"localhost", "127.0.0.1"}:
+        if sslmode not in {"require", "verify-ca", "verify-full"}:
+            raise ValueError(
+                "DATABASE_URL must set sslmode=require, verify-ca, or verify-full"
+            )
+    # end of code
     return url
 
 
