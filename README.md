@@ -1,3 +1,5 @@
+![SparkCity dashboard overview](docs/images/sparkcity-capstone.png)
+
 # SparkCity
 an apache spark project.
 
