@@ -1,608 +1,66 @@
 ![SparkCity dashboard overview](docs/images/sparkcity-capstone.png)
 
-# SparkCity
+# SparkCity: New York Digital City
 
-SparkCity is a PySpark-based smart city IoT analytics application. It ingests traffic, air quality, weather, energy, and occupancy sensor data, runs data quality checks, and persists results to PostgreSQL via a Dockerized Spark cluster, with a Streamlit dashboard delivering real-time city operations insights.
+SparkCity is a data engineering capstone exploring how city data can inform planning for a large STEAM convention. The project combines PySpark data pipelines and validation with an interactive Streamlit dashboard for mobility, environment, capacity, fiscal impact, and convention planning.
 
-For local installation, database configuration, and instructions for running the application, see [SETUP.md](SETUP.md).
+The dashboard is a planning and analysis tool, not a live city operations system. Some views use shared PostgreSQL data; scenario outputs and projections include assumptions that should not be treated as confirmed forecasts or operational recommendations.
 
-## Standard Python setup
+## Dashboard
 
-Install [uv](https://docs.astral.sh/uv/getting-started/installation/) and a Java
-runtime supported by Spark (Java 17 or 21 is recommended), then run these commands
-from the repository root:
+- **Mobility & Traffic:** explore traffic patterns and convention-related scenarios.
+- **Environment:** review air-quality and weather observations, current modeled conditions, and historical planning context.
+- **Capacity & Utilization:** examine occupancy and infrastructure capacity using shared database data.
+- **Fiscal Impact:** explore fiscal data and scenario analysis.
+- **Convention Planner:** compare planning scenarios and their assumptions.
+
+## Quick Start
+
+### Requirements
+
+- Python 3.13
+- [uv](https://docs.astral.sh/uv/getting-started/installation/)
+- Java 17 or 21 for PySpark workflows
+
+Install dependencies and launch the app from the repository root:
 
 ```bash
 uv python install 3.13
 uv sync --dev
+uv run streamlit run dashboard/app.py
+```
+
+Open the local URL printed by Streamlit, usually <http://localhost:8501>. PostgreSQL credentials are not needed to launch the app, but database-backed views require an approved connection; see [Setup.md](Setup.md).
+
+Run the test suite with:
+
+```bash
 uv run pytest
 ```
 
-In notebooks and Python modules, import the shared utilities from the installed
-`sparkcityx` package:
+## Project Layout
 
-```python
-from sparkcityx.data_quality import get_validation_config, validate_dataframe
-from sparkcityx.loaders import load_dataset
-
-traffic_df = load_dataset(spark, "data/reference/traffic_sensors.csv")
-report = validate_dataframe(traffic_df, "traffic")
-print(report["valid"], report["record_count"])
+```text
+dashboard/       Streamlit application, pages, components, and styles
+data/            Reference data and local processed outputs
+docs/            Model notes, workflows, and project documentation
+notebooks/       Exploratory analysis and reproducible project workflows
+scripts/         Database checks, dataset loading, and pipeline entry points
+sql/             Database schema and analytics queries
+src/sparkcityx/  Shared Python package and data engineering logic
+tests/           Unit, integration, data, and dashboard checks
 ```
 
-Validation operates on an existing PySpark DataFrame and does not access files or
-databases. `load_dataset` separately supports CSV, Parquet, JSON arrays, and
-newline-delimited JSON. Supported validation types are `traffic`, `air_quality`,
-`weather`, `energy`, `city_zones`, `occupancy`, and `fiscal`; fiscal aliases include
-`financial`, `financial_data`, and `fiscal_data`.
-
-## Shared PostgreSQL connection
-
-Copy `.env.example` to `secrets/.env`, replace its placeholders with the
-instructor-provided credentials, and keep that file local. Verify the connection
-without reading or changing application data:
-
-```bash
-uv run python scripts/check-database.py
-```
-
-Application code should use the shared helper rather than embedding credentials:
-
-```python
-from sparkcityx.database import connect_database
-
-with connect_database() as connection:
-    with connection.cursor() as cursor:
-        cursor.execute("SELECT 1")
-        assert cursor.fetchone() == (1,)
-```
-
-`connect_database` reads `DATABASE_URL` from the process environment. The helper
-does not create schemas, tables, or rows; those operations require explicit team
-ownership and review.
-
-The helper requires an encrypted SSL mode and rejects `disable`, `allow`, and
-`prefer`. The instructor-provided endpoint currently uses `sslmode=require`.
-Certificate and hostname verification should be upgraded to `verify-full` with
-the approved `sslrootcert` when the S2 certificate authority is provided.
-
-### Shared schema setup
-
-Preview the additive schema migration before applying it:
-
-```bash
-uv run python scripts/setup-database.py
-```
-
-After team review, the infrastructure owner can apply it once and inspect the
-result. Both commands are safe to repeat:
-
-```bash
-uv run python scripts/setup-database.py --apply
-uv run python scripts/inspect-database.py
-```
-
-The migration creates the `sparkcity` schema and seven empty tables. It contains
-no drop, truncate, update, delete, or data-loading operations.
-
-### Loading one dataset
-
-Each dataset owner should preview and then load only their assigned dataset:
-
-```bash
-uv run python scripts/load-dataset.py traffic
-uv run python scripts/load-dataset.py traffic --apply
-```
-
-The loader validates the Spark DataFrame before opening a database transaction,
-targets the existing `sparkcity` table, and uses `ON CONFLICT DO NOTHING`. A
-repeat run preserves existing rows and constraints instead of replacing tables.
-
-# Smart City IoT Analytics Pipeline
-## 5-Day PySpark Data Engineering Lab
-
-### 🎯 Project Overview
-
-Build a comprehensive data pipeline that ingests, processes, and analyzes IoT sensor data from a smart city infrastructure. Students will use PySpark to handle large-scale sensor data, perform real-time analytics, and create actionable insights for city operations through an interactive dashboard.
-
-### 🎓 Learning Objectives
-
-By the end of this project, students will be able to:
-
-- Set up and configure a distributed Spark cluster using Docker
-- Ingest and process multi-format IoT data streams using PySpark
-- Implement data quality checks and cleaning procedures for sensor data
-- Perform time-series analysis and anomaly detection on large datasets
-- Design and optimize data pipelines for real-time processing
-- Integrate Spark with RDBMS (PostgreSQL) for data persistence
-- Create monitoring dashboards for operational insights
-- Apply best practices for data engineering workflows
-
-### 📊 Data Sources & Schema
-
-#### Primary Datasets (Simulated Smart City Data)
-
-**1. Traffic Sensors (`traffic_sensors.csv`)**
-```sql
-sensor_id: string
-timestamp: timestamp
-location_lat: double
-location_lon: double
-vehicle_count: integer
-avg_speed: double
-congestion_level: string
-road_type: string
-```
-
-**2. Air Quality Monitors (`air_quality.json`)**
-```sql
-sensor_id: string
-timestamp: timestamp
-location_lat: double
-location_lon: double
-pm25: double
-pm10: double
-no2: double
-co: double
-temperature: double
-humidity: double
-```
-
-**3. Weather Stations (`weather_data.parquet`)**
-```sql
-station_id: string
-timestamp: timestamp
-location_lat: double
-location_lon: double
-temperature: double
-humidity: double
-wind_speed: double
-wind_direction: double
-precipitation: double
-pressure: double
-```
-
-**4. Energy Consumption (`energy_meters.csv`)**
-```sql
-meter_id: string
-timestamp: timestamp
-building_type: string
-location_lat: double
-location_lon: double
-power_consumption: double
-voltage: double
-current: double
-power_factor: double
-```
-
-**5. Reference Data (`city_zones.csv`)**
-```sql
-zone_id: string
-zone_name: string
-zone_type: string
-lat_min: double
-lat_max: double
-lon_min: double
-lon_max: double
-population: integer
-```
-
-**6. Occupancy Data (`occupancy_data.csv`)**
-```sql
-sensor_id: string
-timestamp: timestamp
-location_lat: double
-location_lon: double
-available_rooms: integer
-occupied_rooms: integer
-guests: integer
-```
-
-**7. Fiscal Data (`fiscal_data.csv`)**
-```sql
-sensor_id: string
-timestamp: timestamp
-location_lat: double
-location_lon: double
-expense: double
-revenue: double
-```
-
-### 🛠 Technical Requirements
-
-#### Infrastructure
-- **Spark Cluster:** 3-node cluster (1 master, 2 workers) via Docker Compose
-- **Database:** PostgreSQL 13+ for data persistence
-- **Dashboard:** Grafana or Streamlit for visualization
-- **Storage:** Local filesystem with HDFS simulation
-- **Languages:** Python 3.8+, SQL
-
-#### Python Dependencies
-```
-pyspark==3.4.0
-pandas==1.5.3
-psycopg2-binary==2.9.5
-matplotlib==3.6.3
-seaborn==0.12.2
-streamlit==1.20.0
-plotly==5.13.1
-requests==2.28.2
-```
-
-### 📅 Daily Breakdown
-
-## Day 1: Environment Setup & Data Exploration
-**Duration:** 8 hours  
-**Focus:** Infrastructure setup, data ingestion, basic transformations
-
-### Learning Objectives
-- Configure Spark cluster and development environment
-- Understand IoT data characteristics and challenges
-- Implement basic data ingestion patterns
-- Explore PySpark DataFrame operations
-
-### Tasks
-
-#### Morning (4 hours)
-1. **Environment Setup (2 hours)**
-   - Clone repository and review project structure
-   - Start Docker Compose cluster (Spark + PostgreSQL)
-   - Verify Spark UI and database connectivity
-   - Configure Jupyter notebook with PySpark
-
-2. **Data Exploration (2 hours)**
-   - Load sample datasets into Spark DataFrames
-   - Examine data schemas and quality issues
-   - Generate basic statistics for each data source
-   - Identify missing values and outliers
-
-#### Afternoon (4 hours)
-3. **Basic Data Ingestion (2 hours)**
-   - Implement CSV, JSON, and Parquet readers
-   - Handle schema inference and enforcement
-   - Create reusable data loading functions
-   - Set up data validation checks
-
-4. **Initial Data Transformations (2 hours)**
-   - Standardize timestamp formats across datasets
-   - Add derived columns (hour, day, week)
-   - Implement basic data type conversions
-   - Create geographical zone mappings
-
-### Deliverables
-- Working Spark cluster with all services running
-- Data ingestion notebook with basic EDA
-- Documentation of data quality findings
-- Initial data loading pipeline functions
-
-### Key Concepts Covered
-- Spark cluster architecture and configuration
-- DataFrame creation and basic operations
-- Schema management and data types
-- File format handling (CSV, JSON, Parquet)
-
----
-
-## Day 2: Data Quality & Cleaning Pipeline
-**Duration:** 8 hours  
-**Focus:** Data quality assessment, cleaning procedures, standardization
-
-### Learning Objectives
-- Implement comprehensive data quality checks
-- Design cleaning procedures for IoT sensor data
-- Handle missing values and outliers appropriately
-- Create reusable data quality functions
-
-### Tasks
-
-#### Morning (4 hours)
-1. **Data Quality Assessment (2 hours)**
-   - Develop data profiling functions
-   - Identify anomalies in sensor readings
-   - Check for duplicate records across time series
-   - Analyze temporal patterns and gaps
-
-2. **Missing Data Strategy (2 hours)**
-   - Implement interpolation for time series gaps
-   - Create business rules for acceptable missing data
-   - Design backfill procedures for critical sensors
-   - Handle sensors with extended outages
-
-#### Afternoon (4 hours)
-3. **Outlier Detection & Treatment (2 hours)**
-   - Implement statistical outlier detection (IQR, Z-score)
-   - Create domain-specific validation rules
-   - Design outlier treatment strategies
-   - Build alerting for anomalous readings
-
-4. **Data Standardization (2 hours)**
-   - Standardize location coordinates
-   - Normalize sensor measurement units
-   - Create consistent naming conventions
-   - Implement data lineage tracking
-
-### Deliverables
-- Data quality assessment report
-- Comprehensive cleaning pipeline
-- Outlier detection and treatment functions
-- Standardized datasets ready for analysis
-
-### Key Concepts Covered
-- Data profiling techniques in Spark
-- Time series data quality challenges
-- Statistical outlier detection methods
-- Data validation and business rules
-
----
-
-## Day 3: Time Series Analysis & Feature Engineering
-**Duration:** 8 hours  
-**Focus:** Temporal analysis, correlation studies, feature creation
-
-### Learning Objectives
-- Perform time series analysis on sensor data
-- Calculate correlations between different sensor types
-- Engineer features for predictive modeling
-- Implement window functions for trend analysis
-
-### Tasks
-
-#### Morning (4 hours)
-1. **Temporal Pattern Analysis (2 hours)**
-   - Analyze hourly, daily, and weekly patterns
-   - Identify seasonal trends in sensor data
-   - Calculate moving averages and trend indicators
-   - Detect pattern anomalies and shifts
-
-2. **Cross-Sensor Correlation Analysis (2 hours)**
-   - Correlate air quality with traffic patterns
-   - Analyze weather impact on energy consumption
-   - Study relationships between sensor proximity
-   - Create correlation matrices and heatmaps
-
-#### Afternoon (4 hours)
-3. **Feature Engineering (3 hours)**
-   - Create lag features for time series prediction
-   - Calculate rolling statistics (mean, std, min, max)
-   - Engineer interaction features between sensors
-   - Build aggregated features by city zones
-
-4. **Trend Analysis (1 hour)**
-   - Implement trend detection algorithms
-   - Calculate rate of change indicators
-   - Identify long-term vs short-term patterns
-   - Create trend visualization functions
-
-### Deliverables
-- Time series analysis dashboard
-- Correlation study findings
-- Feature engineering pipeline
-- Trend analysis reports
-
-### Key Concepts Covered
-- Window functions in Spark SQL
-- Time series feature engineering
-- Statistical correlation analysis
-- Temporal pattern recognition
-
----
-
-## Day 4: Advanced Analytics & Anomaly Detection
-**Duration:** 8 hours  
-**Focus:** Predictive modeling, anomaly detection, optimization
-
-### Learning Objectives
-- Implement machine learning pipelines in PySpark
-- Build anomaly detection systems for IoT data
-- Optimize pipeline performance and resource usage
-- Create predictive models for city operations
-
-### Tasks
-
-#### Morning (4 hours)
-1. **Anomaly Detection System (2 hours)**
-   - Implement isolation forest for multivariate anomalies
-   - Create threshold-based alerting systems
-   - Build real-time anomaly scoring
-   - Design anomaly investigation workflows
-
-2. **Predictive Modeling (2 hours)**
-   - Build traffic congestion prediction models
-   - Create air quality forecasting pipeline
-   - Implement energy demand prediction
-   - Validate model performance and accuracy
-
-#### Afternoon (4 hours)
-3. **Pipeline Optimization (2 hours)**
-   - Implement data partitioning strategies
-   - Optimize Spark configurations for performance
-   - Add caching for frequently accessed data
-   - Monitor resource utilization and bottlenecks
-
-4. **Advanced Analytics (2 hours)**
-   - Implement clustering for sensor grouping
-   - Create recommendation systems for city planning
-   - Build alerting systems for critical thresholds
-   - Design automated response triggers
-
-### Deliverables
-- Anomaly detection system with alerting
-- Predictive models with validation metrics
-- Optimized pipeline with performance benchmarks
-- Advanced analytics dashboard
-
-### Key Concepts Covered
-- MLlib for machine learning in Spark
-- Performance tuning and optimization
-- Real-time stream processing concepts
-- Advanced statistical modeling techniques
-
----
-
-## Day 5: Database Integration & Dashboard Creation
-**Duration:** 8 hours  
-**Focus:** Data persistence, dashboard development, deployment
-
-### Learning Objectives
-- Integrate Spark with PostgreSQL for data persistence
-- Design efficient database schemas for analytics
-- Create interactive dashboards for city operations
-- Implement automated pipeline scheduling
-
-### Tasks
-
-#### Morning (4 hours)
-1. **Database Schema Design (1 hour)**
-   - Design star schema for analytics
-   - Create optimized table structures
-   - Implement proper indexing strategies
-   - Set up data retention policies
-
-2. **Data Pipeline to Database (3 hours)**
-   - Implement Spark-to-PostgreSQL connectors
-   - Create batch and streaming write operations
-   - Design upsert operations for real-time updates
-   - Implement data quality checks before writes
-
-#### Afternoon (4 hours)
-3. **Dashboard Development (3 hours)**
-   - Create real-time city operations dashboard
-   - Build interactive visualizations for each sensor type
-   - Implement drill-down capabilities
-   - Add alerting and notification features
-
-4. **Pipeline Automation (1 hour)**
-   - Create scheduling workflows
-   - Implement error handling and recovery
-   - Set up monitoring and logging
-   - Document deployment procedures
-
-### Deliverables
-- Production-ready database schema
-- Automated data pipeline with scheduling
-- Interactive city operations dashboard
-- Complete project documentation
-
-### Key Concepts Covered
-- Spark-RDBMS integration patterns
-- Dashboard design principles
-- Pipeline automation and monitoring
-- Production deployment considerations
-
----
-
-### 🏗 Project Structure
-
-```
-smart-city-iot-pipeline/
-├── README.md
-├── requirements.txt
-├── docker-compose.yml
-├── config/
-│   ├── spark-defaults.conf
-│   └── postgres-init.sql
-├── data/
-│   ├── raw/
-│   ├── processed/
-│   └── reference/
-├── notebooks/
-│   ├── day1_setup_and_exploration.ipynb
-│   ├── day2_data_quality_cleaning.ipynb
-│   ├── day3_time_series_analysis.ipynb
-│   ├── day4_advanced_analytics.ipynb
-│   └── day5_dashboard_deployment.ipynb
-├── src/
-│   ├── data_ingestion/
-│   ├── data_quality/
-│   ├── analytics/
-│   ├── models/
-│   └── utils/
-├── sql/
-│   ├── create_tables.sql
-│   └── analytical_queries.sql
-├── dashboard/
-│   ├── app.py
-│   └── templates/
-├── tests/
-│   └── test_pipeline.py
-└── docs/
-    ├── setup_guide.md
-    ├── daily_objectives.md
-    └── troubleshooting.md
-```
-
-### 📝 Assessment Criteria
-
-#### Technical Implementation (60%)
-- **Code Quality:** Clean, documented, following PySpark best practices
-- **Data Pipeline:** Robust ingestion, cleaning, and transformation
-- **Performance:** Efficient use of Spark features and optimizations
-- **Database Integration:** Proper schema design and data persistence
-
-#### Analytics & Insights (25%)
-- **Data Quality:** Comprehensive cleaning and validation
-- **Analysis Depth:** Meaningful insights from sensor data
-- **Visualization:** Clear, informative dashboard design
-- **Anomaly Detection:** Effective identification of unusual patterns
-
-#### Documentation & Presentation (15%)
-- **Code Documentation:** Clear comments and README files
-- **Daily Deliverables:** Complete notebook submissions
-- **Final Presentation:** Clear explanation of insights and architecture
-- **Reproducibility:** Others can run the pipeline successfully
-
-### 🚀 Getting Started
-
-1. **Prerequisites Check:**
-   - Docker and Docker Compose installed
-   - Python 3.8+ with pip
-   - Git for version control
-   - 8GB+ RAM recommended
-
-2. **Repository Setup:**
-   ```bash
-   git clone [repository-url]
-   cd smart-city-iot-pipeline
-   pip install -r requirements.txt
-   ```
-
-3. **Start Infrastructure:**
-   ```bash
-   docker-compose up -d
-   # Wait for services to be ready (check logs)
-   docker-compose logs -f
-   ```
-
-4. **Verify Setup:**
-   - Spark UI: http://localhost:8080
-   - Jupyter: http://localhost:8888
-   - Database: localhost:5432
-
-5. **Begin Day 1 Activities:**
-   - Open `notebooks/day1_setup_and_exploration.ipynb`
-   - Setup kanban board for project
-   - Follow daily objectives and complete tasks
-   - Submit deliverables at end of each day
-   - Generate your data using scripts
-
-### 🆘 Support Resources
-
-- **Spark Documentation:** https://spark.apache.org/docs/latest/
-- **PySpark API Reference:** https://spark.apache.org/docs/latest/api/python/
-- **PostgreSQL Documentation:** https://www.postgresql.org/docs/
-- **Project Issues:** Use GitHub Issues for technical questions
-- **Daily Check-ins:** Instructor availability for guidance
-
-### 🎉 Success Metrics
-
-By project completion, students will have:
-- ✅ Built a production-ready data pipeline processing 1M+ sensor readings
-- ✅ Implemented comprehensive data quality and anomaly detection
-- ✅ Created actionable insights for smart city operations
-- ✅ Did you actually read this file? Say "booyah" to an instructor  
-- ✅ Developed skills in distributed data processing with Spark
-- ✅ Gained experience with modern data engineering tools and practices
-
----
-
-*Ready to build the future of smart cities? Let's get started!* 🏙️⚡
+## Data and Safety
+
+- Do not commit credentials, private datasets, or local environment files. Keep database credentials in the ignored `secrets/.env` file.
+- Database schema changes and writes are explicit operations. Review the relevant workflow documentation and obtain team approval before applying them.
+- Scenario results and projections document their assumptions and limits in the relevant pages under [`docs/`](docs/).
+
+## Documentation
+
+- [Local setup and database access](Setup.md)
+- [Day 5 data pipeline and database workflow](docs/day5_workflow.md)
+- [Convention planner dashboard and model boundaries](docs/convention_planner_dashboard.md)
+- [Fiscal model](docs/fiscal_model.md)
+- [Environment projection](docs/environment_projection.md)

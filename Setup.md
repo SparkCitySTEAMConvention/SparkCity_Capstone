@@ -1,192 +1,58 @@
-## Local Setup
+# Local Setup
 
-### Prerequisites
+These instructions use the repository's `uv` environment and launch the full Streamlit application. Start in the repository root.
 
-Before running New York Digital City locally, make sure you have:
+## Requirements
 
-- Python 3.13+
-- PostgreSQL
-- Git
-- A virtual environment
-- Access to the New York Digital City database credentials
+- Python 3.13
+- [uv](https://docs.astral.sh/uv/getting-started/installation/)
+- Java 17 or 21 for PySpark workflows
+- PostgreSQL credentials only for database-backed dashboard views or database scripts
 
----
-
-### 1. Clone the Repository
+## Install
 
 ```bash
-git clone https://github.com/SparkCitySTEAMConvention/SparkCity_Capstone.git
-cd SparkCity_Capstone
+uv python install 3.13
+uv sync --dev
 ```
 
-If you already cloned the repository, navigate to the project directory:
+`uv` creates and manages the project environment from `pyproject.toml` and `uv.lock`.
+
+## Run the dashboard
 
 ```bash
-cd ~/Projects/SparkCity_Capstone
+uv run streamlit run dashboard/app.py
 ```
 
----
+Open the local URL printed by Streamlit, usually <http://localhost:8501>. Stop the server with `Ctrl+C`.
 
-### 2. Create and Activate a Virtual Environment
+The app can launch without database credentials. Environment history and Capacity & Utilization features that read shared PostgreSQL data require an approved database connection. Other views may use local project data or external public data sources.
 
-Create the virtual environment:
+## Optional: configure PostgreSQL
+
+Copy the example file and add the credentials provided for your project environment:
 
 ```bash
-python3 -m venv .venv
+mkdir -p secrets
+cp -n .env.example secrets/.env
 ```
 
-Activate it on macOS/Linux:
+Edit `secrets/.env` and replace the placeholder values. The application loads this file locally. Never commit it, share it publicly, or paste credentials into notebooks; `secrets/` is ignored by Git.
+
+Check the connection without reading or changing application data:
 
 ```bash
-source .venv/bin/activate
+uv run python scripts/check-database.py
 ```
 
-Your terminal should now show `(.venv)` before the command prompt.
+The shared connection helper requires encrypted SSL. Use the approved database endpoint and SSL settings; the checked-in example uses `sslmode=require`. Do not create schemas, load data, or write to shared tables without explicit team approval. See [Day 5 workflow](docs/day5_workflow.md) for the reviewed pipeline and database operations.
 
----
+## Tests
 
-### 3. Install Project Dependencies
-
-Install the project and its dependencies:
+Run the project test suite:
 
 ```bash
-pip install -e .
+uv run pytest
 ```
 
-If development dependencies are configured separately in the project, install those as required before running the test suite.
-
----
-
-### 4. Configure the Database Connection
-
-The application expects the PostgreSQL connection string in the `DATABASE_URL` environment variable.
-
-Create the local environment file from the example:
-
-```bash
-cp .env.example secrets/.env
-```
-
-Add the instructor-provided PostgreSQL credentials to:
-
-```text
-secrets/.env
-```
-
-Do not commit `secrets/.env` or database credentials to GitHub.
-
-Before running the application, load the environment variables into the current terminal session:
-
-```bash
-set -a
-source secrets/.env
-set +a
-```
-
----
-
-### 5. Verify PostgreSQL with psql
-
-Make sure PostgreSQL is available:
-
-```bash
-psql --version
-```
-
-To connect using the `DATABASE_URL` stored in `secrets/.env`, first load the environment variables:
-
-```bash
-set -a
-source secrets/.env
-set +a
-```
-
-Then start `psql`:
-
-```bash
-psql "$DATABASE_URL"
-```
-
-Once connected, you can verify the database connection with:
-
-```sql
-\conninfo
-```
-
-List the available tables:
-
-```sql
-\dt
-```
-
-Exit `psql` with:
-
-```sql
-\q
-```
-
----
-
-### 6. Run the SparkCity Dashboard
-
-From the project root, make sure your virtual environment is active and the database environment variables have been loaded:
-
-```bash
-source .venv/bin/activate
-
-set -a
-source secrets/.env
-set +a
-```
-
-Start the Mobility & Traffic Streamlit page:
-
-```bash
-PYTHONPATH=src streamlit run dashboard/pages/mobility_traffic.py
-```
-
-Streamlit will display a local URL in the terminal, typically:
-
-```text
-http://localhost:8501
-```
-
-Open that address in your browser to view the dashboard.
-
-Press `Ctrl+C` in the terminal to stop the Streamlit server.
-
----
-
-### 7. Run the Tests
-
-Before pushing code, run the complete test suite from the project root:
-
-```bash
-pytest
-```
-
-A successful test run should complete without failures.
-
----
-
-## Quick Start
-
-For returning developers who have already completed the initial setup:
-
-```bash
-cd ~/Projects/SparkCity_Capstone
-source .venv/bin/activate
-set -a
-source secrets/.env
-set +a
-PYTHONPATH=src streamlit run dashboard/pages/mobility_traffic.py
-```
-
-To open PostgreSQL instead:
-
-```bash
-set -a
-source secrets/.env
-set +a
-psql "$DATABASE_URL"
-```
+Database integration tests require a separately configured, isolated test database. Never point integration tests at the shared project database.
