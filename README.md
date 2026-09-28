@@ -6,6 +6,24 @@ SparkCity is a data engineering capstone exploring how city data can inform plan
 
 The dashboard is a planning and analysis tool, not a live city operations system. Some views use shared PostgreSQL data; scenario outputs and projections include assumptions that should not be treated as confirmed forecasts or operational recommendations.
 
+## Engineering Highlights
+
+- **Reusable ingestion:** the shared `sparkcityx` package loads CSV, Parquet, JSON arrays, and newline-delimited JSON into PySpark DataFrames.
+- **Data validation:** schema and quality rules cover seven dataset types: traffic, air quality, weather, energy, city zones, occupancy, and fiscal data.
+- **Safe database loading:** the loader validates data before inserts and uses `ON CONFLICT DO NOTHING`, preserving existing primary-key rows on repeat runs.
+- **Reviewable migrations:** schema setup defaults to preview mode; the additive migration creates tables without destructive statements.
+- **Secure connections:** remote PostgreSQL connections require encrypted SSL, and credentials are read from local environment configuration rather than embedded in source.
+
+For the database-backed sensor workflow, data moves through:
+
+```text
+Raw sensor files -> PySpark ingestion -> validation -> PostgreSQL -> database-backed dashboard views
+```
+
+## My Role
+
+I built the Fiscal Impact dashboard and fiscal forecast model, contributed to the Day 5 Spark/PostgreSQL pipeline, and implemented accessible light-mode support for the dashboard.
+
 ## Dashboard
 
 - **Mobility & Traffic:** explore traffic patterns and convention-related scenarios.

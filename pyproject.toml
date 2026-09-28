@@ -1,7 +1,7 @@
 [project]
 name = "sparkcityx"
 version = "0.1.0"
-description = "PySpark data engineering capstone and Streamlit dashboard for city and convention planning"
+description = "PySpark data pipelines and Streamlit planning dashboard for city data and STEAM convention analysis"
 readme = "README.md"
 authors = [
     { name = "pknight", email = "paul.knight@delmarvacomputer.com" }
